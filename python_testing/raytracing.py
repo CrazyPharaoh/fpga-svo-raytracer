@@ -98,5 +98,4 @@ def render():
             color = get_ray_color((0, 0, 0), ray_direction)
             print(f'{color[0]} {color[1]} {color[2]}')
 
-if __name__ == "__main__":
-    render()
+  
