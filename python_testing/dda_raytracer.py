@@ -1,16 +1,17 @@
 import math
+import time
 
 light_pos = (8.5, 10, 8.5)
 width = 640
 height = 360
 world_size = 20
 
-colour_list = [(0, 0, 0),
-               (255, 0, 0),
-               (0, 255, 0),
-               (0, 0, 255),
-               (255, 255, 255),
-               (0, 0, 0)]
+colour_list = [(0, 0, 0), # Empty
+               (255, 0, 0), # Red
+               (0, 255, 0), # Green
+               (0, 0, 255), # Blue
+               (255, 255, 255), # White
+               (0, 0, 0),]
 
 def normalize(v):
     length = math.sqrt((v[0]*v[0]) + (v[1]*v[1]) + (v[2]*v[2]))
@@ -49,8 +50,7 @@ def generateWorld(width_x, height_y, depth_z, default_val=0):
     print("generating world with size:", width_x)
     world = [[[default_val for z in range(depth_z)] for y in range(height_y)] for x in range(width_x)]
 
-    # # --- Add the Floor
-    # # Now we can loop naturally using x and z
+    # BASIC FLOOR
     # for x in range(width_x):
     #     for z in range(depth_z):
     #         # Access strictly as [x][y][z]
@@ -69,6 +69,13 @@ def generateWorld(width_x, height_y, depth_z, default_val=0):
                  world[x][0][z] = 4  # White
             else:
                  world[x][0][z] = 5  # Black
+    
+    # Floating Red Cube (3x3x3)
+    # Positioned at (10, 5, 10)
+    for x in range(10, 13):
+        for y in range(1, 8):
+            for z in range(10, 13):
+                world[x][y][z] = 1 # Red
 
     return world
 
@@ -183,7 +190,9 @@ def create_image():
     fov = math.pi / 2
     aspect_ratio = width / height
     pixel_list = []
+    start = time.time()
     world = generateWorld(world_size, world_size, world_size)
+    after_gen = time.time()
 
     # --- CHANGED: Initialize Total Metrics dictionary ---
     total_metrics = {
@@ -203,7 +212,7 @@ def create_image():
             Py = -(2 * (y + 0.5) / height - 1) * math.tan(fov / 2)
 
             mapped_ray_dir = (Px, Py, 1)
-            camera_pos = (8.5, 2, 8.5)
+            camera_pos = (8, 5, 4)
 
             # --- CHANGED: Create fresh metrics dict for this specific ray ---
             ray_metrics = {
@@ -224,10 +233,11 @@ def create_image():
 
             pixel_colour = get_colour(block_value, normal, hit_point)
             pixel_list.append(pixel_colour)
-    
+
+    after_rays = time.time()
     createPPM(pixel_list)
 
-    # --- CHANGED: Print the final averaged hardware metrics ---
+    # --- Print the final averaged hardware metrics ---
     total_rays = width * height
     print("\n--- HARDWARE PERFORMANCE METRICS ---")
     print(f"Total Rays Cast: {total_rays}")
@@ -238,6 +248,11 @@ def create_image():
     print(f"Avg Adds/Subs per ray:           {total_metrics['adds_subs'] / total_rays:.2f}")
     print(f"Avg Comparisons per ray:         {total_metrics['comparisons'] / total_rays:.2f}")
     print("------------------------------------\n") 
+
+    print("\n--- Time Metrics ---")
+    print(f"World Gen time: {after_gen - start}")
+    print(f"Ray Calculation time: {after_rays - after_gen}")
+    print(f"Total Time: {after_rays - start}")
 
 if __name__ == "__main__":
     create_image()
