@@ -1,4 +1,5 @@
 import math
+import os
 
 # --- Added tracking for square roots, a critical hardware bottleneck ---
 def normalize(v):
@@ -138,7 +139,8 @@ def getPixelColor(scene, light_position, ray_origin, ray_dir, metrics):
     return (int(obj_color[0] * intensity), int(obj_color[1] * intensity), int(obj_color[2] * intensity))
     
 def createPPM(pixel_list):
-    with open("output2.ppm", "w") as f:
+    os.makedirs("ppm_outputs", exist_ok=True)
+    with open("ppm_outputs/basic.ppm", "w") as f:
         f.write(f'P3\n{width} {height}\n255')
         for color in pixel_list:
             f.write(f'\n{color[0]} {color[1]} {color[2]}')

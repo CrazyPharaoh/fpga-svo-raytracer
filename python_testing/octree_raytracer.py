@@ -1,4 +1,5 @@
 import math
+import os
 import time
 
 light_pos = (16.0, 20, 16.0)
@@ -234,7 +235,8 @@ def intersect_octree(ray_origin, ray_direction, octree, metrics):
     return best_node['block_value'], normal, hit_point
 
 def createPPM(pixel_list):
-    with open("output_octree.ppm", "w") as f:
+    os.makedirs("ppm_outputs", exist_ok=True)
+    with open("ppm_outputs/octree.ppm", "w") as f:
         f.write(f'P3\n{width} {height}\n255')
         for color in pixel_list:
             f.write(f'\n{color[0]} {color[1]} {color[2]}')

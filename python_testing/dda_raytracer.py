@@ -1,10 +1,11 @@
 import math
+import os
 import time
 
-light_pos = (8.5, 10, 8.5)
+light_pos = (31, 31, 5)
 width = 640
 height = 360
-world_size = 20
+world_size = 32
 
 colour_list = [(0, 0, 0), # Empty
                (255, 0, 0), # Red
@@ -41,41 +42,27 @@ def sub(v1, v2):
 def add(v1, v2):
     return (v1[0] + v2[0], v1[1] + v2[1], v1[2]+ v2[2])
 
-def generateWorld(width_x, height_y, depth_z, default_val=0):
-    # Create [X][Y][Z] structure
-    # Note the order of loops: 
-    #   Outer: range(width_x)
-    #   Middle: range(height_y)
-    #   Inner: range(depth_z)
-    print("generating world with size:", width_x)
-    world = [[[default_val for z in range(depth_z)] for y in range(height_y)] for x in range(width_x)]
+def generateWorld(size, default_val=0):
+    print("generating world with size:", size)
+    world = [[[default_val for z in range(size)] for y in range(size)] for x in range(size)]
 
-    # BASIC FLOOR
-    # for x in range(width_x):
-    #     for z in range(depth_z):
-    #         # Access strictly as [x][y][z]
-    #             world[x][0][z] = 1
-
-    check_size = 1
-
-    for x in range(width_x):
-        for z in range(depth_z):
-            # 1. Scale the coordinates down by the size
-            scaled_x = x // check_size
-            scaled_z = z // check_size
-            
-            # 2. Check if the sum is even or odd (standard checkerboard math)
-            if (scaled_x + scaled_z) % 2 == 0:
-                 world[x][0][z] = 4  # White
+    # Checkerboard floor
+    for x in range(size):
+        for z in range(size):
+            if (x + z) % 2 == 0:
+                world[x][0][z] = 4  # White
             else:
-                 world[x][0][z] = 5  # Black
-    
-    # Floating Red Cube (3x3x3)
-    # Positioned at (10, 5, 10)
-    for x in range(10, 13):
-        for y in range(1, 8):
-            for z in range(10, 13):
-                world[x][y][z] = 1 # Red
+                world[x][0][z] = 5  # Black
+
+    # Red cube (4x4x4) at roughly center
+    for x in range(14, 18):
+        for y in range(1, 10):
+            for z in range(14, 18):
+                world[x][y][z] = 1  # Red
+
+    # Blue pillar
+    for y in range(1, 14):
+        world[8][y][8] = 3  # Blue
 
     return world
 
@@ -158,7 +145,8 @@ def intersect_voxel(ray_origin, ray_direction, world, metrics):
     return block_value, normal, hit_point
 
 def createPPM(pixel_list):
-    with open("output_dda.ppm", "w") as f:
+    os.makedirs("ppm_outputs", exist_ok=True)
+    with open("ppm_outputs/dda.ppm", "w") as f:
         f.write(f'P3\n{width} {height}\n255')
         for color in pixel_list:
             f.write(f'\n{color[0]} {color[1]} {color[2]}')
@@ -181,7 +169,7 @@ def main():
 
     # --- CHANGED: Added dummy metrics dictionary for main test ---
     dummy_metrics = {'mem_reads': 0, 'iterations': 0, 'adds_subs': 0, 'multiplications': 0, 'divisions': 0, 'comparisons': 0}
-    world = generateWorld(world_size, world_size, world_size)
+    world = generateWorld(world_size)
     block_value, normal, hit_point = intersect_voxel((8.5, 10.5, 8.5), (0, -1, 0), world, dummy_metrics)
     print(block_value, normal, hit_point)
 
@@ -191,7 +179,7 @@ def create_image():
     aspect_ratio = width / height
     pixel_list = []
     start = time.time()
-    world = generateWorld(world_size, world_size, world_size)
+    world = generateWorld(world_size)
     after_gen = time.time()
 
     # --- CHANGED: Initialize Total Metrics dictionary ---
@@ -212,7 +200,7 @@ def create_image():
             Py = -(2 * (y + 0.5) / height - 1) * math.tan(fov / 2)
 
             mapped_ray_dir = (Px, Py, 1)
-            camera_pos = (8, 5, 4)
+            camera_pos = (16, 10, 4)
 
             # --- CHANGED: Create fresh metrics dict for this specific ray ---
             ray_metrics = {

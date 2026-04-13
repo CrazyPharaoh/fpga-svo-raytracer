@@ -1,4 +1,5 @@
 import math
+import os
 import time
 
 light_pos = (5.0, 10.0, -5.0)
@@ -217,7 +218,8 @@ def get_nearest_triangle(scene, ray_origin, ray_dir, metrics):
     return nearest_t, nearest_tri
 
 def createPPM(pixel_list):
-    with open("output_triangle.ppm", "w") as f:
+    os.makedirs("ppm_outputs", exist_ok=True)
+    with open("ppm_outputs/triangle.ppm", "w") as f:
         f.write(f'P3\n{width} {height}\n255')
         for color in pixel_list:
             f.write(f'\n{color[0]} {color[1]} {color[2]}')

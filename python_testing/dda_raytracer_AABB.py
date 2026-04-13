@@ -1,4 +1,5 @@
 import math
+import os
 import time
 
 light_pos = (8.5, 10, 8.5)
@@ -133,7 +134,8 @@ def intersect_voxel(ray_origin, ray_direction, world):
     return block_value, normal, hit_point
 
 def createPPM(pixel_list):
-    with open("output_dda.ppm", "w") as f:
+    os.makedirs("ppm_outputs", exist_ok=True)
+    with open("ppm_outputs/dda_aabb.ppm", "w") as f:
         f.write(f'P3\n{width} {height}\n255')
         for color in pixel_list:
             f.write(f'\n{color[0]} {color[1]} {color[2]}')

@@ -1,7 +1,8 @@
 import math
+import os
 import time
 
-light_pos = (16.0, 20, 16.0)
+light_pos = light_pos = (31, 31, 5)
 width = 640
 height = 360
 MACRO_SIZE = 4
@@ -158,6 +159,7 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
             # Find entry point into macro-cell from current ray position
             # Use slab test to get t_enter
             t_enter = 0.0
+            entry_axis = 0
             for i in range(3):
                 # --- TRACKING: 1 sub, 1 mult ---
                 metrics['adds_subs'] += 1
@@ -166,6 +168,7 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
                     t_slab = (cell_min[i] - ray_origin[i]) * inv_dir[i] if ray_direction[i] > 0 else (cell_max[i] - ray_origin[i]) * inv_dir[i]
                     if t_slab > t_enter:
                         t_enter = t_slab
+                        entry_axis = i
 
             # Entry point for micro DDA
             # --- TRACKING: 3 mults, 3 adds ---
@@ -200,6 +203,11 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
                     metrics['multiplications'] += 1
                     side_dist_micro[i] = (micro_pos[i] + 1.0 - micro_origin[i]) * delta_dist_micro[i]
 
+            # last_axis tracks the face we last crossed (needed for correct normals).
+            # Seed with entry_axis so the first voxel (checked before any advance)
+            # already has a valid entry-face normal.
+            last_axis = entry_axis
+
             # --- Micro DDA loop ---
             while True:
                 # --- TRACKING: 1 iteration ---
@@ -233,15 +241,16 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
                 metrics['comparisons'] += 1
                 if world[micro_pos[0]][micro_pos[1]][micro_pos[2]] > 0:
                     block_value = world[micro_pos[0]][micro_pos[1]][micro_pos[2]]
-                    # Compute normal and hit point
-                    min_sd = min(side_dist_micro)
-                    axis = side_dist_micro.index(min_sd)
+                    # Use last_axis (the face we entered through) for the normal.
+                    # min(side_dist_micro) is wrong here: after each advance the
+                    # stepped axis has its side_dist incremented, so it is no
+                    # longer the minimum — that picks a different (wrong) axis.
                     normal = [0, 0, 0]
-                    normal[axis] = -step_micro[axis]
+                    normal[last_axis] = -step_micro[last_axis]
                     # --- TRACKING: 1 sub, 3 mults, 3 adds ---
                     metrics['adds_subs'] += 4
                     metrics['multiplications'] += 3
-                    t = side_dist_micro[axis] - delta_dist_micro[axis]
+                    t = max(0.0, side_dist_micro[last_axis] - delta_dist_micro[last_axis])
                     hit_point = add(micro_origin, scalarMult(t, ray_direction))
                     return block_value, tuple(normal), hit_point
 
@@ -255,6 +264,7 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
                         axis = i
                         min_sd = side_dist_micro[i]
 
+                last_axis = axis  # record before incrementing so hit detection uses it
                 # --- TRACKING: 1 add ---
                 metrics['adds_subs'] += 1
                 side_dist_micro[axis] += delta_dist_micro[axis]
@@ -280,7 +290,8 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
         macro_pos[macro_axis] += step_macro[macro_axis]
 
 def createPPM(pixel_list):
-    with open("output_hierarchical_dda.ppm", "w") as f:
+    os.makedirs("ppm_outputs", exist_ok=True)
+    with open("ppm_outputs/hierarchical_dda.ppm", "w") as f:
         f.write(f'P3\n{width} {height}\n255')
         for color in pixel_list:
             f.write(f'\n{color[0]} {color[1]} {color[2]}')
