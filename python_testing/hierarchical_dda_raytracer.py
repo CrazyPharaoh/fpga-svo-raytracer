@@ -2,7 +2,7 @@ import math
 import os
 import time
 
-light_pos = light_pos = (31, 31, 5)
+light_pos = (31, 31, 5)
 width = 640
 height = 360
 MACRO_SIZE = 4

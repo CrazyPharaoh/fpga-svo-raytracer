@@ -1,0 +1,14 @@
+========================================
+  SVO Raytracer — Hardware Metrics Report
+========================================
+  Total primary rays cast   : 2,304,000
+  Total shadow rays cast    : 1,659,097
+  Total nodes visited       : 57,279,985
+  Total bitmask checks      : 65,660,326
+  Avg nodes visited  / ray  : 14.45
+  Avg bitmask checks / ray  : 16.57
+  Total frames rendered     : 30
+  Resolution                : 320 x 240
+  SVO max depth             : 6
+  World size                : 64^3 voxels
+========================================

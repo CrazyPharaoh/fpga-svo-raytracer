@@ -2,7 +2,7 @@ import math
 import os
 import time
 
-light_pos = (16.0, 20, 16.0)
+light_pos = (31, 31, 5)
 width = 640
 height = 360
 world_size = 32
