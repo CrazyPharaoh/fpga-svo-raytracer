@@ -1,0 +1,17 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1778537986" />
+    <testcase name="test_irq_pulses_after_render" classname="test_top" file="/home/ali/git/fyp/sim/cocotb/test_top/test_top.py" lineno="106" time="0.0016291141510009766" sim_time_ns="120.0" ratio_time="73659.66339821454">
+      <failure error_type="ValueError" error_msg="Cannot convert Logic('X') to bool" />
+    </testcase>
+    <testcase name="test_second_render_after_first" classname="test_top" file="/home/ali/git/fyp/sim/cocotb/test_top/test_top.py" lineno="118" time="0.0008139610290527344" sim_time_ns="130.0" ratio_time="159712.80609256006">
+      <failure error_type="ValueError" error_msg="Cannot convert Logic('X') to bool" />
+    </testcase>
+    <testcase name="test_hdmi_data_en_active_during_render" classname="test_top" file="/home/ali/git/fyp/sim/cocotb/test_top/test_top.py" lineno="132" time="0.0007567405700683594" sim_time_ns="130.0" ratio_time="171789.38878386893">
+      <failure error_type="ValueError" error_msg="Cannot convert Logic('X') to bool" />
+    </testcase>
+    <testcase name="test_busy_signal_visible_via_axi" classname="test_top" file="/home/ali/git/fyp/sim/cocotb/test_top/test_top.py" lineno="158" time="0.0007023811340332031" sim_time_ns="130.0" ratio_time="185084.69789545145">
+      <failure error_type="ValueError" error_msg="Cannot convert Logic('X') to bool" />
+    </testcase>
+  </testsuite>
+</testsuites>

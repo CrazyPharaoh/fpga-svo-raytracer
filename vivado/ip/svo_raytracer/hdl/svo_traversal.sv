@@ -1,0 +1,481 @@
+// svo_traversal.sv
+// SVO DDA traversal FSM. Processes one ray at a time.
+// All arithmetic in Q16.16 signed fixed-point.
+//
+// Parameters:
+//   SHADOW_MODE = 0  Primary-ray mode: renders full 320×240 frame.
+//                    When SHADE_MODE=0 (Phase 1) hits write white pixels.
+//                    When SHADE_MODE=1 (Phase 2) hits hand off to shading pipeline.
+//   SHADOW_MODE = 1  Shadow-ray mode: terminates at first hit, pulses frame_done.
+//                    Ignores camera registers; uses cam_pos/fwd as ray origin/dir.
+//   SHADE_MODE  = 0  Phase 1: hit → white, miss → sky_color (no shading pipeline).
+//   SHADE_MODE  = 1  Phase 2: hit → trigger shading pipeline, await shade_done.
+`timescale 1ns/1ps
+module svo_traversal #(
+    parameter int IMG_W       = 320,
+    parameter int IMG_H       = 240,
+    parameter int STACK_DEPTH = 12,
+    parameter int WORLD_SIZE  = 64,
+    parameter bit SHADOW_MODE = 0,   // 1 = shadow-ray instance
+    parameter bit SHADE_MODE  = 0    // 1 = hand off to shading_pipeline
+)(
+    input  logic        clk,
+    input  logic        rst,
+    input  logic        start,
+
+    // Camera / ray-origin registers (Q16.16)
+    // In SHADOW_MODE: cam_pos = ray origin, cam_fwd = ray direction (normalised)
+    input  logic signed [31:0] cam_pos_x,   cam_pos_y,   cam_pos_z,
+    input  logic signed [31:0] cam_right_x, cam_right_y, cam_right_z,
+    input  logic signed [31:0] cam_up_x,    cam_up_y,    cam_up_z,
+    input  logic signed [31:0] cam_fwd_x,   cam_fwd_y,   cam_fwd_z,
+    input  logic signed [31:0] cam_scale,   // ignored in SHADOW_MODE
+
+    // Sky colour (Phase 1 miss path)
+    input  logic [23:0] sky_color,
+
+    // SVO BRAM read port
+    output logic [14:0] svo_rd_addr,
+    input  logic [31:0] svo_rd_data,
+    output logic        svo_rd_en,
+
+    // Framebuffer write port (unused in SHADOW_MODE)
+    output logic [16:0] fb_wr_addr,
+    output logic [23:0] fb_wr_data,
+    output logic        fb_wr_en,
+
+    // Shading pipeline handoff (SHADE_MODE=1 only)
+    output logic        shade_start,
+    output logic        shade_is_miss,
+    output logic [1:0]  shade_hit_face,
+    output logic        shade_hit_face_sign,
+    output logic [7:0]  shade_block_id,
+    output logic signed [31:0] shade_t_hit,
+    output logic signed [31:0] shade_ray_dx,  shade_ray_dy,  shade_ray_dz,
+    output logic signed [31:0] shade_hit_px,  shade_hit_py,  shade_hit_pz,
+    input  logic        shade_done,
+    input  logic [23:0] shade_pixel_color,
+
+    // Status
+    output logic        busy,
+    output logic        frame_done,   // also used as "any_hit" pulse in SHADOW_MODE
+    output logic        any_hit       // SHADOW_MODE: 1 when first solid hit found
+);
+
+    // -------------------------------------------------------------------------
+    // Q16.16 helpers
+    // -------------------------------------------------------------------------
+    function automatic logic signed [31:0] qmul(
+        input logic signed [31:0] a, b
+    );
+        logic signed [63:0] p;
+        p = a * b;
+        return p[47:16];
+    endfunction
+
+    function automatic logic signed [31:0] qrecip(
+        input logic signed [31:0] x
+    );
+        logic signed [31:0] xabs, r, r2;
+        xabs = (x < 0) ? -x : x;
+        r  = 32'h0001_0000;
+        r2 = qmul(xabs, r); r2 = 32'h0002_0000 - r2; r = qmul(r, r2);
+        r2 = qmul(xabs, r); r2 = 32'h0002_0000 - r2; r = qmul(r, r2);
+        return (x < 0) ? -r : r;
+    endfunction
+
+    // -------------------------------------------------------------------------
+    // FSM states
+    // -------------------------------------------------------------------------
+    typedef enum logic [3:0] {
+        S_IDLE        = 4'd0,
+        S_RAY_SETUP   = 4'd1,
+        S_ROOT_SLAB   = 4'd2,
+        S_ENTER_NODE  = 4'd3,
+        S_BRAM_WAIT   = 4'd4,
+        S_CHECK_CHILD = 4'd5,
+        S_EMPTY       = 4'd6,
+        S_SOLID       = 4'd7,
+        S_MIXED       = 4'd8,
+        S_POP_STACK   = 4'd9,
+        S_MISS        = 4'd10,
+        S_WAIT_SHADE  = 4'd11,
+        S_WRITE_PIXEL = 4'd12,
+        S_NEXT_PIXEL  = 4'd13
+    } state_t;
+
+    state_t state;
+
+    // -------------------------------------------------------------------------
+    // Pixel counters (primary-ray mode only)
+    // -------------------------------------------------------------------------
+    logic [8:0] px;
+    logic [7:0] py;
+
+    // -------------------------------------------------------------------------
+    // Ray registers (Q16.16)
+    // -------------------------------------------------------------------------
+    logic signed [31:0] ro_x, ro_y, ro_z;
+    logic signed [31:0] rd_x, rd_y, rd_z;
+    logic signed [31:0] inv_x, inv_y, inv_z;
+
+    // -------------------------------------------------------------------------
+    // DDA registers
+    // -------------------------------------------------------------------------
+    logic signed [31:0] t_min, t_max;
+    logic signed [31:0] t_next_x, t_next_y, t_next_z;
+    logic signed [31:0] dt_x, dt_y, dt_z;
+    logic signed [2:0]  step_x, step_y, step_z;
+    logic [5:0] cx, cy, cz;
+    logic [5:0] node_half;
+    logic [5:0] node_origin_x, node_origin_y, node_origin_z;
+
+    // -------------------------------------------------------------------------
+    // SVO node registers
+    // -------------------------------------------------------------------------
+    logic [15:0] node_idx;
+    logic [15:0] bitmask;
+    logic [2:0]  cidx;
+    logic [15:0] r_child [0:7];
+    logic [7:0]  r_block [0:7];
+    logic [15:0] r_bitmask;
+    logic [2:0]  bram_field;
+
+    // Hit info
+    logic [7:0]  block_id_hit;
+    logic signed [31:0] t_hit;
+    logic [1:0]  hit_face;
+    logic        hit_face_sign_r;
+    logic signed [31:0] hit_px_r, hit_py_r, hit_pz_r;
+
+    // -------------------------------------------------------------------------
+    // Stack
+    // -------------------------------------------------------------------------
+    logic [3:0]  sp;
+    logic [15:0] stk_node_idx    [0:STACK_DEPTH-1];
+    logic signed [31:0] stk_t_min      [0:STACK_DEPTH-1];
+    logic signed [31:0] stk_t_max      [0:STACK_DEPTH-1];
+    logic signed [31:0] stk_t_next_x   [0:STACK_DEPTH-1];
+    logic signed [31:0] stk_t_next_y   [0:STACK_DEPTH-1];
+    logic signed [31:0] stk_t_next_z   [0:STACK_DEPTH-1];
+    logic [5:0]  stk_cx          [0:STACK_DEPTH-1];
+    logic [5:0]  stk_cy          [0:STACK_DEPTH-1];
+    logic [5:0]  stk_cz          [0:STACK_DEPTH-1];
+    logic [5:0]  stk_node_half   [0:STACK_DEPTH-1];
+    logic [5:0]  stk_orig_x      [0:STACK_DEPTH-1];
+    logic [5:0]  stk_orig_y      [0:STACK_DEPTH-1];
+    logic [5:0]  stk_orig_z      [0:STACK_DEPTH-1];
+
+    logic [23:0] pixel_color;
+
+    // -------------------------------------------------------------------------
+    // FSM
+    // -------------------------------------------------------------------------
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            state      <= S_IDLE;
+            busy       <= '0;
+            frame_done <= '0;
+            any_hit    <= '0;
+            fb_wr_en   <= '0;
+            svo_rd_en  <= '0;
+            shade_start <= '0;
+            px <= '0; py <= '0; sp <= '0;
+        end else begin
+            fb_wr_en    <= '0;
+            frame_done  <= '0;
+            any_hit     <= '0;
+            shade_start <= '0;
+
+            unique case (state)
+
+            // -----------------------------------------------------------------
+            S_IDLE: begin
+                busy <= '0;
+                if (start) begin
+                    busy  <= 1'b1;
+                    px    <= '0;
+                    py    <= '0;
+                    state <= S_RAY_SETUP;
+                end
+            end
+
+            // -----------------------------------------------------------------
+            S_RAY_SETUP: begin
+                if (SHADOW_MODE) begin
+                    // Shadow mode: ray is fully specified by cam_pos / cam_fwd
+                    ro_x <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
+                    rd_x <= cam_fwd_x; rd_y <= cam_fwd_y; rd_z <= cam_fwd_z;
+                end else begin
+                    // Primary mode: derive ray from pixel coords + camera basis
+                    logic signed [31:0] u, v, dx, dy, dz, len2, inv_len;
+                    u  = qmul(($signed(32'(px)) - 32'sh000A_0000), cam_scale);
+                    v  = qmul(($signed(32'(py)) - 32'sh0078_0000), cam_scale);
+                    dx = cam_fwd_x + qmul(u, cam_right_x) - qmul(v, cam_up_x);
+                    dy = cam_fwd_y + qmul(u, cam_right_y) - qmul(v, cam_up_y);
+                    dz = cam_fwd_z + qmul(u, cam_right_z) - qmul(v, cam_up_z);
+                    len2    = qmul(dx, dx) + qmul(dy, dy) + qmul(dz, dz);
+                    inv_len = qrecip(len2);
+                    inv_len = qrecip(qmul(len2, inv_len) + inv_len) <<< 1;
+                    rd_x <= qmul(dx, inv_len);
+                    rd_y <= qmul(dy, inv_len);
+                    rd_z <= qmul(dz, inv_len);
+                    ro_x <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
+                end
+                inv_x <= qrecip(SHADOW_MODE ? cam_fwd_x : rd_x);
+                inv_y <= qrecip(SHADOW_MODE ? cam_fwd_y : rd_y);
+                inv_z <= qrecip(SHADOW_MODE ? cam_fwd_z : rd_z);
+                step_x <= ((SHADOW_MODE ? cam_fwd_x : rd_x) >= 0) ? 3'sd1 : -3'sd1;
+                step_y <= ((SHADOW_MODE ? cam_fwd_y : rd_y) >= 0) ? 3'sd1 : -3'sd1;
+                step_z <= ((SHADOW_MODE ? cam_fwd_z : rd_z) >= 0) ? 3'sd1 : -3'sd1;
+                sp    <= '0;
+                state <= S_ROOT_SLAB;
+            end
+
+            // -----------------------------------------------------------------
+            S_ROOT_SLAB: begin
+                logic signed [31:0] tx0, tx1, ty0, ty1, tz0, tz1, world_q, tmp;
+                world_q = WORLD_SIZE << 16;
+                tx0 = qmul(-ro_x,         inv_x); tx1 = qmul(world_q - ro_x, inv_x);
+                ty0 = qmul(-ro_y,         inv_y); ty1 = qmul(world_q - ro_y, inv_y);
+                tz0 = qmul(-ro_z,         inv_z); tz1 = qmul(world_q - ro_z, inv_z);
+                if (tx0 > tx1) begin tmp=tx0; tx0=tx1; tx1=tmp; end
+                if (ty0 > ty1) begin tmp=ty0; ty0=ty1; ty1=tmp; end
+                if (tz0 > tz1) begin tmp=tz0; tz0=tz1; tz1=tmp; end
+                t_min = (tx0>ty0)?((tx0>tz0)?tx0:tz0):((ty0>tz0)?ty0:tz0);
+                t_max = (tx1<ty1)?((tx1<tz1)?tx1:tz1):((ty1<tz1)?ty1:tz1);
+                if (t_min > t_max)
+                    state <= S_MISS;
+                else begin
+                    node_idx      <= '0;
+                    node_half     <= 6'(WORLD_SIZE >> 1);
+                    node_origin_x <= '0; node_origin_y <= '0; node_origin_z <= '0;
+                    state <= S_ENTER_NODE;
+                end
+            end
+
+            // -----------------------------------------------------------------
+            S_ENTER_NODE: begin
+                bram_field  <= '0;
+                svo_rd_en   <= 1'b1;
+                svo_rd_addr <= {node_idx[11:0], 3'd0};
+                state       <= S_BRAM_WAIT;
+            end
+
+            // -----------------------------------------------------------------
+            S_BRAM_WAIT: begin
+                unique case (bram_field)
+                    3'd0: r_bitmask       <= svo_rd_data[15:0];
+                    3'd1: begin r_child[0]<=svo_rd_data[31:16]; r_child[1]<=svo_rd_data[15:0]; end
+                    3'd2: begin r_child[2]<=svo_rd_data[31:16]; r_child[3]<=svo_rd_data[15:0]; end
+                    3'd3: begin r_child[4]<=svo_rd_data[31:16]; r_child[5]<=svo_rd_data[15:0]; end
+                    3'd4: begin r_child[6]<=svo_rd_data[31:16]; r_child[7]<=svo_rd_data[15:0]; end
+                    3'd5: begin
+                        r_block[0]<=svo_rd_data[31:24]; r_block[1]<=svo_rd_data[23:16];
+                        r_block[2]<=svo_rd_data[15:8];  r_block[3]<=svo_rd_data[7:0];
+                    end
+                    3'd6: begin
+                        r_block[4]<=svo_rd_data[31:24]; r_block[5]<=svo_rd_data[23:16];
+                        r_block[6]<=svo_rd_data[15:8];  r_block[7]<=svo_rd_data[7:0];
+                    end
+                    default: ;
+                endcase
+                if (bram_field < 3'd6) begin
+                    bram_field  <= bram_field + 1'b1;
+                    svo_rd_addr <= {node_idx[11:0], bram_field + 1'b1};
+                end else begin
+                    svo_rd_en <= '0;
+                    bitmask   <= r_bitmask;
+                    begin
+                        logic signed [31:0] ex, ey, ez;
+                        logic [5:0] icx, icy, icz;
+                        logic signed [31:0] abs_ix, abs_iy, abs_iz;
+                        ex  = ro_x + qmul(t_min, rd_x);
+                        ey  = ro_y + qmul(t_min, rd_y);
+                        ez  = ro_z + qmul(t_min, rd_z);
+                        icx = ex[21:16] - node_origin_x;
+                        icy = ey[21:16] - node_origin_y;
+                        icz = ez[21:16] - node_origin_z;
+                        cx  <= icx >> $clog2(node_half);
+                        cy  <= icy >> $clog2(node_half);
+                        cz  <= icz >> $clog2(node_half);
+                        abs_ix = (inv_x >= 0) ? inv_x : -inv_x;
+                        abs_iy = (inv_y >= 0) ? inv_y : -inv_y;
+                        abs_iz = (inv_z >= 0) ? inv_z : -inv_z;
+                        dt_x     <= qmul(32'(node_half) << 16, abs_ix);
+                        dt_y     <= qmul(32'(node_half) << 16, abs_iy);
+                        dt_z     <= qmul(32'(node_half) << 16, abs_iz);
+                        t_next_x <= t_min + qmul(32'(node_half) << 16, abs_ix);
+                        t_next_y <= t_min + qmul(32'(node_half) << 16, abs_iy);
+                        t_next_z <= t_min + qmul(32'(node_half) << 16, abs_iz);
+                    end
+                    state <= S_CHECK_CHILD;
+                end
+            end
+
+            // -----------------------------------------------------------------
+            S_CHECK_CHILD: begin
+                cidx <= {cz[0], cy[0], cx[0]};
+                unique case (2'((r_bitmask >> ({cz[0],cy[0],cx[0]} * 2)) & 16'h0003))
+                    2'b00:   state <= S_EMPTY;
+                    2'b11:   state <= S_SOLID;
+                    2'b01:   state <= S_MIXED;
+                    default: state <= S_EMPTY;
+                endcase
+            end
+
+            // -----------------------------------------------------------------
+            S_EMPTY: begin
+                begin
+                    logic [1:0] face;
+                    logic       fsign;
+                    if (t_next_x <= t_next_y && t_next_x <= t_next_z) begin
+                        cx <= cx + 6'(step_x); t_min <= t_next_x; t_next_x <= t_next_x + dt_x;
+                        face = 2'd0; fsign = (step_x < 0);
+                    end else if (t_next_y <= t_next_z) begin
+                        cy <= cy + 6'(step_y); t_min <= t_next_y; t_next_y <= t_next_y + dt_y;
+                        face = 2'd1; fsign = (step_y < 0);
+                    end else begin
+                        cz <= cz + 6'(step_z); t_min <= t_next_z; t_next_z <= t_next_z + dt_z;
+                        face = 2'd2; fsign = (step_z < 0);
+                    end
+                    hit_face          <= face;
+                    hit_face_sign_r   <= fsign;
+                end
+                if (cx > 1 || cy > 1 || cz > 1 || cx[5] || cy[5] || cz[5])
+                    state <= S_POP_STACK;
+                else
+                    state <= S_CHECK_CHILD;
+            end
+
+            // -----------------------------------------------------------------
+            S_SOLID: begin
+                t_hit        <= t_min;
+                block_id_hit <= r_block[cidx];
+                hit_px_r     <= ro_x + qmul(t_min, rd_x);
+                hit_py_r     <= ro_y + qmul(t_min, rd_y);
+                hit_pz_r     <= ro_z + qmul(t_min, rd_z);
+                if (SHADOW_MODE) begin
+                    // Shadow mode: immediately signal hit and stop
+                    any_hit    <= 1'b1;
+                    frame_done <= 1'b1;
+                    state      <= S_IDLE;
+                end else if (SHADE_MODE) begin
+                    // Phase 2: hand off to shading pipeline
+                    shade_is_miss       <= 1'b0;
+                    shade_hit_face      <= hit_face;
+                    shade_hit_face_sign <= hit_face_sign_r;
+                    shade_block_id      <= r_block[cidx];
+                    shade_t_hit         <= t_min;
+                    shade_ray_dx        <= rd_x;
+                    shade_ray_dy        <= rd_y;
+                    shade_ray_dz        <= rd_z;
+                    shade_hit_px        <= ro_x + qmul(t_min, rd_x);
+                    shade_hit_py        <= ro_y + qmul(t_min, rd_y);
+                    shade_hit_pz        <= ro_z + qmul(t_min, rd_z);
+                    shade_start         <= 1'b1;
+                    state               <= S_WAIT_SHADE;
+                end else begin
+                    // Phase 1: white pixel
+                    pixel_color <= 24'hFF_FF_FF;
+                    state       <= S_WRITE_PIXEL;
+                end
+            end
+
+            // -----------------------------------------------------------------
+            S_MIXED: begin
+                stk_node_idx [sp] <= node_idx;
+                stk_t_min    [sp] <= t_min;     stk_t_max    [sp] <= t_max;
+                stk_t_next_x [sp] <= t_next_x;  stk_t_next_y [sp] <= t_next_y;
+                stk_t_next_z [sp] <= t_next_z;
+                stk_cx       [sp] <= cx;  stk_cy [sp] <= cy;  stk_cz [sp] <= cz;
+                stk_node_half[sp] <= node_half;
+                stk_orig_x   [sp] <= node_origin_x;
+                stk_orig_y   [sp] <= node_origin_y;
+                stk_orig_z   [sp] <= node_origin_z;
+                sp            <= sp + 1'b1;
+                node_idx      <= r_child[cidx];
+                node_origin_x <= node_origin_x + (cx[0] ? node_half : 6'd0);
+                node_origin_y <= node_origin_y + (cy[0] ? node_half : 6'd0);
+                node_origin_z <= node_origin_z + (cz[0] ? node_half : 6'd0);
+                node_half     <= node_half >> 1;
+                state <= S_ENTER_NODE;
+            end
+
+            // -----------------------------------------------------------------
+            S_POP_STACK: begin
+                if (sp == '0)
+                    state <= S_MISS;
+                else begin
+                    sp            <= sp - 1'b1;
+                    node_idx      <= stk_node_idx [sp-1];
+                    t_min         <= stk_t_min    [sp-1]; t_max <= stk_t_max [sp-1];
+                    t_next_x      <= stk_t_next_x [sp-1];
+                    t_next_y      <= stk_t_next_y [sp-1];
+                    t_next_z      <= stk_t_next_z [sp-1];
+                    cx            <= stk_cx       [sp-1];
+                    cy            <= stk_cy       [sp-1];
+                    cz            <= stk_cz       [sp-1];
+                    node_half     <= stk_node_half[sp-1];
+                    node_origin_x <= stk_orig_x   [sp-1];
+                    node_origin_y <= stk_orig_y   [sp-1];
+                    node_origin_z <= stk_orig_z   [sp-1];
+                    state <= S_EMPTY;
+                end
+            end
+
+            // -----------------------------------------------------------------
+            S_MISS: begin
+                if (SHADOW_MODE) begin
+                    frame_done <= 1'b1;
+                    state      <= S_IDLE;
+                end else if (SHADE_MODE) begin
+                    shade_is_miss  <= 1'b1;
+                    shade_start    <= 1'b1;
+                    state          <= S_WAIT_SHADE;
+                end else begin
+                    pixel_color <= sky_color;
+                    state       <= S_WRITE_PIXEL;
+                end
+            end
+
+            // -----------------------------------------------------------------
+            S_WAIT_SHADE: begin
+                shade_start <= '0;
+                if (shade_done) begin
+                    pixel_color <= shade_pixel_color;
+                    state       <= S_WRITE_PIXEL;
+                end
+            end
+
+            // -----------------------------------------------------------------
+            S_WRITE_PIXEL: begin
+                fb_wr_en   <= 1'b1;
+                fb_wr_addr <= ({9'd0, py} << 8) + ({9'd0, py} << 6) + {8'd0, px};
+                fb_wr_data <= pixel_color;
+                state      <= S_NEXT_PIXEL;
+            end
+
+            // -----------------------------------------------------------------
+            S_NEXT_PIXEL: begin
+                if (px == 9'(IMG_W - 1)) begin
+                    px <= '0;
+                    if (py == 8'(IMG_H - 1)) begin
+                        py         <= '0;
+                        frame_done <= 1'b1;
+                        state      <= S_IDLE;
+                    end else begin
+                        py    <= py + 1'b1;
+                        state <= S_RAY_SETUP;
+                    end
+                end else begin
+                    px    <= px + 1'b1;
+                    state <= S_RAY_SETUP;
+                end
+            end
+
+            endcase
+        end
+    end
+
+endmodule

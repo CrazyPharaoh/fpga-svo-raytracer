@@ -1,0 +1,10 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1778690081" />
+    <testcase name="test_frame_done_pulses" classname="test_svo_traversal" file="/home/ali/git/fyp/sim/cocotb/test_svo_traversal/test_svo_traversal.py" lineno="133" time="26.331010580062866" sim_time_ns="13824120.0" ratio_time="525012.8914712925" />
+    <testcase name="test_busy_deasserts_after_frame" classname="test_svo_traversal" file="/home/ali/git/fyp/sim/cocotb/test_svo_traversal/test_svo_traversal.py" lineno="148" time="25.041481018066406" sim_time_ns="13824119.999999998" ratio_time="552048.8181200809" />
+    <testcase name="test_all_miss_writes_sky_colour" classname="test_svo_traversal" file="/home/ali/git/fyp/sim/cocotb/test_svo_traversal/test_svo_traversal.py" lineno="171" time="30.346620082855225" sim_time_ns="13824109.999999996" ratio_time="455540.35217945516" />
+    <testcase name="test_all_solid_writes_white" classname="test_svo_traversal" file="/home/ali/git/fyp/sim/cocotb/test_svo_traversal/test_svo_traversal.py" lineno="194" time="24.36670207977295" sim_time_ns="10752110.0" ratio_time="441262.4229901607" />
+    <testcase name="test_pixel_addresses_cover_full_frame" classname="test_svo_traversal" file="/home/ali/git/fyp/sim/cocotb/test_svo_traversal/test_svo_traversal.py" lineno="219" time="31.19123935699463" sim_time_ns="13824110.0" ratio_time="443204.8961497885" />
+  </testsuite>
+</testsuites>

@@ -1,0 +1,30 @@
+# Makefile.common — shared variables for all cocotb testbenches
+#
+# Prerequisites:
+#   pip install cocotb
+#   sudo apt install iverilog   (or set SIM=questa / SIM=xcelium)
+#
+# Usage from a test subdirectory:
+#   make            — run tests with Icarus
+#   make SIM=questa — run with Questa
+#   make clean      — remove build artefacts
+
+SIM          ?= icarus
+TOPLEVEL_LANG ?= systemverilog
+
+# SystemVerilog compile flags for Icarus 11+
+ifeq ($(SIM),icarus)
+  COMPILE_ARGS += -g2012
+endif
+
+# Verilator: initialise all undriven signals to 0 instead of X so that
+# uninitialized BRAM memory and output registers do not propagate X through
+# combinatorial paths, which breaks integer conversion in cocotb.
+ifeq ($(SIM),verilator)
+  COMPILE_ARGS += --x-initial 0 --x-initial-edge
+endif
+
+# Root of the RTL sources relative to this file
+RTL_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../vivado/ip/svo_raytracer/hdl)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim

@@ -1,0 +1,13 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1778537982" />
+    <testcase name="test_reset_clears_counters" classname="test_hdmi_timing" file="/home/ali/git/fyp/sim/cocotb/test_hdmi_timing/test_hdmi_timing.py" lineno="25" time="0.0007219314575195312" sim_time_ns="119.16" ratio_time="165057.22081902245" />
+    <testcase name="test_hx_increments_each_cycle" classname="test_hdmi_timing" file="/home/ali/git/fyp/sim/cocotb/test_hdmi_timing/test_hdmi_timing.py" lineno="35" time="0.0005135536193847656" sim_time_ns="556.0799999999999" ratio_time="1082808.063286908" />
+    <testcase name="test_hx_wraps_at_h_total" classname="test_hdmi_timing" file="/home/ali/git/fyp/sim/cocotb/test_hdmi_timing/test_hdmi_timing.py" lineno="47" time="0.01990962028503418" sim_time_ns="31974.600000000002" ratio_time="1605987.4343276613" />
+    <testcase name="test_hy_wraps_at_v_total" classname="test_hdmi_timing" file="/home/ali/git/fyp/sim/cocotb/test_hdmi_timing/test_hdmi_timing.py" lineno="62" time="10.97978949546814" sim_time_ns="16682598.6" ratio_time="1519391.478942804" />
+    <testcase name="test_active_pixel_count_per_frame" classname="test_hdmi_timing" file="/home/ali/git/fyp/sim/cocotb/test_hdmi_timing/test_hdmi_timing.py" lineno="76" time="12.26493239402771" sim_time_ns="16682598.6" ratio_time="1360186.755544077" />
+    <testcase name="test_hsync_polarity_and_position" classname="test_hdmi_timing" file="/home/ali/git/fyp/sim/cocotb/test_hdmi_timing/test_hdmi_timing.py" lineno="91" time="0.024840593338012695" sim_time_ns="31974.599999997765" ratio_time="1287191.4758601256" />
+    <testcase name="test_vsync_polarity_and_position" classname="test_hdmi_timing" file="/home/ali/git/fyp/sim/cocotb/test_hdmi_timing/test_hdmi_timing.py" lineno="107" time="13.38059687614441" sim_time_ns="16650822.599999998" ratio_time="1244400.5864705415" />
+    <testcase name="test_data_en_only_in_active_region" classname="test_hdmi_timing" file="/home/ali/git/fyp/sim/cocotb/test_hdmi_timing/test_hdmi_timing.py" lineno="126" time="13.9841787815094" sim_time_ns="16682598.600000001" ratio_time="1192962.3369846067" />
+  </testsuite>
+</testsuites>
