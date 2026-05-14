@@ -105,6 +105,7 @@ module svo_traversal #(
     } state_t;
 
     state_t state;
+    logic [3:0] state_raw; assign state_raw = state;   // integer alias for waveform viewers
 
     // -------------------------------------------------------------------------
     // Pixel counters (primary-ray mode only)
@@ -129,6 +130,16 @@ module svo_traversal #(
     logic [5:0] cx, cy, cz;
     logic [5:0] node_half;
     logic [5:0] node_origin_x, node_origin_y, node_origin_z;
+
+    logic signed [31:0] rs_tx0, rs_tx1, rs_ty0, rs_ty1, rs_tz0, rs_tz1, rs_world_q, rs_tmp;
+    logic signed [31:0] bw_ex, bw_ey, bw_ez, bw_abs_ix, bw_abs_iy, bw_abs_iz;
+    logic signed [31:0] bw_ex_rel, bw_ey_rel, bw_ez_rel;   // position within node (Q16.16)
+    logic signed [31:0] bw_dist_x, bw_dist_y, bw_dist_z;   // distance to next boundary
+    logic signed [31:0] bw_nh;                               // node_half in Q16.16
+    logic [5:0]         bw_icx, bw_icy, bw_icz;
+    logic [1:0]         em_face;
+    logic               em_fsign;
+    logic signed [31:0] rsu, rsv, rsdx, rsdy, rsdz, rslen2, rsinv_len, rsndx, rsndy, rsndz;
 
     // -------------------------------------------------------------------------
     // SVO node registers
@@ -206,45 +217,53 @@ module svo_traversal #(
                     // Shadow mode: ray is fully specified by cam_pos / cam_fwd
                     ro_x <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
                     rd_x <= cam_fwd_x; rd_y <= cam_fwd_y; rd_z <= cam_fwd_z;
+                    inv_x <= qrecip(cam_fwd_x);
+                    inv_y <= qrecip(cam_fwd_y);
+                    inv_z <= qrecip(cam_fwd_z);
+                    step_x <= (cam_fwd_x >= 0) ? 3'sd1 : -3'sd1;
+                    step_y <= (cam_fwd_y >= 0) ? 3'sd1 : -3'sd1;
+                    step_z <= (cam_fwd_z >= 0) ? 3'sd1 : -3'sd1;
                 end else begin
                     // Primary mode: derive ray from pixel coords + camera basis
-                    logic signed [31:0] u, v, dx, dy, dz, len2, inv_len;
-                    u  = qmul(($signed(32'(px)) - 32'sh000A_0000), cam_scale);
-                    v  = qmul(($signed(32'(py)) - 32'sh0078_0000), cam_scale);
-                    dx = cam_fwd_x + qmul(u, cam_right_x) - qmul(v, cam_up_x);
-                    dy = cam_fwd_y + qmul(u, cam_right_y) - qmul(v, cam_up_y);
-                    dz = cam_fwd_z + qmul(u, cam_right_z) - qmul(v, cam_up_z);
-                    len2    = qmul(dx, dx) + qmul(dy, dy) + qmul(dz, dz);
-                    inv_len = qrecip(len2);
-                    inv_len = qrecip(qmul(len2, inv_len) + inv_len) <<< 1;
-                    rd_x <= qmul(dx, inv_len);
-                    rd_y <= qmul(dy, inv_len);
-                    rd_z <= qmul(dz, inv_len);
+                    rsu  = qmul(($signed({px, 16'd0}) - 32'sh00A0_0000), cam_scale);
+                    rsv  = qmul(($signed({py, 16'd0}) - 32'sh0078_0000), cam_scale);
+                    rsdx = cam_fwd_x + qmul(rsu, cam_right_x) - qmul(rsv, cam_up_x);
+                    rsdy = cam_fwd_y + qmul(rsu, cam_right_y) - qmul(rsv, cam_up_y);
+                    rsdz = cam_fwd_z + qmul(rsu, cam_right_z) - qmul(rsv, cam_up_z);
+                    rslen2    = qmul(rsdx, rsdx) + qmul(rsdy, rsdy) + qmul(rsdz, rsdz);
+                    rsinv_len = 32'sh0001_8000 - qmul(32'sh0000_8000, rslen2);
+                    rsinv_len = qmul(rsinv_len, 32'sh0001_8000 - qmul(32'sh0000_8000, qmul(rslen2, qmul(rsinv_len, rsinv_len))));
+                    rsndx = qmul(rsdx, rsinv_len);
+                    rsndy = qmul(rsdy, rsinv_len);
+                    rsndz = qmul(rsdz, rsinv_len);
+                    rd_x <= rsndx;
+                    rd_y <= rsndy;
+                    rd_z <= rsndz;
                     ro_x <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
+                    inv_x <= qrecip(rsndx);
+                    inv_y <= qrecip(rsndy);
+                    inv_z <= qrecip(rsndz);
+                    step_x <= (rsndx >= 0) ? 3'sd1 : -3'sd1;
+                    step_y <= (rsndy >= 0) ? 3'sd1 : -3'sd1;
+                    step_z <= (rsndz >= 0) ? 3'sd1 : -3'sd1;
                 end
-                inv_x <= qrecip(SHADOW_MODE ? cam_fwd_x : rd_x);
-                inv_y <= qrecip(SHADOW_MODE ? cam_fwd_y : rd_y);
-                inv_z <= qrecip(SHADOW_MODE ? cam_fwd_z : rd_z);
-                step_x <= ((SHADOW_MODE ? cam_fwd_x : rd_x) >= 0) ? 3'sd1 : -3'sd1;
-                step_y <= ((SHADOW_MODE ? cam_fwd_y : rd_y) >= 0) ? 3'sd1 : -3'sd1;
-                step_z <= ((SHADOW_MODE ? cam_fwd_z : rd_z) >= 0) ? 3'sd1 : -3'sd1;
                 sp    <= '0;
                 state <= S_ROOT_SLAB;
             end
 
             // -----------------------------------------------------------------
             S_ROOT_SLAB: begin
-                logic signed [31:0] tx0, tx1, ty0, ty1, tz0, tz1, world_q, tmp;
-                world_q = WORLD_SIZE << 16;
-                tx0 = qmul(-ro_x,         inv_x); tx1 = qmul(world_q - ro_x, inv_x);
-                ty0 = qmul(-ro_y,         inv_y); ty1 = qmul(world_q - ro_y, inv_y);
-                tz0 = qmul(-ro_z,         inv_z); tz1 = qmul(world_q - ro_z, inv_z);
-                if (tx0 > tx1) begin tmp=tx0; tx0=tx1; tx1=tmp; end
-                if (ty0 > ty1) begin tmp=ty0; ty0=ty1; ty1=tmp; end
-                if (tz0 > tz1) begin tmp=tz0; tz0=tz1; tz1=tmp; end
-                t_min = (tx0>ty0)?((tx0>tz0)?tx0:tz0):((ty0>tz0)?ty0:tz0);
-                t_max = (tx1<ty1)?((tx1<tz1)?tx1:tz1):((ty1<tz1)?ty1:tz1);
-                if (t_min > t_max)
+                rs_world_q = WORLD_SIZE << 16;
+                rs_tx0 = qmul(-ro_x,              inv_x); rs_tx1 = qmul(rs_world_q - ro_x, inv_x);
+                rs_ty0 = qmul(-ro_y,              inv_y); rs_ty1 = qmul(rs_world_q - ro_y, inv_y);
+                rs_tz0 = qmul(-ro_z,              inv_z); rs_tz1 = qmul(rs_world_q - ro_z, inv_z);
+                if (rs_tx0 > rs_tx1) begin rs_tmp=rs_tx0; rs_tx0=rs_tx1; rs_tx1=rs_tmp; end
+                if (rs_ty0 > rs_ty1) begin rs_tmp=rs_ty0; rs_ty0=rs_ty1; rs_ty1=rs_tmp; end
+                if (rs_tz0 > rs_tz1) begin rs_tmp=rs_tz0; rs_tz0=rs_tz1; rs_tz1=rs_tmp; end
+                t_min <= (rs_tx0>rs_ty0)?((rs_tx0>rs_tz0)?rs_tx0:rs_tz0):((rs_ty0>rs_tz0)?rs_ty0:rs_tz0);
+                t_max <= (rs_tx1<rs_ty1)?((rs_tx1<rs_tz1)?rs_tx1:rs_tz1):((rs_ty1<rs_tz1)?rs_ty1:rs_tz1);
+                if ((rs_tx0>rs_ty0 ? (rs_tx0>rs_tz0 ? rs_tx0:rs_tz0):(rs_ty0>rs_tz0 ? rs_ty0:rs_tz0)) >
+                    (rs_tx1<rs_ty1 ? (rs_tx1<rs_tz1 ? rs_tx1:rs_tz1):(rs_ty1<rs_tz1 ? rs_ty1:rs_tz1)))
                     state <= S_MISS;
                 else begin
                     node_idx      <= '0;
@@ -266,17 +285,17 @@ module svo_traversal #(
             S_BRAM_WAIT: begin
                 unique case (bram_field)
                     3'd0: r_bitmask       <= svo_rd_data[15:0];
-                    3'd1: begin r_child[0]<=svo_rd_data[31:16]; r_child[1]<=svo_rd_data[15:0]; end
-                    3'd2: begin r_child[2]<=svo_rd_data[31:16]; r_child[3]<=svo_rd_data[15:0]; end
-                    3'd3: begin r_child[4]<=svo_rd_data[31:16]; r_child[5]<=svo_rd_data[15:0]; end
-                    3'd4: begin r_child[6]<=svo_rd_data[31:16]; r_child[7]<=svo_rd_data[15:0]; end
+                    3'd1: begin r_child[0]<=svo_rd_data[15:0]; r_child[1]<=svo_rd_data[31:16]; end
+                    3'd2: begin r_child[2]<=svo_rd_data[15:0]; r_child[3]<=svo_rd_data[31:16]; end
+                    3'd3: begin r_child[4]<=svo_rd_data[15:0]; r_child[5]<=svo_rd_data[31:16]; end
+                    3'd4: begin r_child[6]<=svo_rd_data[15:0]; r_child[7]<=svo_rd_data[31:16]; end
                     3'd5: begin
-                        r_block[0]<=svo_rd_data[31:24]; r_block[1]<=svo_rd_data[23:16];
-                        r_block[2]<=svo_rd_data[15:8];  r_block[3]<=svo_rd_data[7:0];
+                        r_block[0]<=svo_rd_data[7:0];   r_block[1]<=svo_rd_data[15:8];
+                        r_block[2]<=svo_rd_data[23:16]; r_block[3]<=svo_rd_data[31:24];
                     end
                     3'd6: begin
-                        r_block[4]<=svo_rd_data[31:24]; r_block[5]<=svo_rd_data[23:16];
-                        r_block[6]<=svo_rd_data[15:8];  r_block[7]<=svo_rd_data[7:0];
+                        r_block[4]<=svo_rd_data[7:0];   r_block[5]<=svo_rd_data[15:8];
+                        r_block[6]<=svo_rd_data[23:16]; r_block[7]<=svo_rd_data[31:24];
                     end
                     default: ;
                 endcase
@@ -286,29 +305,56 @@ module svo_traversal #(
                 end else begin
                     svo_rd_en <= '0;
                     bitmask   <= r_bitmask;
-                    begin
-                        logic signed [31:0] ex, ey, ez;
-                        logic [5:0] icx, icy, icz;
-                        logic signed [31:0] abs_ix, abs_iy, abs_iz;
-                        ex  = ro_x + qmul(t_min, rd_x);
-                        ey  = ro_y + qmul(t_min, rd_y);
-                        ez  = ro_z + qmul(t_min, rd_z);
-                        icx = ex[21:16] - node_origin_x;
-                        icy = ey[21:16] - node_origin_y;
-                        icz = ez[21:16] - node_origin_z;
-                        cx  <= icx >> $clog2(node_half);
-                        cy  <= icy >> $clog2(node_half);
-                        cz  <= icz >> $clog2(node_half);
-                        abs_ix = (inv_x >= 0) ? inv_x : -inv_x;
-                        abs_iy = (inv_y >= 0) ? inv_y : -inv_y;
-                        abs_iz = (inv_z >= 0) ? inv_z : -inv_z;
-                        dt_x     <= qmul(32'(node_half) << 16, abs_ix);
-                        dt_y     <= qmul(32'(node_half) << 16, abs_iy);
-                        dt_z     <= qmul(32'(node_half) << 16, abs_iz);
-                        t_next_x <= t_min + qmul(32'(node_half) << 16, abs_ix);
-                        t_next_y <= t_min + qmul(32'(node_half) << 16, abs_iy);
-                        t_next_z <= t_min + qmul(32'(node_half) << 16, abs_iz);
-                    end
+                    bw_ex  = ro_x + qmul(t_min, rd_x);
+                    bw_ey  = ro_y + qmul(t_min, rd_y);
+                    bw_ez  = ro_z + qmul(t_min, rd_z);
+                    bw_icx = ($signed(bw_ex) < 0) ? 6'd0 : bw_ex[21:16];
+                    bw_icy = ($signed(bw_ey) < 0) ? 6'd0 : bw_ey[21:16];
+                    bw_icz = ($signed(bw_ez) < 0) ? 6'd0 : bw_ez[21:16];
+                    bw_icx = bw_icx - node_origin_x;
+                    bw_icy = bw_icy - node_origin_y;
+                    bw_icz = bw_icz - node_origin_z;
+                    cx  <= (bw_icx >= node_half) ? 6'd1 : 6'd0;
+                    cy  <= (bw_icy >= node_half) ? 6'd1 : 6'd0;
+                    cz  <= (bw_icz >= node_half) ? 6'd1 : 6'd0;
+                    bw_abs_ix = (inv_x >= 0) ? inv_x : -inv_x;
+                    bw_abs_iy = (inv_y >= 0) ? inv_y : -inv_y;
+                    bw_abs_iz = (inv_z >= 0) ? inv_z : -inv_z;
+                    bw_nh = $signed(32'(node_half)) << 16;   // node_half as Q16.16
+                    dt_x     <= qmul(bw_nh, bw_abs_ix);
+                    dt_y     <= qmul(bw_nh, bw_abs_iy);
+                    dt_z     <= qmul(bw_nh, bw_abs_iz);
+                    // Correct t_next: distance from entry point to next boundary (not from node edge)
+                    bw_ex_rel = bw_ex - ($signed(32'(node_origin_x)) << 16);
+                    bw_ey_rel = bw_ey - ($signed(32'(node_origin_y)) << 16);
+                    bw_ez_rel = bw_ez - ($signed(32'(node_origin_z)) << 16);
+                    if (step_x > 0)
+                        bw_dist_x = (bw_icx >= node_half) ?
+                            ((bw_nh <<< 1) - bw_ex_rel) :   // cx=1: 2*nh - pos
+                            (bw_nh - bw_ex_rel);             // cx=0: nh - pos
+                    else
+                        bw_dist_x = (bw_icx >= node_half) ?
+                            (bw_ex_rel - bw_nh) :            // cx=1: pos - nh
+                            bw_ex_rel;                       // cx=0: pos - 0
+                    if (step_y > 0)
+                        bw_dist_y = (bw_icy >= node_half) ?
+                            ((bw_nh <<< 1) - bw_ey_rel) :
+                            (bw_nh - bw_ey_rel);
+                    else
+                        bw_dist_y = (bw_icy >= node_half) ?
+                            (bw_ey_rel - bw_nh) :
+                            bw_ey_rel;
+                    if (step_z > 0)
+                        bw_dist_z = (bw_icz >= node_half) ?
+                            ((bw_nh <<< 1) - bw_ez_rel) :
+                            (bw_nh - bw_ez_rel);
+                    else
+                        bw_dist_z = (bw_icz >= node_half) ?
+                            (bw_ez_rel - bw_nh) :
+                            bw_ez_rel;
+                    t_next_x <= t_min + qmul(bw_dist_x, bw_abs_ix);
+                    t_next_y <= t_min + qmul(bw_dist_y, bw_abs_iy);
+                    t_next_z <= t_min + qmul(bw_dist_z, bw_abs_iz);
                     state <= S_CHECK_CHILD;
                 end
             end
@@ -326,22 +372,18 @@ module svo_traversal #(
 
             // -----------------------------------------------------------------
             S_EMPTY: begin
-                begin
-                    logic [1:0] face;
-                    logic       fsign;
-                    if (t_next_x <= t_next_y && t_next_x <= t_next_z) begin
-                        cx <= cx + 6'(step_x); t_min <= t_next_x; t_next_x <= t_next_x + dt_x;
-                        face = 2'd0; fsign = (step_x < 0);
-                    end else if (t_next_y <= t_next_z) begin
-                        cy <= cy + 6'(step_y); t_min <= t_next_y; t_next_y <= t_next_y + dt_y;
-                        face = 2'd1; fsign = (step_y < 0);
-                    end else begin
-                        cz <= cz + 6'(step_z); t_min <= t_next_z; t_next_z <= t_next_z + dt_z;
-                        face = 2'd2; fsign = (step_z < 0);
-                    end
-                    hit_face          <= face;
-                    hit_face_sign_r   <= fsign;
+                if (t_next_x <= t_next_y && t_next_x <= t_next_z) begin
+                    cx <= cx + 6'(step_x); t_min <= t_next_x; t_next_x <= t_next_x + dt_x;
+                    em_face = 2'd0; em_fsign = (step_x < 0);
+                end else if (t_next_y <= t_next_z) begin
+                    cy <= cy + 6'(step_y); t_min <= t_next_y; t_next_y <= t_next_y + dt_y;
+                    em_face = 2'd1; em_fsign = (step_y < 0);
+                end else begin
+                    cz <= cz + 6'(step_z); t_min <= t_next_z; t_next_z <= t_next_z + dt_z;
+                    em_face = 2'd2; em_fsign = (step_z < 0);
                 end
+                hit_face        <= em_face;
+                hit_face_sign_r <= em_fsign;
                 if (cx > 1 || cy > 1 || cz > 1 || cx[5] || cy[5] || cz[5])
                     state <= S_POP_STACK;
                 else

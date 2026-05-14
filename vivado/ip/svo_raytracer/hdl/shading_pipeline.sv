@@ -202,6 +202,7 @@ module shading_pipeline (
                 end else if (t_hit > fog_start) begin
                     logic signed [31:0] blend;
                     logic signed [31:0] cr, cg, cb, fr, fg, fb;
+                    logic signed [31:0] pr, pg, pb;
                     blend = qclamp01(qmul(t_hit - fog_start, FOG_INV_RANGE));
                     cr = {16'd0, combined[23:16]};
                     cg = {16'd0, combined[15:8]};
@@ -209,11 +210,10 @@ module shading_pipeline (
                     fr = {16'd0, fog_color[23:16]};
                     fg = {16'd0, fog_color[15:8]};
                     fb = {16'd0, fog_color[7:0]};
-                    pixel_color <= {
-                        (cr + qmul(blend, fr - cr))[7:0],
-                        (cg + qmul(blend, fg - cg))[7:0],
-                        (cb + qmul(blend, fb - cb))[7:0]
-                    };
+                    pr = cr + qmul(blend, fr - cr);
+                    pg = cg + qmul(blend, fg - cg);
+                    pb = cb + qmul(blend, fb - cb);
+                    pixel_color <= {pr[7:0], pg[7:0], pb[7:0]};
                 end else begin
                     pixel_color <= combined;
                 end
