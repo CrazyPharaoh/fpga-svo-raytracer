@@ -121,7 +121,6 @@ module shading_pipeline (
             // -----------------------------------------------------------------
             S_NORMAL: begin
                 // Decode face normal: two components zero, one ±1.0
-                // If hit face sign is 1, sets to neg, otherwise positive
                 nx <= '0; ny <= '0; nz <= '0;
                 unique case (hit_face)
                     2'd0: nx <= hit_face_sign ? -32'sh0001_0000 : 32'sh0001_0000;
@@ -130,7 +129,6 @@ module shading_pipeline (
                     default: nx <= 32'sh0001_0000;
                 endcase
                 // Look up base colour; clamp block_id to LUT range [0,5]
-                // if block ID is > 5, choose 5 as the highest one, might have to change if we add more colours
                 base_color <= lut[(block_id > 5) ? 5 : block_id][23:0];
                 state <= S_DIFFSPEC;
             end

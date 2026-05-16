@@ -87,7 +87,6 @@ def flatten_svo(root: SVONode) -> List[SVONode]:
     Returns a flat list of SVONodes where each node's children[i] is either
     None (leaf) or an integer index into the returned list.
     """
-    # Map from object id to BFS index
     obj_to_idx = {}
     queue = [root]
     ordered = []

@@ -32,15 +32,12 @@ module top #(
 
     output logic        irq,          // frame_done → IRQ_F2P on PS
 
-    input  logic        clk_pixel,    // 25.175 MHz from MMCM
-
-    // HDMI video signals — connect to rgb2dvi in block design
-    output logic [7:0]  hdmi_r,
-    output logic [7:0]  hdmi_g,
-    output logic [7:0]  hdmi_b,
-    output logic        hdmi_hsync,
-    output logic        hdmi_vsync,
-    output logic        hdmi_de
+    // AXI-Stream pixel output → AXI VDMA in block design
+    output logic        axis_tvalid,
+    output logic [31:0] axis_tdata,
+    output logic        axis_tlast,
+    output logic [0:0]  axis_tuser,
+    input  logic        axis_tready
 );
 
     logic clk = s_axi_aclk;
@@ -94,20 +91,12 @@ module top #(
     assign svo_rd_data_shad = svo_rd_data_mux;
 
     // -------------------------------------------------------------------------
-    // Framebuffer
+    // AXI-Stream from traversal to VDMA
     // -------------------------------------------------------------------------
-    logic [16:0] fb_wr_addr;
-    logic [23:0] fb_wr_data;
-    logic        fb_wr_en;
-    logic [16:0] fb_rd_addr;
-    logic [23:0] fb_rd_data;
-
-    // -------------------------------------------------------------------------
-    // HDMI timing
-    // -------------------------------------------------------------------------
-    logic [9:0] hx, hy;
-    logic       hdmi_de_int;
-    logic       hdmi_de_r;
+    logic        axis_tvalid_int;
+    logic [31:0] axis_tdata_int;
+    logic        axis_tlast_int;
+    logic [0:0]  axis_tuser_int;
 
     // -------------------------------------------------------------------------
     // Shading pipeline ↔ primary traversal
@@ -173,7 +162,10 @@ module top #(
         .sky_color(sky_color_reg[23:0]),
         .svo_rd_addr(svo_rd_addr_prim), .svo_rd_data(svo_rd_data_prim),
         .svo_rd_en(svo_rd_en_prim),
-        .fb_wr_addr(fb_wr_addr), .fb_wr_data(fb_wr_data), .fb_wr_en(fb_wr_en),
+        .fb_wr_addr(), .fb_wr_data(), .fb_wr_en(),   // legacy — unconnected
+        .axis_tvalid(axis_tvalid_int), .axis_tdata(axis_tdata_int),
+        .axis_tlast(axis_tlast_int),   .axis_tuser(axis_tuser_int),
+        .axis_tready(axis_tready),
         .shade_start(shade_start),    .shade_is_miss(shade_is_miss),
         .shade_hit_face(shade_hit_face), .shade_hit_face_sign(shade_hit_face_sign),
         .shade_block_id(shade_block_id), .shade_t_hit(shade_t_hit),
@@ -217,6 +209,8 @@ module top #(
             .svo_rd_addr(svo_rd_addr_shad), .svo_rd_data(svo_rd_data_shad),
             .svo_rd_en(svo_rd_en_shad),
             .fb_wr_addr(), .fb_wr_data(), .fb_wr_en(),
+            .axis_tvalid(), .axis_tdata(), .axis_tlast(), .axis_tuser(),
+            .axis_tready('0),
             .shade_start(), .shade_is_miss(), .shade_hit_face(), .shade_hit_face_sign(),
             .shade_block_id(), .shade_t_hit(),
             .shade_ray_dx(), .shade_ray_dy(), .shade_ray_dz(),
@@ -226,7 +220,7 @@ module top #(
         );
 
     end else begin : g_no_shading
-        // Phase 1: tie off shading outputs
+        // tie off shading outputs
         assign shade_done        = '0;
         assign shade_pixel_color = '0;
         assign shadow_done       = '0;
@@ -235,30 +229,11 @@ module top #(
         assign svo_rd_addr_shad  = '0;
     end endgenerate
 
-    framebuffer fb (
-        .wr_clk(clk),       .wr_en(fb_wr_en),
-        .wr_addr(fb_wr_addr),.wr_data(fb_wr_data),
-        .rd_clk(clk_pixel), .rd_en(hdmi_de_int),
-        .rd_addr(fb_rd_addr),.rd_data(fb_rd_data)
-    );
+    assign axis_tvalid = axis_tvalid_int;
+    assign axis_tdata  = axis_tdata_int;
+    assign axis_tlast  = axis_tlast_int;
+    assign axis_tuser  = axis_tuser_int;
 
-    hdmi_timing timing (
-        .clk_pixel(clk_pixel), .rst(rst),
-        .hx(hx), .hy(hy),
-        .hsync(hdmi_hsync), .vsync(hdmi_vsync), .data_en(hdmi_de_int)
-    );
-
-    pixel_upscaler upscaler (
-        .hx(hx), .hy(hy), .fb_addr(fb_rd_addr)
-    );
-
-    // Align DE and RGB by 1 cycle to match BRAM read latency
-    always_ff @(posedge clk_pixel) hdmi_de_r <= hdmi_de_int;
-
-    assign hdmi_de = hdmi_de_r;
-    assign hdmi_r  = hdmi_de_r ? fb_rd_data[23:16] : 8'd0;
-    assign hdmi_g  = hdmi_de_r ? fb_rd_data[15:8]  : 8'd0;
-    assign hdmi_b  = hdmi_de_r ? fb_rd_data[7:0]   : 8'd0;
-    assign irq     = status_frame_done;
+    assign irq = status_frame_done;
 
 endmodule

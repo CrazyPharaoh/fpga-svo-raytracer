@@ -39,10 +39,17 @@ module svo_traversal #(
     input  logic [31:0] svo_rd_data,
     output logic        svo_rd_en,
 
-    // Framebuffer write port (unused in SHADOW_MODE)
+    // Framebuffer write port (legacy — undriven when AXI-Stream path is active)
     output logic [16:0] fb_wr_addr,
     output logic [23:0] fb_wr_data,
     output logic        fb_wr_en,
+
+    // AXI-Stream pixel output (primary-ray mode only, SHADOW_MODE=0)
+    output logic        axis_tvalid,
+    output logic [31:0] axis_tdata,   // [31:24]=0x00, [23:16]=R, [15:8]=G, [7:0]=B
+    output logic        axis_tlast,   // high on last pixel of each line (px == IMG_W-1)
+    output logic [0:0]  axis_tuser,   // high on first pixel of frame (px==0, py==0)
+    input  logic        axis_tready,
 
     // Shading pipeline handoff (SHADE_MODE=1 only)
     output logic        shade_start,
@@ -179,6 +186,11 @@ module svo_traversal #(
 
     logic [23:0] pixel_color;
 
+    // Wait counter for S_RAY_SETUP: holds the state for 11 cycles so the
+    // 14-DSP48 combinational chain (~79 ns) settles before registers capture.
+    // Matches the set_multicycle_path -setup 11 constraint in the XDC.
+    logic [3:0] rs_wait;
+
     // -------------------------------------------------------------------------
     // FSM
     // -------------------------------------------------------------------------
@@ -188,15 +200,20 @@ module svo_traversal #(
             busy       <= '0;
             frame_done <= '0;
             any_hit    <= '0;
-            fb_wr_en   <= '0;
-            svo_rd_en  <= '0;
+            fb_wr_en    <= '0;
+            svo_rd_en   <= '0;
             shade_start <= '0;
-            px <= '0; py <= '0; sp <= '0;
+            axis_tvalid <= '0;
+            axis_tdata  <= '0;
+            axis_tlast  <= '0;
+            axis_tuser  <= '0;
+            px <= '0; py <= '0; sp <= '0; rs_wait <= '0;
         end else begin
             fb_wr_en    <= '0;
             frame_done  <= '0;
             any_hit     <= '0;
             shade_start <= '0;
+            axis_tvalid <= '0;
 
             unique case (state)
 
@@ -204,17 +221,25 @@ module svo_traversal #(
             S_IDLE: begin
                 busy <= '0;
                 if (start) begin
-                    busy  <= 1'b1;
-                    px    <= '0;
-                    py    <= '0;
-                    state <= S_RAY_SETUP;
+                    busy    <= 1'b1;
+                    px      <= '0;
+                    py      <= '0;
+                    rs_wait <= '0;
+                    state   <= S_RAY_SETUP;
                 end
             end
 
             // -----------------------------------------------------------------
+            // S_RAY_SETUP: compute normalised ray direction from pixel + camera.
+            //
+            // Primary mode has a 14-DSP48 combinational chain (~79 ns) that
+            // cannot close timing in a single 10 ns cycle.  rs_wait holds the
+            // FSM here for 11 cycles so the chain settles before the registers
+            // capture.  This matches set_multicycle_path -setup 11 in the XDC.
+            // Shadow mode has no deep chain and exits immediately.
             S_RAY_SETUP: begin
                 if (SHADOW_MODE) begin
-                    // Shadow mode: ray is fully specified by cam_pos / cam_fwd
+                    // Shadow mode: ray fully specified by cam_pos / cam_fwd
                     ro_x <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
                     rd_x <= cam_fwd_x; rd_y <= cam_fwd_y; rd_z <= cam_fwd_z;
                     inv_x <= qrecip(cam_fwd_x);
@@ -223,32 +248,39 @@ module svo_traversal #(
                     step_x <= (cam_fwd_x >= 0) ? 3'sd1 : -3'sd1;
                     step_y <= (cam_fwd_y >= 0) ? 3'sd1 : -3'sd1;
                     step_z <= (cam_fwd_z >= 0) ? 3'sd1 : -3'sd1;
+                    sp    <= '0;
+                    state <= S_ROOT_SLAB;
                 end else begin
-                    // Primary mode: derive ray from pixel coords + camera basis
-                    rsu  = qmul(($signed({px, 16'd0}) - 32'sh00A0_0000), cam_scale);
-                    rsv  = qmul(($signed({py, 16'd0}) - 32'sh0078_0000), cam_scale);
-                    rsdx = cam_fwd_x + qmul(rsu, cam_right_x) - qmul(rsv, cam_up_x);
-                    rsdy = cam_fwd_y + qmul(rsu, cam_right_y) - qmul(rsv, cam_up_y);
-                    rsdz = cam_fwd_z + qmul(rsu, cam_right_z) - qmul(rsv, cam_up_z);
-                    rslen2    = qmul(rsdx, rsdx) + qmul(rsdy, rsdy) + qmul(rsdz, rsdz);
-                    rsinv_len = 32'sh0001_8000 - qmul(32'sh0000_8000, rslen2);
-                    rsinv_len = qmul(rsinv_len, 32'sh0001_8000 - qmul(32'sh0000_8000, qmul(rslen2, qmul(rsinv_len, rsinv_len))));
-                    rsndx = qmul(rsdx, rsinv_len);
-                    rsndy = qmul(rsdy, rsinv_len);
-                    rsndz = qmul(rsdz, rsinv_len);
-                    rd_x <= rsndx;
-                    rd_y <= rsndy;
-                    rd_z <= rsndz;
-                    ro_x <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
-                    inv_x <= qrecip(rsndx);
-                    inv_y <= qrecip(rsndy);
-                    inv_z <= qrecip(rsndz);
-                    step_x <= (rsndx >= 0) ? 3'sd1 : -3'sd1;
-                    step_y <= (rsndy >= 0) ? 3'sd1 : -3'sd1;
-                    step_z <= (rsndz >= 0) ? 3'sd1 : -3'sd1;
+                    // Primary mode: wait for combinational chain to settle
+                    if (rs_wait < 4'd10) begin
+                        rs_wait <= rs_wait + 1'b1;
+                    end else begin
+                        rs_wait <= '0;
+                        rsu  = qmul(($signed({px, 16'd0}) - 32'sh00A0_0000), cam_scale);
+                        rsv  = qmul(($signed({py, 16'd0}) - 32'sh0078_0000), cam_scale);
+                        rsdx = cam_fwd_x + qmul(rsu, cam_right_x) - qmul(rsv, cam_up_x);
+                        rsdy = cam_fwd_y + qmul(rsu, cam_right_y) - qmul(rsv, cam_up_y);
+                        rsdz = cam_fwd_z + qmul(rsu, cam_right_z) - qmul(rsv, cam_up_z);
+                        rslen2    = qmul(rsdx, rsdx) + qmul(rsdy, rsdy) + qmul(rsdz, rsdz);
+                        rsinv_len = 32'sh0001_8000 - qmul(32'sh0000_8000, rslen2);
+                        rsinv_len = qmul(rsinv_len, 32'sh0001_8000 - qmul(32'sh0000_8000, qmul(rslen2, qmul(rsinv_len, rsinv_len))));
+                        rsndx = qmul(rsdx, rsinv_len);
+                        rsndy = qmul(rsdy, rsinv_len);
+                        rsndz = qmul(rsdz, rsinv_len);
+                        rd_x <= rsndx;
+                        rd_y <= rsndy;
+                        rd_z <= rsndz;
+                        ro_x <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
+                        inv_x <= qrecip(rsndx);
+                        inv_y <= qrecip(rsndy);
+                        inv_z <= qrecip(rsndz);
+                        step_x <= (rsndx >= 0) ? 3'sd1 : -3'sd1;
+                        step_y <= (rsndy >= 0) ? 3'sd1 : -3'sd1;
+                        step_z <= (rsndz >= 0) ? 3'sd1 : -3'sd1;
+                        sp    <= '0;
+                        state <= S_ROOT_SLAB;
+                    end
                 end
-                sp    <= '0;
-                state <= S_ROOT_SLAB;
             end
 
             // -----------------------------------------------------------------
@@ -403,7 +435,7 @@ module svo_traversal #(
                     frame_done <= 1'b1;
                     state      <= S_IDLE;
                 end else if (SHADE_MODE) begin
-                    // Phase 2: hand off to shading pipeline
+                    // hand off to shading pipeline
                     shade_is_miss       <= 1'b0;
                     shade_hit_face      <= hit_face;
                     shade_hit_face_sign <= hit_face_sign_r;
@@ -418,7 +450,6 @@ module svo_traversal #(
                     shade_start         <= 1'b1;
                     state               <= S_WAIT_SHADE;
                 end else begin
-                    // Phase 1: white pixel
                     pixel_color <= 24'hFF_FF_FF;
                     state       <= S_WRITE_PIXEL;
                 end
@@ -492,10 +523,13 @@ module svo_traversal #(
 
             // -----------------------------------------------------------------
             S_WRITE_PIXEL: begin
-                fb_wr_en   <= 1'b1;
-                fb_wr_addr <= ({9'd0, py} << 8) + ({9'd0, py} << 6) + {8'd0, px};
-                fb_wr_data <= pixel_color;
-                state      <= S_NEXT_PIXEL;
+                axis_tvalid <= 1'b1;
+                axis_tdata  <= {8'h00, pixel_color};
+                axis_tlast  <= (px == 9'(IMG_W - 1));
+                axis_tuser  <= (px == '0 && py == '0) ? 1'b1 : 1'b0;
+                if (axis_tready)
+                    state <= S_NEXT_PIXEL;
+                // else: hold tvalid high until tready (AXI-Stream rules)
             end
 
             // -----------------------------------------------------------------
@@ -507,12 +541,14 @@ module svo_traversal #(
                         frame_done <= 1'b1;
                         state      <= S_IDLE;
                     end else begin
-                        py    <= py + 1'b1;
-                        state <= S_RAY_SETUP;
+                        py      <= py + 1'b1;
+                        rs_wait <= '0;
+                        state   <= S_RAY_SETUP;
                     end
                 end else begin
-                    px    <= px + 1'b1;
-                    state <= S_RAY_SETUP;
+                    px      <= px + 1'b1;
+                    rs_wait <= '0;
+                    state   <= S_RAY_SETUP;
                 end
             end
 

@@ -11,7 +11,7 @@ import math
 from pynq import Overlay
 import svo_builder
 
-BITSTREAM = '/home/xilinx/jupyter_notebooks/svo_raytracer.bit'
+BITSTREAM = '/home/xilinx/jupyter_notebooks/svo_system.bit'
 
 
 def to_q16(f: float) -> int:
@@ -42,7 +42,7 @@ def cross(a, b):
 # ---------------------------------------------------------------------------
 print("Loading bitstream …")
 ol = Overlay(BITSTREAM)
-ip = ol.svo_raytracer_0
+ip = ol.top_0
 
 # ---------------------------------------------------------------------------
 # Build world + SVO on the PS (ARM CPU)
