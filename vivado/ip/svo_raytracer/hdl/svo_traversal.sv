@@ -66,7 +66,14 @@ module svo_traversal #(
     // Status
     output logic        busy,
     output logic        frame_done,   // also used as "any_hit" pulse in SHADOW_MODE
-    output logic        any_hit       // SHADOW_MODE: 1 when first solid hit found
+    output logic        any_hit,      // SHADOW_MODE: 1 when first solid hit found
+
+    // Debug: readable via AXI at run-time to diagnose hangs
+    output logic [3:0]  dbg_state,    // current FSM state integer (S_WRITE_PIXEL=12)
+    output logic [8:0]  dbg_px,       // current pixel X
+    output logic [7:0]  dbg_py,       // current pixel Y
+    output logic        dbg_tvalid,   // axis_tvalid: IP is outputting a pixel
+    output logic        dbg_tready    // axis_tready: VDMA is accepting the pixel
 );
 
     // -------------------------------------------------------------------------
@@ -111,8 +118,13 @@ module svo_traversal #(
         S_NEXT_PIXEL  = 4'd13
     } state_t;
 
-    state_t state;
-    logic [3:0] state_raw; assign state_raw = state;   // integer alias for waveform viewers
+    (* fsm_encoding = "sequential" *) state_t state;
+    logic [3:0] state_raw; assign state_raw = state;
+    assign dbg_state  = state_raw;
+    assign dbg_px     = px;
+    assign dbg_py     = py;
+    assign dbg_tvalid = axis_tvalid;
+    assign dbg_tready = axis_tready;
 
     // -------------------------------------------------------------------------
     // Pixel counters (primary-ray mode only)
@@ -171,6 +183,7 @@ module svo_traversal #(
     // -------------------------------------------------------------------------
     logic [3:0]  sp;
     logic [15:0] stk_node_idx    [0:STACK_DEPTH-1];
+    logic [15:0] stk_bitmask     [0:STACK_DEPTH-1];
     logic signed [31:0] stk_t_min      [0:STACK_DEPTH-1];
     logic signed [31:0] stk_t_max      [0:STACK_DEPTH-1];
     logic signed [31:0] stk_t_next_x   [0:STACK_DEPTH-1];
@@ -224,6 +237,7 @@ module svo_traversal #(
                     busy    <= 1'b1;
                     px      <= '0;
                     py      <= '0;
+                    sp      <= '0;
                     rs_wait <= '0;
                     state   <= S_RAY_SETUP;
                 end
@@ -307,34 +321,61 @@ module svo_traversal #(
 
             // -----------------------------------------------------------------
             S_ENTER_NODE: begin
-                bram_field  <= '0;
+                bram_field  <= 3'd7;   // sentinel: first S_BRAM_WAIT cycle absorbs BRAM latency
                 svo_rd_en   <= 1'b1;
                 svo_rd_addr <= {node_idx[11:0], 3'd0};
                 state       <= S_BRAM_WAIT;
             end
 
             // -----------------------------------------------------------------
+            // svo_bram has a registered output (1-cycle read latency after addr
+            // is registered by the FSM), so data is valid 2 edges after the FSM
+            // sets svo_rd_addr.  bram_field=7 is a pure wait that absorbs this
+            // extra cycle; fields 0-6 then read words 0-6 with correct alignment.
             S_BRAM_WAIT: begin
                 unique case (bram_field)
-                    3'd0: r_bitmask       <= svo_rd_data[15:0];
-                    3'd1: begin r_child[0]<=svo_rd_data[15:0]; r_child[1]<=svo_rd_data[31:16]; end
-                    3'd2: begin r_child[2]<=svo_rd_data[15:0]; r_child[3]<=svo_rd_data[31:16]; end
-                    3'd3: begin r_child[4]<=svo_rd_data[15:0]; r_child[5]<=svo_rd_data[31:16]; end
-                    3'd4: begin r_child[6]<=svo_rd_data[15:0]; r_child[7]<=svo_rd_data[31:16]; end
-                    3'd5: begin
+                    3'd7: begin   // wait: word-0 addr issued in S_ENTER_NODE, data ready next cycle
+                        svo_rd_addr <= {node_idx[11:0], 3'd1};
+                        bram_field  <= 3'd0;
+                    end
+                    3'd0: begin   // read word 0 = bitmask
+                        r_bitmask <= svo_rd_data[15:0];
+                        svo_rd_addr <= {node_idx[11:0], 3'd2};
+                        bram_field  <= 3'd1;
+                    end
+                    3'd1: begin   // read word 1 = child ptrs 0-1
+                        r_child[0]<=svo_rd_data[15:0]; r_child[1]<=svo_rd_data[31:16];
+                        svo_rd_addr <= {node_idx[11:0], 3'd3};
+                        bram_field  <= 3'd2;
+                    end
+                    3'd2: begin   // read word 2 = child ptrs 2-3
+                        r_child[2]<=svo_rd_data[15:0]; r_child[3]<=svo_rd_data[31:16];
+                        svo_rd_addr <= {node_idx[11:0], 3'd4};
+                        bram_field  <= 3'd3;
+                    end
+                    3'd3: begin   // read word 3 = child ptrs 4-5
+                        r_child[4]<=svo_rd_data[15:0]; r_child[5]<=svo_rd_data[31:16];
+                        svo_rd_addr <= {node_idx[11:0], 3'd5};
+                        bram_field  <= 3'd4;
+                    end
+                    3'd4: begin   // read word 4 = child ptrs 6-7
+                        r_child[6]<=svo_rd_data[15:0]; r_child[7]<=svo_rd_data[31:16];
+                        svo_rd_addr <= {node_idx[11:0], 3'd6};
+                        bram_field  <= 3'd5;
+                    end
+                    3'd5: begin   // read word 5 = block IDs 0-3; word-6 addr already issued
                         r_block[0]<=svo_rd_data[7:0];   r_block[1]<=svo_rd_data[15:8];
                         r_block[2]<=svo_rd_data[23:16]; r_block[3]<=svo_rd_data[31:24];
+                        svo_rd_en  <= '0;
+                        bram_field <= 3'd6;
                     end
-                    3'd6: begin
+                    3'd6: begin   // read word 6 = block IDs 4-7; done
                         r_block[4]<=svo_rd_data[7:0];   r_block[5]<=svo_rd_data[15:8];
                         r_block[6]<=svo_rd_data[23:16]; r_block[7]<=svo_rd_data[31:24];
                     end
                     default: ;
                 endcase
-                if (bram_field < 3'd6) begin
-                    bram_field  <= bram_field + 1'b1;
-                    svo_rd_addr <= {node_idx[11:0], bram_field + 1'b1};
-                end else begin
+                if (bram_field == 3'd6) begin
                     svo_rd_en <= '0;
                     bitmask   <= r_bitmask;
                     bw_ex  = ro_x + qmul(t_min, rd_x);
@@ -458,6 +499,7 @@ module svo_traversal #(
             // -----------------------------------------------------------------
             S_MIXED: begin
                 stk_node_idx [sp] <= node_idx;
+                stk_bitmask  [sp] <= r_bitmask;
                 stk_t_min    [sp] <= t_min;     stk_t_max    [sp] <= t_max;
                 stk_t_next_x [sp] <= t_next_x;  stk_t_next_y [sp] <= t_next_y;
                 stk_t_next_z [sp] <= t_next_z;
@@ -482,6 +524,7 @@ module svo_traversal #(
                 else begin
                     sp            <= sp - 1'b1;
                     node_idx      <= stk_node_idx [sp-1];
+                    r_bitmask     <= stk_bitmask  [sp-1];
                     t_min         <= stk_t_min    [sp-1]; t_max <= stk_t_max [sp-1];
                     t_next_x      <= stk_t_next_x [sp-1];
                     t_next_y      <= stk_t_next_y [sp-1];
@@ -534,6 +577,8 @@ module svo_traversal #(
 
             // -----------------------------------------------------------------
             S_NEXT_PIXEL: begin
+                axis_tvalid <= 1'b0;
+                sp          <= '0;   // reset stack pointer for next ray
                 if (px == 9'(IMG_W - 1)) begin
                     px <= '0;
                     if (py == 8'(IMG_H - 1)) begin

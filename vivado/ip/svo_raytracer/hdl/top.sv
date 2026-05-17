@@ -35,6 +35,7 @@ module top #(
     // AXI-Stream pixel output → AXI VDMA in block design
     output logic        axis_tvalid,
     output logic [31:0] axis_tdata,
+    output logic [3:0]  axis_tkeep,
     output logic        axis_tlast,
     output logic [0:0]  axis_tuser,
     input  logic        axis_tready
@@ -42,6 +43,12 @@ module top #(
 
     logic clk = s_axi_aclk;
     logic rst = ~s_axi_aresetn;
+
+    logic [3:0] dbg_state_w;
+    logic [8:0] dbg_px_w;
+    logic [7:0] dbg_py_w;
+    logic       dbg_tvalid_w;
+    logic       dbg_tready_w;
 
     // -------------------------------------------------------------------------
     // AXI slave → pipeline wires
@@ -142,12 +149,20 @@ module top #(
         .svo_wr_addr(svo_wr_addr),.svo_wr_data(svo_wr_data),.svo_wr_en(svo_wr_en),
         .lut(lut),
         .sky_color(sky_color_reg), .fog_color(fog_color_reg),
-        .fog_start(fog_start_reg), .shadow_bias(shadow_bias_reg)
+        .fog_start(fog_start_reg), .shadow_bias(shadow_bias_reg),
+        .dbg_state(dbg_state_w), .dbg_px(dbg_px_w), .dbg_py(dbg_py_w),
+        .dbg_tvalid(dbg_tvalid_w), .dbg_tready(dbg_tready_w)
     );
+
+    // svo_wr_addr is incremented in the same non-blocking cycle as svo_wr_en is
+    // asserted, so by the time svo_wr_en propagates to the BRAM (1 cycle later)
+    // addr is already addr+1.  A 1-cycle delayed copy corrects this.
+    logic [14:0] svo_wr_addr_lat;
+    always_ff @(posedge clk) svo_wr_addr_lat <= svo_wr_addr;
 
     svo_bram svo_mem (
         .clk_a(clk), .en_a(svo_wr_en),
-        .addr_a({svo_wr_addr[11:0], 3'd0}), .din_a(svo_wr_data),
+        .addr_a(svo_wr_addr_lat), .din_a(svo_wr_data),
         .clk_b(clk), .en_b(svo_rd_en_mux),
         .addr_b(svo_rd_addr_mux), .dout_b(svo_rd_data_mux)
     );
@@ -172,7 +187,9 @@ module top #(
         .shade_ray_dx(shade_ray_dx),  .shade_ray_dy(shade_ray_dy),  .shade_ray_dz(shade_ray_dz),
         .shade_hit_px(shade_hit_px),  .shade_hit_py(shade_hit_py),  .shade_hit_pz(shade_hit_pz),
         .shade_done(shade_done),  .shade_pixel_color(shade_pixel_color),
-        .busy(status_busy), .frame_done(status_frame_done), .any_hit()
+        .busy(status_busy), .frame_done(status_frame_done), .any_hit(),
+        .dbg_state(dbg_state_w), .dbg_px(dbg_px_w), .dbg_py(dbg_py_w),
+        .dbg_tvalid(dbg_tvalid_w), .dbg_tready(dbg_tready_w)
     );
 
     // Phase 2 only: shading pipeline + shadow traversal
@@ -216,7 +233,9 @@ module top #(
             .shade_ray_dx(), .shade_ray_dy(), .shade_ray_dz(),
             .shade_hit_px(), .shade_hit_py(), .shade_hit_pz(),
             .shade_done('0), .shade_pixel_color('0),
-            .busy(), .frame_done(shadow_done), .any_hit(shadow_any_hit)
+            .busy(), .frame_done(shadow_done), .any_hit(shadow_any_hit),
+            .dbg_state(), .dbg_px(), .dbg_py(),
+            .dbg_tvalid(), .dbg_tready()
         );
 
     end else begin : g_no_shading
@@ -231,6 +250,7 @@ module top #(
 
     assign axis_tvalid = axis_tvalid_int;
     assign axis_tdata  = axis_tdata_int;
+    assign axis_tkeep  = 4'b1111;
     assign axis_tlast  = axis_tlast_int;
     assign axis_tuser  = axis_tuser_int;
 

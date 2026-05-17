@@ -20,7 +20,7 @@ def to_q16(f):
 
 
 def pack_rgb(r, g, b):
-    return (int(r) & 0xFF) | ((int(g) & 0xFF) << 8) | ((int(b) & 0xFF) << 16)
+    return ((int(r) & 0xFF) << 16) | ((int(g) & 0xFF) << 8) | (int(b) & 0xFF)
 
 
 def normalise(v):

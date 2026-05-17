@@ -51,7 +51,14 @@ module axi_lite_slave #(
     output logic [31:0] sky_color,
     output logic [31:0] fog_color,
     output logic signed [31:0] fog_start,
-    output logic signed [31:0] shadow_bias
+    output logic signed [31:0] shadow_bias,
+
+    // Debug inputs from traversal FSM (read-only)
+    input  logic [3:0]  dbg_state,
+    input  logic [8:0]  dbg_px,
+    input  logic [7:0]  dbg_py,
+    input  logic        dbg_tvalid,   // 1 = IP outputting pixel to VDMA
+    input  logic        dbg_tready    // 1 = VDMA accepting the pixel
 );
 
     logic [C_S_AXI_ADDR_WIDTH-1:0] aw_addr_lat;
@@ -151,6 +158,11 @@ module axi_lite_slave #(
                 S_AXI_RRESP   <= 2'b00;
                 unique case (S_AXI_ARADDR[7:2])
                     6'h01:   S_AXI_RDATA <= {30'd0, status_frame_done, status_busy};
+                    // 0x78: bits[3:0]=FSM state, bit[4]=tvalid, bit[5]=tready
+                    // state=12 + tvalid=1 + tready=0 means VDMA is applying backpressure
+                    6'h1E:   S_AXI_RDATA <= {26'd0, dbg_tready, dbg_tvalid, dbg_state};
+                    // 0x7C: pixel position — bits[16:8]=px, bits[7:0]=py
+                    6'h1F:   S_AXI_RDATA <= {15'd0, dbg_px, dbg_py};
                     default: S_AXI_RDATA <= 32'hDEAD_BEEF;
                 endcase
             end else begin

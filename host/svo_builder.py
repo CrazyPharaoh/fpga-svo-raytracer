@@ -11,6 +11,10 @@ from typing import List, Optional
 WORLD_SIZE  = 64
 MAX_DEPTH   = 6
 
+# Set to 1 to generate a simple test world (single block at world centre)
+# instead of the full terrain. All callers use build_world() unchanged.
+TESTING = 1
+
 STATE_EMPTY = 0b00
 STATE_SOLID = 0b11
 STATE_MIXED = 0b01
@@ -28,8 +32,18 @@ class SVONode:
     block_id: List[int] = field(default_factory=lambda: [0] * 8)
 
 
+def _build_test_world() -> np.ndarray:
+    """Return a 64^3 grid with a single 8x8x8 stone block at the world centre."""
+    grid = np.zeros((WORLD_SIZE, WORLD_SIZE, WORLD_SIZE), dtype=np.uint8)
+    c = WORLD_SIZE // 2
+    grid[c - 4:c + 4, c - 4:c + 4, c - 4:c + 4] = BLOCK_STONE
+    return grid
+
+
 def build_world() -> np.ndarray:
-    """Return a 64^3 uint8 voxel grid matching the reference model terrain."""
+    """Return a 64^3 uint8 voxel grid. Returns test world when TESTING=1."""
+    if TESTING:
+        return _build_test_world()
     grid = np.zeros((WORLD_SIZE, WORLD_SIZE, WORLD_SIZE), dtype=np.uint8)
     for x in range(WORLD_SIZE):
         for z in range(WORLD_SIZE):
