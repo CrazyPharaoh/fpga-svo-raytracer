@@ -1,5 +1,6 @@
 # Regenerate block design wrapper so any IP parameter changes (e.g. SHADE_MODE)
 # propagate into the synthesis netlist before it runs.
+reset_run synth_1
 generate_target all [get_files -filter {FILE_TYPE == "Block Designs"}]
 
 # Reset the IP OOC synthesis run so Vivado never uses a stale cached DCP.

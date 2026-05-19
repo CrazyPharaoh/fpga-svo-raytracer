@@ -401,7 +401,7 @@ module svo_traversal #(
                     bw_ex_rel = bw_ex - ($signed(32'(node_origin_x)) << 16);
                     bw_ey_rel = bw_ey - ($signed(32'(node_origin_y)) << 16);
                     bw_ez_rel = bw_ez - ($signed(32'(node_origin_z)) << 16);
-                    if (step_x > 0)
+                    if (!step_x[2])  // positive direction: MSB=0
                         bw_dist_x = (bw_icx >= node_half) ?
                             ((bw_nh <<< 1) - bw_ex_rel) :   // cx=1: 2*nh - pos
                             (bw_nh - bw_ex_rel);             // cx=0: nh - pos
@@ -409,7 +409,7 @@ module svo_traversal #(
                         bw_dist_x = (bw_icx >= node_half) ?
                             (bw_ex_rel - bw_nh) :            // cx=1: pos - nh
                             bw_ex_rel;                       // cx=0: pos - 0
-                    if (step_y > 0)
+                    if (!step_y[2])  // positive direction: MSB=0
                         bw_dist_y = (bw_icy >= node_half) ?
                             ((bw_nh <<< 1) - bw_ey_rel) :
                             (bw_nh - bw_ey_rel);
@@ -417,7 +417,7 @@ module svo_traversal #(
                         bw_dist_y = (bw_icy >= node_half) ?
                             (bw_ey_rel - bw_nh) :
                             bw_ey_rel;
-                    if (step_z > 0)
+                    if (!step_z[2])  // positive direction: MSB=0
                         bw_dist_z = (bw_icz >= node_half) ?
                             ((bw_nh <<< 1) - bw_ez_rel) :
                             (bw_nh - bw_ez_rel);
@@ -446,21 +446,23 @@ module svo_traversal #(
             // -----------------------------------------------------------------
             S_EMPTY: begin
                 if (t_next_x <= t_next_y && t_next_x <= t_next_z) begin
-                    cx <= cx + 6'(step_x); t_min <= t_next_x; t_next_x <= t_next_x + dt_x;
-                    em_face = 2'd0; em_fsign = (step_x < 0);
+                    cx       <= cx + {{3{step_x[2]}}, step_x};  // sign-extend 3-bit step
+                    t_min    <= t_next_x; t_next_x <= t_next_x + dt_x;
+                    em_face  = 2'd0; em_fsign = step_x[2];      // MSB is sign
+                    state    <= (step_x[2] ^ cx[0]) ? S_POP_STACK : S_CHECK_CHILD;
                 end else if (t_next_y <= t_next_z) begin
-                    cy <= cy + 6'(step_y); t_min <= t_next_y; t_next_y <= t_next_y + dt_y;
-                    em_face = 2'd1; em_fsign = (step_y < 0);
+                    cy       <= cy + {{3{step_y[2]}}, step_y};
+                    t_min    <= t_next_y; t_next_y <= t_next_y + dt_y;
+                    em_face  = 2'd1; em_fsign = step_y[2];
+                    state    <= (step_y[2] ^ cy[0]) ? S_POP_STACK : S_CHECK_CHILD;
                 end else begin
-                    cz <= cz + 6'(step_z); t_min <= t_next_z; t_next_z <= t_next_z + dt_z;
-                    em_face = 2'd2; em_fsign = (step_z < 0);
+                    cz       <= cz + {{3{step_z[2]}}, step_z};
+                    t_min    <= t_next_z; t_next_z <= t_next_z + dt_z;
+                    em_face  = 2'd2; em_fsign = step_z[2];
+                    state    <= (step_z[2] ^ cz[0]) ? S_POP_STACK : S_CHECK_CHILD;
                 end
                 hit_face        <= em_face;
                 hit_face_sign_r <= em_fsign;
-                if (cx > 1 || cy > 1 || cz > 1 || cx[5] || cy[5] || cz[5])
-                    state <= S_POP_STACK;
-                else
-                    state <= S_CHECK_CHILD;
             end
 
             // -----------------------------------------------------------------
@@ -529,6 +531,10 @@ module svo_traversal #(
                     t_next_x      <= stk_t_next_x [sp-1];
                     t_next_y      <= stk_t_next_y [sp-1];
                     t_next_z      <= stk_t_next_z [sp-1];
+                    // Recompute dt from restored node_half and per-ray inv (no stack needed)
+                    dt_x          <= qmul($signed({10'd0, stk_node_half[sp-1], 16'd0}), inv_x[31] ? -inv_x : inv_x);
+                    dt_y          <= qmul($signed({10'd0, stk_node_half[sp-1], 16'd0}), inv_y[31] ? -inv_y : inv_y);
+                    dt_z          <= qmul($signed({10'd0, stk_node_half[sp-1], 16'd0}), inv_z[31] ? -inv_z : inv_z);
                     cx            <= stk_cx       [sp-1];
                     cy            <= stk_cy       [sp-1];
                     cz            <= stk_cz       [sp-1];
