@@ -204,6 +204,10 @@ module svo_traversal #(
     // Matches the set_multicycle_path -setup 11 constraint in the XDC.
     logic [3:0] rs_wait;
 
+    // Set when S_POP_STACK redirects through S_ENTER_NODE to reload r_child[]/r_block[].
+    // Suppresses the cx/cy/cz and t_next recomputation in S_BRAM_WAIT field=6.
+    logic post_pop;
+
     // -------------------------------------------------------------------------
     // FSM
     // -------------------------------------------------------------------------
@@ -220,7 +224,7 @@ module svo_traversal #(
             axis_tdata  <= '0;
             axis_tlast  <= '0;
             axis_tuser  <= '0;
-            px <= '0; py <= '0; sp <= '0; rs_wait <= '0;
+            px <= '0; py <= '0; sp <= '0; rs_wait <= '0; post_pop <= '0;
         end else begin
             fb_wr_en    <= '0;
             frame_done  <= '0;
@@ -378,6 +382,12 @@ module svo_traversal #(
                 if (bram_field == 3'd6) begin
                     svo_rd_en <= '0;
                     bitmask   <= r_bitmask;
+                    if (post_pop) begin
+                        // r_child[]/r_block[] now hold the parent node's data.
+                        // cx/cy/cz, t_next, and dt were already restored by S_POP_STACK.
+                        post_pop <= 1'b0;
+                        state    <= S_EMPTY;
+                    end else begin
                     bw_ex  = ro_x + qmul(t_min, rd_x);
                     bw_ey  = ro_y + qmul(t_min, rd_y);
                     bw_ez  = ro_z + qmul(t_min, rd_z);
@@ -429,6 +439,7 @@ module svo_traversal #(
                     t_next_y <= t_min + qmul(bw_dist_y, bw_abs_iy);
                     t_next_z <= t_min + qmul(bw_dist_z, bw_abs_iz);
                     state <= S_CHECK_CHILD;
+                    end  // end else (not post_pop)
                 end
             end
 
@@ -542,7 +553,11 @@ module svo_traversal #(
                     node_origin_x <= stk_orig_x   [sp-1];
                     node_origin_y <= stk_orig_y   [sp-1];
                     node_origin_z <= stk_orig_z   [sp-1];
-                    state <= S_EMPTY;
+                    // Re-read BRAM to recover r_child[]/r_block[] for the restored
+                    // parent node. post_pop suppresses cx/cy/cz recomputation in
+                    // S_BRAM_WAIT field=6 so the stack-restored DDA state is kept.
+                    post_pop <= 1'b1;
+                    state <= S_ENTER_NODE;
                 end
             end
 
