@@ -12,6 +12,9 @@ MODULE   = tb_svo_traversal
 EXTRA_ARGS  = --language 1800-2012
 EXTRA_ARGS += -Wno-WIDTHTRUNC -Wno-WIDTHEXPAND -Wno-CASEINCOMPLETE
 EXTRA_ARGS += -Wno-UNOPTFLAT
+# DEBUG: expose all internal Verilator registers to cocotb for pixel tracing.
+# Remove this line when pixel_tracer is removed from tb_svo_traversal.py.
+EXTRA_ARGS += --public-flat-rw
 
 OUTPUT_DIR = output
 $(shell mkdir -p $(OUTPUT_DIR))
