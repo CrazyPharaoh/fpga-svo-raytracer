@@ -270,8 +270,8 @@ module svo_traversal #(
                         rs_wait <= rs_wait + 1'b1;
                     end else begin
                         rs_wait <= '0;
-                        rsu  = qmul(($signed({px, 16'd0}) - 32'sh00A0_0000), cam_scale);
-                        rsv  = qmul(($signed({py, 16'd0}) - 32'sh0078_0000), cam_scale);
+                        rsu  = qmul(($signed({1'b0, px, 16'd0}) - 32'sh00A0_0000), cam_scale);
+                        rsv  = qmul(($signed({1'b0, py, 16'd0}) - 32'sh0078_0000), cam_scale);
                         rsdx = cam_fwd_x + qmul(rsu, cam_right_x) - qmul(rsv, cam_up_x);
                         rsdy = cam_fwd_y + qmul(rsu, cam_right_y) - qmul(rsv, cam_up_y);
                         rsdz = cam_fwd_z + qmul(rsu, cam_right_z) - qmul(rsv, cam_up_z);

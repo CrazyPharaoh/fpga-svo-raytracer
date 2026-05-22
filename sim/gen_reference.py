@@ -35,7 +35,7 @@ def main():
     print(f"  {len(nodes)} nodes")
 
     # Camera — identical to testbench
-    pos   = [32.0, 40.0, -20.0]
+    pos   = [40, 60, 10]
     fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
     right = normalise(cross(fwd, [0, 1, 0]))
     up    = cross(right, fwd)

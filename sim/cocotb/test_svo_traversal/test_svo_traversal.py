@@ -5,8 +5,11 @@ In Verilator the always_ff evaluation happens in the active region BEFORE the
 VPI (cocotb) callback fires, so non-blocking assignment updates from the FSM
 are not yet visible to Python when RisingEdge returns.  Two consequences:
 
-1. svo_rd_data must be driven BETWEEN posedges (via Timer(1)) so that it is
-   stable before the next posedge that the FSM reads it.
+1. svo_rd_data must be driven with a one-cycle pipeline delay to match the
+   real svo_bram.sv registered output.  The bram_model uses a pending_data
+   variable: address committed after edge E → data driven after edge E+1 →
+   sampled by FSM at edge E+2.  This matches the 2-edge latency described
+   in the BRAM timing invariants.
 2. Any signal set by a NB assignment (e.g. busy) should be checked on the
    FOLLOWING clock cycle, not immediately after the trigger edge.
 
@@ -56,7 +59,10 @@ def all_empty_root():
 
 
 async def reset_dut(dut):
-    dut.svo_rd_data.value = 0
+    dut.svo_rd_data.value    = 0
+    dut.axis_tready.value    = 1   # always accept pixels; FSM hangs in S_WRITE_PIXEL if 0
+    dut.shade_done.value     = 0   # tie off shading inputs (unused in SHADE_MODE=0)
+    dut.shade_pixel_color.value = 0
     dut.rst.value   = 1
     dut.start.value = 0
     await ClockCycles(dut.clk, 6)
@@ -87,26 +93,46 @@ async def bram_model(dut, mem: dict):
     """
     Simulate svo_bram.sv port B: 1-cycle registered read latency.
 
-    Verilator fires VPI callbacks in the active region — before non-blocking
-    assignments commit.  Timer(1) steps 1 ns past the posedge so that NB
-    updates (svo_rd_en, svo_rd_addr) have committed before we read them and
-    drive svo_rd_data.  The data is then stable for the NEXT posedge.
+    svo_bram uses 'always @(posedge clk_b) if (en_b) dout_b <= mem[addr_b]'.
+    That means address committed after edge E is sampled by the BRAM at edge
+    E+1, and dout_b is valid (committed) after edge E+1 — so the FSM reads it
+    at edge E+2.  The S_BRAM_WAIT/field=7 wait state in svo_traversal.sv
+    absorbs exactly this 2-edge delay.
+
+    Verilator fires VPI callbacks before NBA commits, so Timer(1) is needed to
+    read the committed NB values.  The pending_data pipeline then adds the
+    required extra cycle of delay:
+      edge E+1ns  → sample svo_rd_addr, store in pending (don't drive yet)
+      edge E+1+1ns → drive pending → FSM reads at edge E+2  ✓
     """
+    pending_data = None
     dut.svo_rd_data.value = 0
     while True:
         await RisingEdge(dut.clk)
-        await Timer(1, units="ns")   # wait for NB commit before reading/driving
+        await Timer(1, units="ns")   # wait for NB commit
+        # Output the address that was registered one cycle ago
+        if pending_data is not None:
+            dut.svo_rd_data.value = pending_data
+        # Sample this cycle's address for output next cycle
         if int(dut.svo_rd_en.value) == 1:
-            addr = int(dut.svo_rd_addr.value)
-            dut.svo_rd_data.value = mem.get(addr, 0)
+            pending_data = mem.get(int(dut.svo_rd_addr.value), 0)
+        else:
+            pending_data = None
 
 
-async def fb_monitor(dut, pixels: list):
-    """Collect every framebuffer write as (addr, colour) pairs."""
+async def axis_sink(dut, pixels: list):
+    """
+    Collect pixels from the AXI-Stream output.
+
+    axis_tready is held high in reset_dut so the FSM never stalls.
+    Pixels are stored as (sequential_index, 24-bit_colour) to match the
+    fb_monitor interface that the test assertions expect.
+    """
     while True:
         await RisingEdge(dut.clk)
-        if int(dut.fb_wr_en.value) == 1:
-            pixels.append((int(dut.fb_wr_addr.value), int(dut.fb_wr_data.value)))
+        if int(dut.axis_tvalid.value) and int(dut.axis_tready.value):
+            tdata = int(dut.axis_tdata.value)
+            pixels.append((len(pixels), tdata & 0xFF_FFFF))
 
 
 async def trigger_render(dut):
@@ -179,7 +205,7 @@ async def test_all_miss_writes_sky_colour(dut):
     mem    = {i: w for i, w in enumerate(all_empty_root())}
     pixels = []
     cocotb.start_soon(bram_model(dut, mem))
-    cocotb.start_soon(fb_monitor(dut, pixels))
+    cocotb.start_soon(axis_sink(dut, pixels))
 
     await trigger_render(dut)
     assert await wait_for_frame_done(dut), "Timed out"
@@ -202,7 +228,7 @@ async def test_all_solid_writes_white(dut):
     mem    = {i: w for i, w in enumerate(all_solid_root())}
     pixels = []
     cocotb.start_soon(bram_model(dut, mem))
-    cocotb.start_soon(fb_monitor(dut, pixels))
+    cocotb.start_soon(axis_sink(dut, pixels))
 
     await trigger_render(dut)
     assert await wait_for_frame_done(dut), "Timed out"
@@ -226,7 +252,7 @@ async def test_pixel_addresses_cover_full_frame(dut):
     mem    = {i: w for i, w in enumerate(all_empty_root())}
     pixels = []
     cocotb.start_soon(bram_model(dut, mem))
-    cocotb.start_soon(fb_monitor(dut, pixels))
+    cocotb.start_soon(axis_sink(dut, pixels))
 
     await trigger_render(dut)
     assert await wait_for_frame_done(dut), "Timed out"
