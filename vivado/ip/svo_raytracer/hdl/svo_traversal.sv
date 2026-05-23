@@ -92,7 +92,16 @@ module svo_traversal #(
     );
         logic signed [31:0] xabs, r, r2;
         xabs = (x < 0) ? -x : x;
-        r  = 32'h0001_0000;
+        // Initial estimate chosen by magnitude so N-R converges within 3 iterations.
+        // Ray components are normalised so |x| ≤ 1 in practice.
+        if      (|xabs[31:16]) r = 32'h0001_0000;  // x ≥ 1.0      → r₀=1.0
+        else if (xabs[15])     r = 32'h0001_8000;  // x ∈ [0.5,1)  → r₀=1.5
+        else if (xabs[14])     r = 32'h0003_0000;  // x ∈ [0.25,0.5) → r₀=3.0
+        else if (xabs[13])     r = 32'h0006_0000;  // x ∈ [0.125,0.25) → r₀=6.0
+        else if (xabs[12])     r = 32'h000C_0000;  // x ∈ [0.0625,0.125) → r₀=12.0
+        else                   r = 32'h0018_0000;  // x < 0.0625    → r₀=24.0
+        // 3 N-R iterations: r ← r·(2 − x·r)
+        r2 = qmul(xabs, r); r2 = 32'h0002_0000 - r2; r = qmul(r, r2);
         r2 = qmul(xabs, r); r2 = 32'h0002_0000 - r2; r = qmul(r, r2);
         r2 = qmul(xabs, r); r2 = 32'h0002_0000 - r2; r = qmul(r, r2);
         return (x < 0) ? -r : r;
