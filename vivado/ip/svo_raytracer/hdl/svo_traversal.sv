@@ -164,7 +164,7 @@ module svo_traversal #(
     logic signed [31:0] bw_ex_rel, bw_ey_rel, bw_ez_rel;   // position within node (Q16.16)
     logic signed [31:0] bw_dist_x, bw_dist_y, bw_dist_z;   // distance to next boundary
     logic signed [31:0] bw_nh;                               // node_half in Q16.16
-    logic [5:0]         bw_icx, bw_icy, bw_icz;
+    logic [6:0]         bw_icx, bw_icy, bw_icz;
     logic [1:0]         em_face;
     logic               em_fsign;
     logic signed [31:0] rsu, rsv, rsdx, rsdy, rsdz, rslen2, rsinv_len, rsndx, rsndy, rsndz;
@@ -400,9 +400,9 @@ module svo_traversal #(
                     bw_ex  = ro_x + qmul(t_min, rd_x);
                     bw_ey  = ro_y + qmul(t_min, rd_y);
                     bw_ez  = ro_z + qmul(t_min, rd_z);
-                    bw_icx = ($signed(bw_ex) < 0) ? 6'd0 : bw_ex[21:16];
-                    bw_icy = ($signed(bw_ey) < 0) ? 6'd0 : bw_ey[21:16];
-                    bw_icz = ($signed(bw_ez) < 0) ? 6'd0 : bw_ez[21:16];
+                    bw_icx = ($signed(bw_ex) < 0) ? 7'd0 : bw_ex[22:16];
+                    bw_icy = ($signed(bw_ey) < 0) ? 7'd0 : bw_ey[22:16];
+                    bw_icz = ($signed(bw_ez) < 0) ? 7'd0 : bw_ez[22:16];
                     bw_icx = bw_icx - node_origin_x;
                     bw_icy = bw_icy - node_origin_y;
                     bw_icz = bw_icz - node_origin_z;
