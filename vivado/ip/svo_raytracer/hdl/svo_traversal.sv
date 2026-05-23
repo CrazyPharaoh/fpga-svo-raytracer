@@ -403,9 +403,11 @@ module svo_traversal #(
                     bw_icx = ($signed(bw_ex) < 0) ? 7'd0 : bw_ex[22:16];
                     bw_icy = ($signed(bw_ey) < 0) ? 7'd0 : bw_ey[22:16];
                     bw_icz = ($signed(bw_ez) < 0) ? 7'd0 : bw_ez[22:16];
-                    bw_icx = bw_icx - node_origin_x;
-                    bw_icy = bw_icy - node_origin_y;
-                    bw_icz = bw_icz - node_origin_z;
+                    // Clamp to 0 on underflow: rounding can put bw_ic* just below
+                    // the child's origin when t_min is a boundary-crossing time.
+                    bw_icx = (bw_icx >= node_origin_x) ? bw_icx - node_origin_x : 7'd0;
+                    bw_icy = (bw_icy >= node_origin_y) ? bw_icy - node_origin_y : 7'd0;
+                    bw_icz = (bw_icz >= node_origin_z) ? bw_icz - node_origin_z : 7'd0;
                     cx  <= (bw_icx >= node_half) ? 6'd1 : 6'd0;
                     cy  <= (bw_icy >= node_half) ? 6'd1 : 6'd0;
                     cz  <= (bw_icz >= node_half) ? 6'd1 : 6'd0;
