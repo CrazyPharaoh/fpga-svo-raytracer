@@ -55,6 +55,7 @@ module axi_lite_slave #(
 
     // Debug inputs from traversal FSM (read-only)
     input  logic [3:0]  dbg_state,
+    input  logic [3:0]  dbg_rs_wait,  // rs_wait counter value (0-15)
     input  logic [8:0]  dbg_px,
     input  logic [7:0]  dbg_py,
     input  logic        dbg_tvalid,   // 1 = IP outputting pixel to VDMA
@@ -62,6 +63,10 @@ module axi_lite_slave #(
 );
 
     logic [C_S_AXI_ADDR_WIDTH-1:0] aw_addr_lat;
+
+    // ctrl_trigger stays high for 32 cycles after the AXI write so it is
+    // visible to the traversal FSM even across the 16-cycle multicycle path.
+    logic [5:0] trig_cnt;
 
     // -------------------------------------------------------------------------
     // Write channel
@@ -73,10 +78,16 @@ module axi_lite_slave #(
             S_AXI_BVALID  <= '0;
             S_AXI_BRESP   <= '0;
             ctrl_trigger  <= '0;
+            trig_cnt      <= '0;
             svo_wr_en     <= '0;
             svo_wr_addr   <= '0;
         end else begin
-            ctrl_trigger <= '0; // auto-clear each cycle
+            // ctrl_trigger: pulse for 32 cycles after AXI write to 0x00
+            if (trig_cnt != '0) begin
+                trig_cnt     <= trig_cnt - 1'b1;
+                ctrl_trigger <= (trig_cnt != 6'd1); // go low on last countdown
+            end else
+                ctrl_trigger <= '0;
 
             // Latch write address
             if (S_AXI_AWVALID && !S_AXI_AWREADY) begin
@@ -95,7 +106,7 @@ module axi_lite_slave #(
             svo_wr_en <= '0;
             if (S_AXI_AWREADY && S_AXI_AWVALID && S_AXI_WREADY && S_AXI_WVALID) begin
                 unique case (aw_addr_lat[7:2])
-                    6'h00: ctrl_trigger  <= S_AXI_WDATA[0];
+                    6'h00: if (S_AXI_WDATA[0]) trig_cnt <= 6'd32; // arm 32-cycle pulse
                     // 6'h01 → STATUS read-only, writes ignored
                     6'h02: cam_pos_x    <= S_AXI_WDATA;
                     6'h03: cam_pos_y    <= S_AXI_WDATA;
@@ -158,9 +169,10 @@ module axi_lite_slave #(
                 S_AXI_RRESP   <= 2'b00;
                 unique case (S_AXI_ARADDR[7:2])
                     6'h01:   S_AXI_RDATA <= {30'd0, status_frame_done, status_busy};
-                    // 0x78: bits[3:0]=FSM state, bit[4]=tvalid, bit[5]=tready
+                    // 0x78: bits[3:0]=FSM state, bit[4]=tvalid, bit[5]=tready, bits[9:6]=rs_wait
                     // state=12 + tvalid=1 + tready=0 means VDMA is applying backpressure
-                    6'h1E:   S_AXI_RDATA <= {26'd0, dbg_tready, dbg_tvalid, dbg_state};
+                    // state=1 + rs_wait stuck means S_RAY_SETUP hang
+                    6'h1E:   S_AXI_RDATA <= {22'd0, dbg_rs_wait, dbg_tready, dbg_tvalid, dbg_state};
                     // 0x7C: pixel position — bits[16:8]=px, bits[7:0]=py
                     6'h1F:   S_AXI_RDATA <= {15'd0, dbg_px, dbg_py};
                     default: S_AXI_RDATA <= 32'hDEAD_BEEF;

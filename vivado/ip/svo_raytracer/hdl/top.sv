@@ -45,6 +45,7 @@ module top #(
     logic rst = ~s_axi_aresetn;
 
     logic [3:0] dbg_state_w;
+    logic [3:0] dbg_rs_wait_w;
     logic [8:0] dbg_px_w;
     logic [7:0] dbg_py_w;
     logic       dbg_tvalid_w;
@@ -150,7 +151,8 @@ module top #(
         .lut(lut),
         .sky_color(sky_color_reg), .fog_color(fog_color_reg),
         .fog_start(fog_start_reg), .shadow_bias(shadow_bias_reg),
-        .dbg_state(dbg_state_w), .dbg_px(dbg_px_w), .dbg_py(dbg_py_w),
+        .dbg_state(dbg_state_w), .dbg_rs_wait(dbg_rs_wait_w),
+        .dbg_px(dbg_px_w), .dbg_py(dbg_py_w),
         .dbg_tvalid(dbg_tvalid_w), .dbg_tready(dbg_tready_w)
     );
 
@@ -188,7 +190,8 @@ module top #(
         .shade_hit_px(shade_hit_px),  .shade_hit_py(shade_hit_py),  .shade_hit_pz(shade_hit_pz),
         .shade_done(shade_done),  .shade_pixel_color(shade_pixel_color),
         .busy(status_busy), .frame_done(status_frame_done), .any_hit(),
-        .dbg_state(dbg_state_w), .dbg_px(dbg_px_w), .dbg_py(dbg_py_w),
+        .dbg_state(dbg_state_w), .dbg_rs_wait(dbg_rs_wait_w),
+        .dbg_px(dbg_px_w), .dbg_py(dbg_py_w),
         .dbg_tvalid(dbg_tvalid_w), .dbg_tready(dbg_tready_w)
     );
 
@@ -234,7 +237,8 @@ module top #(
             .shade_hit_px(), .shade_hit_py(), .shade_hit_pz(),
             .shade_done('0), .shade_pixel_color('0),
             .busy(), .frame_done(shadow_done), .any_hit(shadow_any_hit),
-            .dbg_state(), .dbg_px(), .dbg_py(),
+            .dbg_state(), .dbg_rs_wait(),
+            .dbg_px(), .dbg_py(),
             .dbg_tvalid(), .dbg_tready()
         );
 

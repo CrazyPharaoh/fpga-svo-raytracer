@@ -58,6 +58,28 @@ _CHILD_TYPES = {0: 'EMPTY', 1: 'MIXED', 2: 'UNDEF(10)', 3: 'SOLID'}
 # ─── END DEBUG LOGGING HELPERS ────────────────────────────────────────────────
 
 
+async def shade_stub(dut, latency=5):
+    """Minimal shading stub for SHADE_MODE=1 simulation.
+
+    Watches shade_start; after 'latency' cycles responds with shade_done=1
+    and a pixel colour: white (0xFFFFFF) for hits, sky blue for misses.
+    Harmless under SHADE_MODE=0 because shade_start is never asserted.
+    """
+    SKY = (135 << 16) | (206 << 8) | 235
+    dut.shade_done.value        = 0
+    dut.shade_pixel_color.value = 0
+    while True:
+        await RisingEdge(dut.clk)
+        if int(dut.shade_start.value):
+            is_miss = int(dut.shade_is_miss.value)
+            for _ in range(latency - 1):
+                await RisingEdge(dut.clk)
+            dut.shade_pixel_color.value = SKY if is_miss else 0xFFFFFF
+            dut.shade_done.value        = 1
+            await RisingEdge(dut.clk)
+            dut.shade_done.value        = 0
+
+
 def build_svo_words():
     grid  = svo_builder.build_world()
     root  = svo_builder.build_svo(grid)
@@ -314,10 +336,6 @@ async def test_render_frame(dut):
     svo_words = build_svo_words()
     cocotb.log.info(f"  {len(svo_words)} SVO words")
 
-    # Tie off shading pipeline inputs (unused in SHADE_MODE=0)
-    dut.shade_done.value        = 0
-    dut.shade_pixel_color.value = 0
-
     pixels = []
     # DEBUG: per-pixel FSM trace. Remove pixel_logs, pixel_tracer start_soon(),
     # and write_pixel_trace_log() call when debug logging is no longer needed.
@@ -325,6 +343,8 @@ async def test_render_frame(dut):
     cocotb.start_soon(bram_model(dut, svo_words))
     cocotb.start_soon(collect_pixels_axis(dut, pixels))
     cocotb.start_soon(pixel_tracer(dut, pixel_logs))
+    # shade_stub handles shade_done/shade_pixel_color; safe in SHADE_MODE=0 too
+    cocotb.start_soon(shade_stub(dut))
 
     # Reset
     dut.rst.value   = 1

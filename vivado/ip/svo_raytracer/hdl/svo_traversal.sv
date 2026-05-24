@@ -70,6 +70,7 @@ module svo_traversal #(
 
     // Debug: readable via AXI at run-time to diagnose hangs
     output logic [3:0]  dbg_state,    // current FSM state integer (S_WRITE_PIXEL=12)
+    output logic [3:0]  dbg_rs_wait,  // rs_wait counter (0-15); stuck≠advancing→hang
     output logic [8:0]  dbg_px,       // current pixel X
     output logic [7:0]  dbg_py,       // current pixel Y
     output logic        dbg_tvalid,   // axis_tvalid: IP is outputting a pixel
@@ -100,8 +101,10 @@ module svo_traversal #(
         else if (xabs[13])     r = 32'h0006_0000;  // x ∈ [0.125,0.25) → r₀=6.0
         else if (xabs[12])     r = 32'h000C_0000;  // x ∈ [0.0625,0.125) → r₀=12.0
         else                   r = 32'h0018_0000;  // x < 0.0625    → r₀=24.0
-        // 3 N-R iterations: r ← r·(2 − x·r)
-        r2 = qmul(xabs, r); r2 = 32'h0002_0000 - r2; r = qmul(r, r2);
+        // 2 N-R iterations: r ← r·(2 − x·r)
+        // 3 iterations caused a 140ns combinational chain (23 DSPs, 103 levels),
+        // violating the 110ns multicycle budget. With the 6-way initial estimate,
+        // 2 iterations give ≤0.4% error for |x|≥0.125, acceptable for DDA traversal.
         r2 = qmul(xabs, r); r2 = 32'h0002_0000 - r2; r = qmul(r, r2);
         r2 = qmul(xabs, r); r2 = 32'h0002_0000 - r2; r = qmul(r, r2);
         return (x < 0) ? -r : r;
@@ -129,11 +132,12 @@ module svo_traversal #(
 
     (* fsm_encoding = "sequential" *) state_t state;
     logic [3:0] state_raw; assign state_raw = state;
-    assign dbg_state  = state_raw;
-    assign dbg_px     = px;
-    assign dbg_py     = py;
-    assign dbg_tvalid = axis_tvalid;
-    assign dbg_tready = axis_tready;
+    assign dbg_state   = state_raw;
+    assign dbg_rs_wait = rs_wait;
+    assign dbg_px      = px;
+    assign dbg_py      = py;
+    assign dbg_tvalid  = axis_tvalid;
+    assign dbg_tready  = axis_tready;
 
     // -------------------------------------------------------------------------
     // Pixel counters (primary-ray mode only)
@@ -210,7 +214,7 @@ module svo_traversal #(
 
     // Wait counter for S_RAY_SETUP: holds the state for 11 cycles so the
     // 14-DSP48 combinational chain (~79 ns) settles before registers capture.
-    // Matches the set_multicycle_path -setup 11 constraint in the XDC.
+    // Matches the set_multicycle_path -setup 16 constraint in the XDC.
     logic [3:0] rs_wait;
 
     // Set when S_POP_STACK redirects through S_ENTER_NODE to reload r_child[]/r_block[].
@@ -261,8 +265,8 @@ module svo_traversal #(
             //
             // Primary mode has a 14-DSP48 combinational chain (~79 ns) that
             // cannot close timing in a single 10 ns cycle.  rs_wait holds the
-            // FSM here for 11 cycles so the chain settles before the registers
-            // capture.  This matches set_multicycle_path -setup 11 in the XDC.
+            // FSM here for 16 cycles so the chain settles before the registers
+            // capture.  This matches set_multicycle_path -setup 16 in the XDC.
             // Shadow mode has no deep chain and exits immediately.
             S_RAY_SETUP: begin
                 if (SHADOW_MODE) begin
@@ -279,7 +283,7 @@ module svo_traversal #(
                     state <= S_ROOT_SLAB;
                 end else begin
                     // Primary mode: wait for combinational chain to settle
-                    if (rs_wait < 4'd10) begin
+                    if (rs_wait < 4'd15) begin
                         rs_wait <= rs_wait + 1'b1;
                     end else begin
                         rs_wait <= '0;
@@ -610,7 +614,8 @@ module svo_traversal #(
             // -----------------------------------------------------------------
             S_NEXT_PIXEL: begin
                 axis_tvalid <= 1'b0;
-                sp          <= '0;   // reset stack pointer for next ray
+                sp          <= '0;
+                post_pop    <= 1'b0;
                 if (px == 9'(IMG_W - 1)) begin
                     px <= '0;
                     if (py == 8'(IMG_H - 1)) begin

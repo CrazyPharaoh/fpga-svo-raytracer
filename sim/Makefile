@@ -9,6 +9,11 @@ VERILOG_SOURCES = $(shell pwd)/../vivado/ip/svo_raytracer/hdl/svo_traversal.sv
 TOPLEVEL = svo_traversal
 MODULE   = tb_svo_traversal
 
+# Set SHADE_MODE=1 to simulate with shading pipeline handshake:
+#   make SHADE_MODE=1
+SHADE_MODE    ?= 0
+COMPILE_ARGS  += -GSHADE_MODE=$(SHADE_MODE)
+
 EXTRA_ARGS  = --language 1800-2012
 EXTRA_ARGS += -Wno-WIDTHTRUNC -Wno-WIDTHEXPAND -Wno-CASEINCOMPLETE
 EXTRA_ARGS += -Wno-UNOPTFLAT
