@@ -45,7 +45,7 @@ module top #(
     logic rst = ~s_axi_aresetn;
 
     logic [3:0] dbg_state_w;
-    logic [3:0] dbg_rs_wait_w;
+    logic [4:0] dbg_rs_wait_w;
     logic [8:0] dbg_px_w;
     logic [7:0] dbg_py_w;
     logic       dbg_tvalid_w;

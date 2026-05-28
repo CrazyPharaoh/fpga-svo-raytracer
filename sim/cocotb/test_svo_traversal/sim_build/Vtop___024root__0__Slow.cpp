@@ -9,67 +9,8 @@ VL_ATTR_COLD void Vtop___024root___eval_static(Vtop___024root* vlSelf) {
     Vtop__Syms* const __restrict vlSymsp VL_ATTR_UNUSED = vlSelf->vlSymsp;
     auto& vlSelfRef = std::ref(*vlSelf).get();
     // Body
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__u = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__v = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__dx = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__dy = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__dz = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__len2 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__inv_len = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__tx0 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__tx1 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__ty0 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__ty1 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__tz0 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__tz1 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__world_q = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__tmp = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__ex = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__ey = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__ez = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__icx = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__icy = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__icz = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__abs_ix = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__abs_iy = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__abs_iz = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk4__DOT__face = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk4__DOT__fsign = 0;
     vlSelfRef.__Vtrigprevexpr___TOP__svo_traversal__DOT__clk__0 
         = vlSelfRef.svo_traversal__DOT__clk;
-}
-
-VL_ATTR_COLD void Vtop___024root___eval_static__TOP(Vtop___024root* vlSelf) {
-    VL_DEBUG_IF(VL_DBG_MSGF("+    Vtop___024root___eval_static__TOP\n"); );
-    Vtop__Syms* const __restrict vlSymsp VL_ATTR_UNUSED = vlSelf->vlSymsp;
-    auto& vlSelfRef = std::ref(*vlSelf).get();
-    // Body
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__u = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__v = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__dx = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__dy = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__dz = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__len2 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk1__DOT__inv_len = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__tx0 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__tx1 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__ty0 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__ty1 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__tz0 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__tz1 = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__world_q = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk2__DOT__tmp = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__ex = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__ey = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__ez = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__icx = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__icy = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__icz = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__abs_ix = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__abs_iy = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk3__DOT__abs_iz = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk4__DOT__face = 0;
-    vlSelf->svo_traversal__DOT__unnamedblk4__DOT__fsign = 0;
 }
 
 VL_ATTR_COLD void Vtop___024root___eval_initial(Vtop___024root* vlSelf) {
@@ -241,6 +182,11 @@ VL_ATTR_COLD void Vtop___024root___ctor_var_reset(Vtop___024root* vlSelf) {
     vlSelf->fb_wr_addr = 0;
     vlSelf->fb_wr_data = 0;
     vlSelf->fb_wr_en = 0;
+    vlSelf->axis_tvalid = 0;
+    vlSelf->axis_tdata = 0;
+    vlSelf->axis_tlast = 0;
+    vlSelf->axis_tuser = 0;
+    vlSelf->axis_tready = 0;
     vlSelf->shade_start = 0;
     vlSelf->shade_is_miss = 0;
     vlSelf->shade_hit_face = 0;
@@ -258,6 +204,12 @@ VL_ATTR_COLD void Vtop___024root___ctor_var_reset(Vtop___024root* vlSelf) {
     vlSelf->busy = 0;
     vlSelf->frame_done = 0;
     vlSelf->any_hit = 0;
+    vlSelf->dbg_state = 0;
+    vlSelf->dbg_rs_wait = 0;
+    vlSelf->dbg_px = 0;
+    vlSelf->dbg_py = 0;
+    vlSelf->dbg_tvalid = 0;
+    vlSelf->dbg_tready = 0;
     vlSelf->svo_traversal__DOT____Vlvbound_habf6d040__0 = 0;
     vlSelf->svo_traversal__DOT____Vlvbound_h9d41b6af__0 = 0;
     vlSelf->svo_traversal__DOT____Vlvbound_h6831e3f2__0 = 0;
@@ -270,6 +222,7 @@ VL_ATTR_COLD void Vtop___024root___ctor_var_reset(Vtop___024root* vlSelf) {
     vlSelf->svo_traversal__DOT____Vlvbound_h10022533__0 = 0;
     vlSelf->svo_traversal__DOT____Vlvbound_h46c1a37b__0 = 0;
     vlSelf->svo_traversal__DOT____Vlvbound_h20b934f4__0 = 0;
+    vlSelf->svo_traversal__DOT____Vlvbound_h5d517a59__0 = 0;
     vlSelf->svo_traversal__DOT____Vlvbound_h3fbd9737__0 = 0;
     vlSelf->svo_traversal__DOT__clk = 0;
     vlSelf->svo_traversal__DOT__rst = 0;
@@ -294,6 +247,11 @@ VL_ATTR_COLD void Vtop___024root___ctor_var_reset(Vtop___024root* vlSelf) {
     vlSelf->svo_traversal__DOT__fb_wr_addr = 0;
     vlSelf->svo_traversal__DOT__fb_wr_data = 0;
     vlSelf->svo_traversal__DOT__fb_wr_en = 0;
+    vlSelf->svo_traversal__DOT__axis_tvalid = 0;
+    vlSelf->svo_traversal__DOT__axis_tdata = 0;
+    vlSelf->svo_traversal__DOT__axis_tlast = 0;
+    vlSelf->svo_traversal__DOT__axis_tuser = 0;
+    vlSelf->svo_traversal__DOT__axis_tready = 0;
     vlSelf->svo_traversal__DOT__shade_start = 0;
     vlSelf->svo_traversal__DOT__shade_is_miss = 0;
     vlSelf->svo_traversal__DOT__shade_hit_face = 0;
@@ -311,7 +269,14 @@ VL_ATTR_COLD void Vtop___024root___ctor_var_reset(Vtop___024root* vlSelf) {
     vlSelf->svo_traversal__DOT__busy = 0;
     vlSelf->svo_traversal__DOT__frame_done = 0;
     vlSelf->svo_traversal__DOT__any_hit = 0;
+    vlSelf->svo_traversal__DOT__dbg_state = 0;
+    vlSelf->svo_traversal__DOT__dbg_rs_wait = 0;
+    vlSelf->svo_traversal__DOT__dbg_px = 0;
+    vlSelf->svo_traversal__DOT__dbg_py = 0;
+    vlSelf->svo_traversal__DOT__dbg_tvalid = 0;
+    vlSelf->svo_traversal__DOT__dbg_tready = 0;
     vlSelf->svo_traversal__DOT__state = 0;
+    vlSelf->svo_traversal__DOT__state_raw = 0;
     vlSelf->svo_traversal__DOT__px = 0;
     vlSelf->svo_traversal__DOT__py = 0;
     vlSelf->svo_traversal__DOT__ro_x = 0;
@@ -341,6 +306,48 @@ VL_ATTR_COLD void Vtop___024root___ctor_var_reset(Vtop___024root* vlSelf) {
     vlSelf->svo_traversal__DOT__node_origin_x = 0;
     vlSelf->svo_traversal__DOT__node_origin_y = 0;
     vlSelf->svo_traversal__DOT__node_origin_z = 0;
+    vlSelf->svo_traversal__DOT__rs_tx0 = 0;
+    vlSelf->svo_traversal__DOT__rs_tx1 = 0;
+    vlSelf->svo_traversal__DOT__rs_ty0 = 0;
+    vlSelf->svo_traversal__DOT__rs_ty1 = 0;
+    vlSelf->svo_traversal__DOT__rs_tz0 = 0;
+    vlSelf->svo_traversal__DOT__rs_tz1 = 0;
+    vlSelf->svo_traversal__DOT__rs_world_q = 0;
+    vlSelf->svo_traversal__DOT__rs_tmp = 0;
+    vlSelf->svo_traversal__DOT__bw_icx_c = 0;
+    vlSelf->svo_traversal__DOT__bw_icy_c = 0;
+    vlSelf->svo_traversal__DOT__bw_icz_c = 0;
+    vlSelf->svo_traversal__DOT__em_face = 0;
+    vlSelf->svo_traversal__DOT__em_fsign = 0;
+    vlSelf->svo_traversal__DOT__rs_rsu_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rsv_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rsdx_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rsdy_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rsdz_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rslen2_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rilinv_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rilsq_r = 0;
+    vlSelf->svo_traversal__DOT__rs_riltmp_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rilsub_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rilinv2_r = 0;
+    vlSelf->svo_traversal__DOT__rs_ndx_r = 0;
+    vlSelf->svo_traversal__DOT__rs_ndy_r = 0;
+    vlSelf->svo_traversal__DOT__rs_ndz_r = 0;
+    vlSelf->svo_traversal__DOT__rs_ax_r = 0;
+    vlSelf->svo_traversal__DOT__rs_ay_r = 0;
+    vlSelf->svo_traversal__DOT__rs_az_r = 0;
+    vlSelf->svo_traversal__DOT__rs_r0x_r = 0;
+    vlSelf->svo_traversal__DOT__rs_r0y_r = 0;
+    vlSelf->svo_traversal__DOT__rs_r0z_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rma_x_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rma_y_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rma_z_r = 0;
+    vlSelf->svo_traversal__DOT__rs_r1x_r = 0;
+    vlSelf->svo_traversal__DOT__rs_r1y_r = 0;
+    vlSelf->svo_traversal__DOT__rs_r1z_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rmb_x_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rmb_y_r = 0;
+    vlSelf->svo_traversal__DOT__rs_rmb_z_r = 0;
     vlSelf->svo_traversal__DOT__node_idx = 0;
     vlSelf->svo_traversal__DOT__bitmask = 0;
     vlSelf->svo_traversal__DOT__cidx = 0;
@@ -362,6 +369,9 @@ VL_ATTR_COLD void Vtop___024root___ctor_var_reset(Vtop___024root* vlSelf) {
     vlSelf->svo_traversal__DOT__sp = 0;
     for (int __Vi0 = 0; __Vi0 < 12; ++__Vi0) {
         vlSelf->svo_traversal__DOT__stk_node_idx[__Vi0] = 0;
+    }
+    for (int __Vi0 = 0; __Vi0 < 12; ++__Vi0) {
+        vlSelf->svo_traversal__DOT__stk_bitmask[__Vi0] = 0;
     }
     for (int __Vi0 = 0; __Vi0 < 12; ++__Vi0) {
         vlSelf->svo_traversal__DOT__stk_t_min[__Vi0] = 0;
@@ -400,6 +410,30 @@ VL_ATTR_COLD void Vtop___024root___ctor_var_reset(Vtop___024root* vlSelf) {
         vlSelf->svo_traversal__DOT__stk_orig_z[__Vi0] = 0;
     }
     vlSelf->svo_traversal__DOT__pixel_color = 0;
+    vlSelf->svo_traversal__DOT__rs_wait = 0;
+    vlSelf->svo_traversal__DOT__post_pop = 0;
+    vlSelf->svo_traversal__DOT__bw_ex_c = 0;
+    vlSelf->svo_traversal__DOT__bw_ey_c = 0;
+    vlSelf->svo_traversal__DOT__bw_ez_c = 0;
+    vlSelf->svo_traversal__DOT__bw_abs_ix_c = 0;
+    vlSelf->svo_traversal__DOT__bw_abs_iy_c = 0;
+    vlSelf->svo_traversal__DOT__bw_abs_iz_c = 0;
+    vlSelf->svo_traversal__DOT__bw_nh_c = 0;
+    vlSelf->svo_traversal__DOT__dt_x_bw_c = 0;
+    vlSelf->svo_traversal__DOT__dt_y_bw_c = 0;
+    vlSelf->svo_traversal__DOT__dt_z_bw_c = 0;
+    vlSelf->svo_traversal__DOT__bw_ex_rel_c = 0;
+    vlSelf->svo_traversal__DOT__bw_ey_rel_c = 0;
+    vlSelf->svo_traversal__DOT__bw_ez_rel_c = 0;
+    vlSelf->svo_traversal__DOT__bw_dist_x_c = 0;
+    vlSelf->svo_traversal__DOT__bw_dist_y_c = 0;
+    vlSelf->svo_traversal__DOT__bw_dist_z_c = 0;
+    vlSelf->svo_traversal__DOT__t_next_x_bw_c = 0;
+    vlSelf->svo_traversal__DOT__t_next_y_bw_c = 0;
+    vlSelf->svo_traversal__DOT__t_next_z_bw_c = 0;
+    vlSelf->svo_traversal__DOT__dt_x_pop_c = 0;
+    vlSelf->svo_traversal__DOT__dt_y_pop_c = 0;
+    vlSelf->svo_traversal__DOT__dt_z_pop_c = 0;
     for (int __Vi0 = 0; __Vi0 < 1; ++__Vi0) {
         vlSelf->__VstlTriggered[__Vi0] = 0;
     }

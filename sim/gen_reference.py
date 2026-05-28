@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 # sim/gen_reference.py
-# Generate a reference PNG using the Python SVO traversal with the exact same
+# Generate a reference PNG + NPY using the Python SVO traversal with the exact same
 # camera / ray formula as the hardware testbench (tb_svo_traversal.py).
-# Output: sim/output/reference_render.png  (white=hit, sky-blue=miss)
+# Output: sim/output/reference_render.png + reference_render.npy  (white=hit, sky-blue=miss)
+#
+# Usage:
+#   python sim/gen_reference.py                    # default camera [40,60,10]
+#   python sim/gen_reference.py 32 40 -20          # camera [32,40,-20]
 
 import sys, os, math
 import numpy as np
@@ -34,8 +38,11 @@ def main():
     nodes = svo_builder.flatten_svo(root)
     print(f"  {len(nodes)} nodes")
 
-    # Camera — identical to testbench
-    pos   = [40, 60, 10]
+    # Camera — pass x y z as CLI args, or defaults to [40,60,10]
+    if len(sys.argv) == 4:
+        pos = [float(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3])]
+    else:
+        pos   = [40, 60, 10]
     fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
     right = normalise(cross(fwd, [0, 1, 0]))
     up    = cross(right, fwd)
@@ -66,8 +73,11 @@ def main():
     out_dir = os.path.join(os.path.dirname(__file__), 'output')
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, 'reference_render.png')
+    npy_path = os.path.join(out_dir, 'reference_render.npy')
     Image.fromarray(arr, 'RGB').save(out_path)
+    np.save(npy_path, arr)
     print(f"Saved {out_path}")
+    print(f"Saved {npy_path}")
 
     hits  = sum(1 for p in pixels if p == HIT_COLOR)
     total = IMG_W * IMG_H

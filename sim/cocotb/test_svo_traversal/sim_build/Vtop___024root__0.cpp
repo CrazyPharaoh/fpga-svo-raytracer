@@ -33,6 +33,31 @@ void Vtop___024root___ico_sequent__TOP__0(Vtop___024root* vlSelf) {
     VL_DEBUG_IF(VL_DBG_MSGF("+    Vtop___024root___ico_sequent__TOP__0\n"); );
     Vtop__Syms* const __restrict vlSymsp VL_ATTR_UNUSED = vlSelf->vlSymsp;
     auto& vlSelfRef = std::ref(*vlSelf).get();
+    // Locals
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__9__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__9__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__9__a;
+    __Vfunc_svo_traversal__DOT__qmul__9__a = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__9__b;
+    __Vfunc_svo_traversal__DOT__qmul__9__b = 0;
+    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__9__p;
+    __Vfunc_svo_traversal__DOT__qmul__9__p = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__10__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__10__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__10__a;
+    __Vfunc_svo_traversal__DOT__qmul__10__a = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__10__b;
+    __Vfunc_svo_traversal__DOT__qmul__10__b = 0;
+    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__10__p;
+    __Vfunc_svo_traversal__DOT__qmul__10__p = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__11__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__11__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__11__a;
+    __Vfunc_svo_traversal__DOT__qmul__11__a = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__11__b;
+    __Vfunc_svo_traversal__DOT__qmul__11__b = 0;
+    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__11__p;
+    __Vfunc_svo_traversal__DOT__qmul__11__p = 0;
     // Body
     vlSelfRef.svo_traversal__DOT__clk = vlSelfRef.clk;
     vlSelfRef.svo_traversal__DOT__rst = vlSelfRef.rst;
@@ -57,6 +82,10 @@ void Vtop___024root___ico_sequent__TOP__0(Vtop___024root* vlSelf) {
     vlSelfRef.fb_wr_addr = vlSelfRef.svo_traversal__DOT__fb_wr_addr;
     vlSelfRef.fb_wr_data = vlSelfRef.svo_traversal__DOT__fb_wr_data;
     vlSelfRef.fb_wr_en = vlSelfRef.svo_traversal__DOT__fb_wr_en;
+    vlSelfRef.axis_tvalid = vlSelfRef.svo_traversal__DOT__axis_tvalid;
+    vlSelfRef.axis_tdata = vlSelfRef.svo_traversal__DOT__axis_tdata;
+    vlSelfRef.axis_tlast = vlSelfRef.svo_traversal__DOT__axis_tlast;
+    vlSelfRef.axis_tuser = vlSelfRef.svo_traversal__DOT__axis_tuser;
     vlSelfRef.shade_start = vlSelfRef.svo_traversal__DOT__shade_start;
     vlSelfRef.shade_is_miss = vlSelfRef.svo_traversal__DOT__shade_is_miss;
     vlSelfRef.shade_hit_face = vlSelfRef.svo_traversal__DOT__shade_hit_face;
@@ -75,6 +104,240 @@ void Vtop___024root___ico_sequent__TOP__0(Vtop___024root* vlSelf) {
     vlSelfRef.busy = vlSelfRef.svo_traversal__DOT__busy;
     vlSelfRef.frame_done = vlSelfRef.svo_traversal__DOT__frame_done;
     vlSelfRef.any_hit = vlSelfRef.svo_traversal__DOT__any_hit;
+    vlSelfRef.svo_traversal__DOT__dbg_tvalid = vlSelfRef.svo_traversal__DOT__axis_tvalid;
+    vlSelfRef.svo_traversal__DOT__dbg_rs_wait = vlSelfRef.svo_traversal__DOT__rs_wait;
+    vlSelfRef.svo_traversal__DOT__dbg_px = vlSelfRef.svo_traversal__DOT__px;
+    vlSelfRef.svo_traversal__DOT__dbg_py = vlSelfRef.svo_traversal__DOT__py;
+    vlSelfRef.svo_traversal__DOT__axis_tready = vlSelfRef.axis_tready;
+    vlSelfRef.svo_traversal__DOT__state_raw = vlSelfRef.svo_traversal__DOT__state;
+    vlSelfRef.svo_traversal__DOT__bw_ex_c = (vlSelfRef.svo_traversal__DOT__ro_x 
+                                             + (IData)(
+                                                       (VL_MULS_QQQ(64, 
+                                                                    VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__t_min), 
+                                                                    VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__rd_x)) 
+                                                        >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__bw_ey_c = (vlSelfRef.svo_traversal__DOT__ro_y 
+                                             + (IData)(
+                                                       (VL_MULS_QQQ(64, 
+                                                                    VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__t_min), 
+                                                                    VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__rd_y)) 
+                                                        >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__bw_ez_c = (vlSelfRef.svo_traversal__DOT__ro_z 
+                                             + (IData)(
+                                                       (VL_MULS_QQQ(64, 
+                                                                    VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__t_min), 
+                                                                    VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__rd_z)) 
+                                                        >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__bw_abs_ix_c = ((vlSelfRef.svo_traversal__DOT__inv_x 
+                                                  >> 0x0000001fU)
+                                                  ? 
+                                                 (- vlSelfRef.svo_traversal__DOT__inv_x)
+                                                  : vlSelfRef.svo_traversal__DOT__inv_x);
+    vlSelfRef.svo_traversal__DOT__bw_abs_iy_c = ((vlSelfRef.svo_traversal__DOT__inv_y 
+                                                  >> 0x0000001fU)
+                                                  ? 
+                                                 (- vlSelfRef.svo_traversal__DOT__inv_y)
+                                                  : vlSelfRef.svo_traversal__DOT__inv_y);
+    vlSelfRef.svo_traversal__DOT__bw_abs_iz_c = ((vlSelfRef.svo_traversal__DOT__inv_z 
+                                                  >> 0x0000001fU)
+                                                  ? 
+                                                 (- vlSelfRef.svo_traversal__DOT__inv_z)
+                                                  : vlSelfRef.svo_traversal__DOT__inv_z);
+    vlSelfRef.svo_traversal__DOT__bw_nh_c = VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_half), 0x00000010U);
+    vlSelfRef.dbg_tvalid = vlSelfRef.svo_traversal__DOT__dbg_tvalid;
+    vlSelfRef.dbg_rs_wait = vlSelfRef.svo_traversal__DOT__dbg_rs_wait;
+    vlSelfRef.dbg_px = vlSelfRef.svo_traversal__DOT__dbg_px;
+    vlSelfRef.dbg_py = vlSelfRef.svo_traversal__DOT__dbg_py;
+    vlSelfRef.svo_traversal__DOT__dbg_tready = vlSelfRef.svo_traversal__DOT__axis_tready;
+    vlSelfRef.svo_traversal__DOT__dbg_state = vlSelfRef.svo_traversal__DOT__state_raw;
+    __Vfunc_svo_traversal__DOT__qmul__9__b = vlSelfRef.svo_traversal__DOT__bw_abs_ix_c;
+    __Vfunc_svo_traversal__DOT__qmul__9__a = (((0x0bU 
+                                                >= 
+                                                (0x0000000fU 
+                                                 & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
+                                                    - (IData)(1U))))
+                                                ? vlSelfRef.svo_traversal__DOT__stk_node_half
+                                               [(0x0000000fU 
+                                                 & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
+                                                    - (IData)(1U)))]
+                                                : 0U) 
+                                              << 0x00000010U);
+    __Vfunc_svo_traversal__DOT__qmul__9__p = VL_MULS_QQQ(64, 
+                                                         VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__9__a), 
+                                                         VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__9__b));
+    __Vfunc_svo_traversal__DOT__qmul__9__Vfuncout = (IData)(
+                                                            (__Vfunc_svo_traversal__DOT__qmul__9__p 
+                                                             >> 0x10U));
+    vlSelfRef.svo_traversal__DOT__dt_x_pop_c = __Vfunc_svo_traversal__DOT__qmul__9__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__10__b = vlSelfRef.svo_traversal__DOT__bw_abs_iy_c;
+    __Vfunc_svo_traversal__DOT__qmul__10__a = (((0x0bU 
+                                                 >= 
+                                                 (0x0000000fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
+                                                     - (IData)(1U))))
+                                                 ? vlSelfRef.svo_traversal__DOT__stk_node_half
+                                                [(0x0000000fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
+                                                     - (IData)(1U)))]
+                                                 : 0U) 
+                                               << 0x00000010U);
+    __Vfunc_svo_traversal__DOT__qmul__10__p = VL_MULS_QQQ(64, 
+                                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__10__a), 
+                                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__10__b));
+    __Vfunc_svo_traversal__DOT__qmul__10__Vfuncout 
+        = (IData)((__Vfunc_svo_traversal__DOT__qmul__10__p 
+                   >> 0x10U));
+    vlSelfRef.svo_traversal__DOT__dt_y_pop_c = __Vfunc_svo_traversal__DOT__qmul__10__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__11__b = vlSelfRef.svo_traversal__DOT__bw_abs_iz_c;
+    __Vfunc_svo_traversal__DOT__qmul__11__a = (((0x0bU 
+                                                 >= 
+                                                 (0x0000000fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
+                                                     - (IData)(1U))))
+                                                 ? vlSelfRef.svo_traversal__DOT__stk_node_half
+                                                [(0x0000000fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
+                                                     - (IData)(1U)))]
+                                                 : 0U) 
+                                               << 0x00000010U);
+    __Vfunc_svo_traversal__DOT__qmul__11__p = VL_MULS_QQQ(64, 
+                                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__11__a), 
+                                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__11__b));
+    __Vfunc_svo_traversal__DOT__qmul__11__Vfuncout 
+        = (IData)((__Vfunc_svo_traversal__DOT__qmul__11__p 
+                   >> 0x10U));
+    vlSelfRef.svo_traversal__DOT__dt_z_pop_c = __Vfunc_svo_traversal__DOT__qmul__11__Vfuncout;
+    vlSelfRef.svo_traversal__DOT__dt_x_bw_c = (IData)(
+                                                      (VL_MULS_QQQ(64, 
+                                                                   VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_nh_c), 
+                                                                   VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_abs_ix_c)) 
+                                                       >> 0x00000010U));
+    vlSelfRef.svo_traversal__DOT__dt_y_bw_c = (IData)(
+                                                      (VL_MULS_QQQ(64, 
+                                                                   VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_nh_c), 
+                                                                   VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_abs_iy_c)) 
+                                                       >> 0x00000010U));
+    vlSelfRef.svo_traversal__DOT__dt_z_bw_c = (IData)(
+                                                      (VL_MULS_QQQ(64, 
+                                                                   VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_nh_c), 
+                                                                   VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_abs_iz_c)) 
+                                                       >> 0x00000010U));
+    vlSelfRef.svo_traversal__DOT__bw_icx_c = (VL_GTS_III(32, 0U, vlSelfRef.svo_traversal__DOT__bw_ex_c)
+                                               ? 0U
+                                               : (0x0000007fU 
+                                                  & (vlSelfRef.svo_traversal__DOT__bw_ex_c 
+                                                     >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__bw_icx_c = (((IData)(vlSelfRef.svo_traversal__DOT__bw_icx_c) 
+                                               >= (IData)(vlSelfRef.svo_traversal__DOT__node_origin_x))
+                                               ? (0x0000007fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__bw_icx_c) 
+                                                     - (IData)(vlSelfRef.svo_traversal__DOT__node_origin_x)))
+                                               : 0U);
+    vlSelfRef.svo_traversal__DOT__bw_ex_rel_c = (vlSelfRef.svo_traversal__DOT__bw_ex_c 
+                                                 - 
+                                                 VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_origin_x), 0x00000010U));
+    vlSelfRef.svo_traversal__DOT__bw_dist_x_c = ((4U 
+                                                  & (IData)(vlSelfRef.svo_traversal__DOT__step_x))
+                                                  ? 
+                                                 (((IData)(vlSelfRef.svo_traversal__DOT__bw_icx_c) 
+                                                   >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                                   ? 
+                                                  (vlSelfRef.svo_traversal__DOT__bw_ex_rel_c 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_nh_c)
+                                                   : vlSelfRef.svo_traversal__DOT__bw_ex_rel_c)
+                                                  : 
+                                                 (((IData)(vlSelfRef.svo_traversal__DOT__bw_icx_c) 
+                                                   >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                                   ? 
+                                                  (VL_SHIFTL_III(32,32,32, vlSelfRef.svo_traversal__DOT__bw_nh_c, 1U) 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_ex_rel_c)
+                                                   : 
+                                                  (vlSelfRef.svo_traversal__DOT__bw_nh_c 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_ex_rel_c)));
+    vlSelfRef.svo_traversal__DOT__bw_icy_c = (VL_GTS_III(32, 0U, vlSelfRef.svo_traversal__DOT__bw_ey_c)
+                                               ? 0U
+                                               : (0x0000007fU 
+                                                  & (vlSelfRef.svo_traversal__DOT__bw_ey_c 
+                                                     >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__bw_icy_c = (((IData)(vlSelfRef.svo_traversal__DOT__bw_icy_c) 
+                                               >= (IData)(vlSelfRef.svo_traversal__DOT__node_origin_y))
+                                               ? (0x0000007fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__bw_icy_c) 
+                                                     - (IData)(vlSelfRef.svo_traversal__DOT__node_origin_y)))
+                                               : 0U);
+    vlSelfRef.svo_traversal__DOT__bw_ey_rel_c = (vlSelfRef.svo_traversal__DOT__bw_ey_c 
+                                                 - 
+                                                 VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_origin_y), 0x00000010U));
+    vlSelfRef.svo_traversal__DOT__bw_dist_y_c = ((4U 
+                                                  & (IData)(vlSelfRef.svo_traversal__DOT__step_y))
+                                                  ? 
+                                                 (((IData)(vlSelfRef.svo_traversal__DOT__bw_icy_c) 
+                                                   >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                                   ? 
+                                                  (vlSelfRef.svo_traversal__DOT__bw_ey_rel_c 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_nh_c)
+                                                   : vlSelfRef.svo_traversal__DOT__bw_ey_rel_c)
+                                                  : 
+                                                 (((IData)(vlSelfRef.svo_traversal__DOT__bw_icy_c) 
+                                                   >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                                   ? 
+                                                  (VL_SHIFTL_III(32,32,32, vlSelfRef.svo_traversal__DOT__bw_nh_c, 1U) 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_ey_rel_c)
+                                                   : 
+                                                  (vlSelfRef.svo_traversal__DOT__bw_nh_c 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_ey_rel_c)));
+    vlSelfRef.svo_traversal__DOT__bw_icz_c = (VL_GTS_III(32, 0U, vlSelfRef.svo_traversal__DOT__bw_ez_c)
+                                               ? 0U
+                                               : (0x0000007fU 
+                                                  & (vlSelfRef.svo_traversal__DOT__bw_ez_c 
+                                                     >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__bw_icz_c = (((IData)(vlSelfRef.svo_traversal__DOT__bw_icz_c) 
+                                               >= (IData)(vlSelfRef.svo_traversal__DOT__node_origin_z))
+                                               ? (0x0000007fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__bw_icz_c) 
+                                                     - (IData)(vlSelfRef.svo_traversal__DOT__node_origin_z)))
+                                               : 0U);
+    vlSelfRef.svo_traversal__DOT__bw_ez_rel_c = (vlSelfRef.svo_traversal__DOT__bw_ez_c 
+                                                 - 
+                                                 VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_origin_z), 0x00000010U));
+    vlSelfRef.svo_traversal__DOT__bw_dist_z_c = ((4U 
+                                                  & (IData)(vlSelfRef.svo_traversal__DOT__step_z))
+                                                  ? 
+                                                 (((IData)(vlSelfRef.svo_traversal__DOT__bw_icz_c) 
+                                                   >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                                   ? 
+                                                  (vlSelfRef.svo_traversal__DOT__bw_ez_rel_c 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_nh_c)
+                                                   : vlSelfRef.svo_traversal__DOT__bw_ez_rel_c)
+                                                  : 
+                                                 (((IData)(vlSelfRef.svo_traversal__DOT__bw_icz_c) 
+                                                   >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                                   ? 
+                                                  (VL_SHIFTL_III(32,32,32, vlSelfRef.svo_traversal__DOT__bw_nh_c, 1U) 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_ez_rel_c)
+                                                   : 
+                                                  (vlSelfRef.svo_traversal__DOT__bw_nh_c 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_ez_rel_c)));
+    vlSelfRef.dbg_tready = vlSelfRef.svo_traversal__DOT__dbg_tready;
+    vlSelfRef.dbg_state = vlSelfRef.svo_traversal__DOT__dbg_state;
+    vlSelfRef.svo_traversal__DOT__t_next_x_bw_c = (vlSelfRef.svo_traversal__DOT__t_min 
+                                                   + (IData)(
+                                                             (VL_MULS_QQQ(64, 
+                                                                          VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_abs_ix_c), 
+                                                                          VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_dist_x_c)) 
+                                                              >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__t_next_y_bw_c = (vlSelfRef.svo_traversal__DOT__t_min 
+                                                   + (IData)(
+                                                             (VL_MULS_QQQ(64, 
+                                                                          VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_abs_iy_c), 
+                                                                          VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_dist_y_c)) 
+                                                              >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__t_next_z_bw_c = (vlSelfRef.svo_traversal__DOT__t_min 
+                                                   + (IData)(
+                                                             (VL_MULS_QQQ(64, 
+                                                                          VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_abs_iz_c), 
+                                                                          VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_dist_z_c)) 
+                                                              >> 0x00000010U)));
 }
 
 void Vtop___024root___eval_ico(Vtop___024root* vlSelf) {
@@ -147,78 +410,24 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     Vtop__Syms* const __restrict vlSymsp VL_ATTR_UNUSED = vlSelf->vlSymsp;
     auto& vlSelfRef = std::ref(*vlSelf).get();
     // Locals
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__0__a;
-    __Vfunc_svo_traversal__DOT__qmul__0__a = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__0__b;
-    __Vfunc_svo_traversal__DOT__qmul__0__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__0__p;
-    __Vfunc_svo_traversal__DOT__qmul__0__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__1__a;
-    __Vfunc_svo_traversal__DOT__qmul__1__a = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__1__b;
-    __Vfunc_svo_traversal__DOT__qmul__1__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__1__p;
-    __Vfunc_svo_traversal__DOT__qmul__1__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__2__a;
-    __Vfunc_svo_traversal__DOT__qmul__2__a = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__2__b;
-    __Vfunc_svo_traversal__DOT__qmul__2__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__2__p;
-    __Vfunc_svo_traversal__DOT__qmul__2__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__3__a;
-    __Vfunc_svo_traversal__DOT__qmul__3__a = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__3__b;
-    __Vfunc_svo_traversal__DOT__qmul__3__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__3__p;
-    __Vfunc_svo_traversal__DOT__qmul__3__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__4__a;
-    __Vfunc_svo_traversal__DOT__qmul__4__a = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__4__b;
-    __Vfunc_svo_traversal__DOT__qmul__4__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__4__p;
-    __Vfunc_svo_traversal__DOT__qmul__4__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__5__a;
-    __Vfunc_svo_traversal__DOT__qmul__5__a = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__5__b;
-    __Vfunc_svo_traversal__DOT__qmul__5__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__5__p;
-    __Vfunc_svo_traversal__DOT__qmul__5__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__6__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__6__Vfuncout = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__6__a;
-    __Vfunc_svo_traversal__DOT__qmul__6__a = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__6__b;
-    __Vfunc_svo_traversal__DOT__qmul__6__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__6__p;
-    __Vfunc_svo_traversal__DOT__qmul__6__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__7__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__7__Vfuncout = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__7__a;
-    __Vfunc_svo_traversal__DOT__qmul__7__a = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__7__b;
-    __Vfunc_svo_traversal__DOT__qmul__7__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__7__p;
-    __Vfunc_svo_traversal__DOT__qmul__7__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__8__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__8__Vfuncout = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__8__a;
-    __Vfunc_svo_traversal__DOT__qmul__8__a = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__8__b;
-    __Vfunc_svo_traversal__DOT__qmul__8__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__8__p;
-    __Vfunc_svo_traversal__DOT__qmul__8__p = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__9__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__9__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__9__a;
     __Vfunc_svo_traversal__DOT__qmul__9__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__9__b;
     __Vfunc_svo_traversal__DOT__qmul__9__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__9__p;
     __Vfunc_svo_traversal__DOT__qmul__9__p = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__10__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__10__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__10__a;
     __Vfunc_svo_traversal__DOT__qmul__10__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__10__b;
     __Vfunc_svo_traversal__DOT__qmul__10__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__10__p;
     __Vfunc_svo_traversal__DOT__qmul__10__p = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__11__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__11__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__11__a;
     __Vfunc_svo_traversal__DOT__qmul__11__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__11__b;
@@ -273,16 +482,12 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     __Vfunc_svo_traversal__DOT__qmul__17__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__17__p;
     __Vfunc_svo_traversal__DOT__qmul__17__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__18__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__18__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__18__a;
     __Vfunc_svo_traversal__DOT__qmul__18__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__18__b;
     __Vfunc_svo_traversal__DOT__qmul__18__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__18__p;
     __Vfunc_svo_traversal__DOT__qmul__18__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__19__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__19__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__19__a;
     __Vfunc_svo_traversal__DOT__qmul__19__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__19__b;
@@ -313,54 +518,66 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     __Vfunc_svo_traversal__DOT__qmul__23__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__23__p;
     __Vfunc_svo_traversal__DOT__qmul__23__p = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__24__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__24__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__24__a;
     __Vfunc_svo_traversal__DOT__qmul__24__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__24__b;
     __Vfunc_svo_traversal__DOT__qmul__24__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__24__p;
     __Vfunc_svo_traversal__DOT__qmul__24__p = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__25__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__25__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__25__a;
     __Vfunc_svo_traversal__DOT__qmul__25__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__25__b;
     __Vfunc_svo_traversal__DOT__qmul__25__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__25__p;
     __Vfunc_svo_traversal__DOT__qmul__25__p = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__26__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__26__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__26__a;
     __Vfunc_svo_traversal__DOT__qmul__26__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__26__b;
     __Vfunc_svo_traversal__DOT__qmul__26__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__26__p;
     __Vfunc_svo_traversal__DOT__qmul__26__p = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__27__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__27__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__27__a;
     __Vfunc_svo_traversal__DOT__qmul__27__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__27__b;
     __Vfunc_svo_traversal__DOT__qmul__27__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__27__p;
     __Vfunc_svo_traversal__DOT__qmul__27__p = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__28__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__28__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__28__a;
     __Vfunc_svo_traversal__DOT__qmul__28__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__28__b;
     __Vfunc_svo_traversal__DOT__qmul__28__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__28__p;
     __Vfunc_svo_traversal__DOT__qmul__28__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__29__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qrecip__29__Vfuncout = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__29__x;
-    __Vfunc_svo_traversal__DOT__qrecip__29__x = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__29__xabs;
-    __Vfunc_svo_traversal__DOT__qrecip__29__xabs = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__29__r;
-    __Vfunc_svo_traversal__DOT__qrecip__29__r = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__29__r2;
-    __Vfunc_svo_traversal__DOT__qrecip__29__r2 = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__29__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__29__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__29__a;
+    __Vfunc_svo_traversal__DOT__qmul__29__a = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__29__b;
+    __Vfunc_svo_traversal__DOT__qmul__29__b = 0;
+    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__29__p;
+    __Vfunc_svo_traversal__DOT__qmul__29__p = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__30__Vfuncout;
     __Vfunc_svo_traversal__DOT__qmul__30__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__30__a;
     __Vfunc_svo_traversal__DOT__qmul__30__a = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__30__b;
+    __Vfunc_svo_traversal__DOT__qmul__30__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__30__p;
     __Vfunc_svo_traversal__DOT__qmul__30__p = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__31__Vfuncout;
     __Vfunc_svo_traversal__DOT__qmul__31__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__31__a;
+    __Vfunc_svo_traversal__DOT__qmul__31__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__31__b;
     __Vfunc_svo_traversal__DOT__qmul__31__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__31__p;
@@ -373,36 +590,30 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     __Vfunc_svo_traversal__DOT__qmul__32__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__32__p;
     __Vfunc_svo_traversal__DOT__qmul__32__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__33__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__33__Vfuncout = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__33__a;
-    __Vfunc_svo_traversal__DOT__qmul__33__a = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__33__b;
-    __Vfunc_svo_traversal__DOT__qmul__33__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__33__p;
-    __Vfunc_svo_traversal__DOT__qmul__33__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__34__a;
-    __Vfunc_svo_traversal__DOT__qmul__34__a = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__34__b;
-    __Vfunc_svo_traversal__DOT__qmul__34__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__34__p;
-    __Vfunc_svo_traversal__DOT__qmul__34__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__35__x;
-    __Vfunc_svo_traversal__DOT__qrecip__35__x = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__35__xabs;
-    __Vfunc_svo_traversal__DOT__qrecip__35__xabs = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__35__r;
-    __Vfunc_svo_traversal__DOT__qrecip__35__r = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__35__r2;
-    __Vfunc_svo_traversal__DOT__qrecip__35__r2 = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip_r0__33__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qrecip_r0__33__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip_r0__33__xabs;
+    __Vfunc_svo_traversal__DOT__qrecip_r0__33__xabs = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip_r0__34__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qrecip_r0__34__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip_r0__34__xabs;
+    __Vfunc_svo_traversal__DOT__qrecip_r0__34__xabs = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip_r0__35__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qrecip_r0__35__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip_r0__35__xabs;
+    __Vfunc_svo_traversal__DOT__qrecip_r0__35__xabs = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__36__Vfuncout;
     __Vfunc_svo_traversal__DOT__qmul__36__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__36__a;
     __Vfunc_svo_traversal__DOT__qmul__36__a = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__36__b;
+    __Vfunc_svo_traversal__DOT__qmul__36__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__36__p;
     __Vfunc_svo_traversal__DOT__qmul__36__p = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__37__Vfuncout;
     __Vfunc_svo_traversal__DOT__qmul__37__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__37__a;
+    __Vfunc_svo_traversal__DOT__qmul__37__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__37__b;
     __Vfunc_svo_traversal__DOT__qmul__37__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__37__p;
@@ -423,10 +634,6 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     __Vfunc_svo_traversal__DOT__qmul__39__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__39__p;
     __Vfunc_svo_traversal__DOT__qmul__39__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__40__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__40__Vfuncout = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__40__a;
-    __Vfunc_svo_traversal__DOT__qmul__40__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__40__b;
     __Vfunc_svo_traversal__DOT__qmul__40__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__40__p;
@@ -447,120 +654,80 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     __Vfunc_svo_traversal__DOT__qmul__42__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__42__p;
     __Vfunc_svo_traversal__DOT__qmul__42__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__43__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qrecip__43__Vfuncout = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__43__x;
-    __Vfunc_svo_traversal__DOT__qrecip__43__x = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__43__xabs;
-    __Vfunc_svo_traversal__DOT__qrecip__43__xabs = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__43__r;
-    __Vfunc_svo_traversal__DOT__qrecip__43__r = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__43__r2;
-    __Vfunc_svo_traversal__DOT__qrecip__43__r2 = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__44__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__44__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__43__b;
+    __Vfunc_svo_traversal__DOT__qmul__43__b = 0;
+    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__43__p;
+    __Vfunc_svo_traversal__DOT__qmul__43__p = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__44__a;
     __Vfunc_svo_traversal__DOT__qmul__44__a = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__44__b;
+    __Vfunc_svo_traversal__DOT__qmul__44__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__44__p;
     __Vfunc_svo_traversal__DOT__qmul__44__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__45__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__45__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__45__a;
+    __Vfunc_svo_traversal__DOT__qmul__45__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__45__b;
     __Vfunc_svo_traversal__DOT__qmul__45__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__45__p;
     __Vfunc_svo_traversal__DOT__qmul__45__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__46__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__46__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__46__a;
     __Vfunc_svo_traversal__DOT__qmul__46__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__46__b;
     __Vfunc_svo_traversal__DOT__qmul__46__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__46__p;
     __Vfunc_svo_traversal__DOT__qmul__46__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__47__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__47__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__47__a;
     __Vfunc_svo_traversal__DOT__qmul__47__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__47__b;
     __Vfunc_svo_traversal__DOT__qmul__47__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__47__p;
     __Vfunc_svo_traversal__DOT__qmul__47__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__48__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qrecip__48__Vfuncout = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__48__x;
-    __Vfunc_svo_traversal__DOT__qrecip__48__x = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__48__xabs;
-    __Vfunc_svo_traversal__DOT__qrecip__48__xabs = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__48__r;
-    __Vfunc_svo_traversal__DOT__qrecip__48__r = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__48__r2;
-    __Vfunc_svo_traversal__DOT__qrecip__48__r2 = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__49__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__49__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__48__a;
+    __Vfunc_svo_traversal__DOT__qmul__48__a = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__48__b;
+    __Vfunc_svo_traversal__DOT__qmul__48__b = 0;
+    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__48__p;
+    __Vfunc_svo_traversal__DOT__qmul__48__p = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__49__a;
     __Vfunc_svo_traversal__DOT__qmul__49__a = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__49__b;
+    __Vfunc_svo_traversal__DOT__qmul__49__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__49__p;
     __Vfunc_svo_traversal__DOT__qmul__49__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__50__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__50__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__50__a;
+    __Vfunc_svo_traversal__DOT__qmul__50__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__50__b;
     __Vfunc_svo_traversal__DOT__qmul__50__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__50__p;
     __Vfunc_svo_traversal__DOT__qmul__50__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__51__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__51__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__51__a;
     __Vfunc_svo_traversal__DOT__qmul__51__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__51__b;
     __Vfunc_svo_traversal__DOT__qmul__51__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__51__p;
     __Vfunc_svo_traversal__DOT__qmul__51__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__52__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__52__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__52__a;
     __Vfunc_svo_traversal__DOT__qmul__52__a = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__52__b;
     __Vfunc_svo_traversal__DOT__qmul__52__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__52__p;
     __Vfunc_svo_traversal__DOT__qmul__52__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__53__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qrecip__53__Vfuncout = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__53__x;
-    __Vfunc_svo_traversal__DOT__qrecip__53__x = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__53__xabs;
-    __Vfunc_svo_traversal__DOT__qrecip__53__xabs = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__53__r;
-    __Vfunc_svo_traversal__DOT__qrecip__53__r = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qrecip__53__r2;
-    __Vfunc_svo_traversal__DOT__qrecip__53__r2 = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__53__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__53__Vfuncout = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__53__a;
+    __Vfunc_svo_traversal__DOT__qmul__53__a = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__53__b;
+    __Vfunc_svo_traversal__DOT__qmul__53__b = 0;
+    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__53__p;
+    __Vfunc_svo_traversal__DOT__qmul__53__p = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__54__Vfuncout;
     __Vfunc_svo_traversal__DOT__qmul__54__Vfuncout = 0;
     IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__54__a;
     __Vfunc_svo_traversal__DOT__qmul__54__a = 0;
+    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__54__b;
+    __Vfunc_svo_traversal__DOT__qmul__54__b = 0;
     QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__54__p;
     __Vfunc_svo_traversal__DOT__qmul__54__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__55__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__55__Vfuncout = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__55__b;
-    __Vfunc_svo_traversal__DOT__qmul__55__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__55__p;
-    __Vfunc_svo_traversal__DOT__qmul__55__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__56__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__56__Vfuncout = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__56__a;
-    __Vfunc_svo_traversal__DOT__qmul__56__a = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__56__b;
-    __Vfunc_svo_traversal__DOT__qmul__56__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__56__p;
-    __Vfunc_svo_traversal__DOT__qmul__56__p = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__57__Vfuncout;
-    __Vfunc_svo_traversal__DOT__qmul__57__Vfuncout = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__57__a;
-    __Vfunc_svo_traversal__DOT__qmul__57__a = 0;
-    IData/*31:0*/ __Vfunc_svo_traversal__DOT__qmul__57__b;
-    __Vfunc_svo_traversal__DOT__qmul__57__b = 0;
-    QData/*63:0*/ __Vfunc_svo_traversal__DOT__qmul__57__p;
-    __Vfunc_svo_traversal__DOT__qmul__57__p = 0;
     CData/*3:0*/ __Vdly__svo_traversal__DOT__state;
     __Vdly__svo_traversal__DOT__state = 0;
     SData/*8:0*/ __Vdly__svo_traversal__DOT__px;
@@ -569,16 +736,26 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     __Vdly__svo_traversal__DOT__py = 0;
     CData/*3:0*/ __Vdly__svo_traversal__DOT__sp;
     __Vdly__svo_traversal__DOT__sp = 0;
+    CData/*4:0*/ __Vdly__svo_traversal__DOT__rs_wait;
+    __Vdly__svo_traversal__DOT__rs_wait = 0;
+    CData/*0:0*/ __Vdly__svo_traversal__DOT__post_pop;
+    __Vdly__svo_traversal__DOT__post_pop = 0;
+    CData/*5:0*/ __Vdly__svo_traversal__DOT__node_half;
+    __Vdly__svo_traversal__DOT__node_half = 0;
     SData/*15:0*/ __Vdly__svo_traversal__DOT__node_idx;
     __Vdly__svo_traversal__DOT__node_idx = 0;
+    IData/*31:0*/ __Vdly__svo_traversal__DOT__dt_x;
+    __Vdly__svo_traversal__DOT__dt_x = 0;
+    IData/*31:0*/ __Vdly__svo_traversal__DOT__dt_y;
+    __Vdly__svo_traversal__DOT__dt_y = 0;
+    IData/*31:0*/ __Vdly__svo_traversal__DOT__dt_z;
+    __Vdly__svo_traversal__DOT__dt_z = 0;
+    SData/*15:0*/ __Vdly__svo_traversal__DOT__r_bitmask;
+    __Vdly__svo_traversal__DOT__r_bitmask = 0;
     IData/*31:0*/ __Vdly__svo_traversal__DOT__t_min;
     __Vdly__svo_traversal__DOT__t_min = 0;
-    IData/*31:0*/ __VdlyMask__svo_traversal__DOT__t_min;
-    __VdlyMask__svo_traversal__DOT__t_min = 0;
     IData/*31:0*/ __Vdly__svo_traversal__DOT__t_max;
     __Vdly__svo_traversal__DOT__t_max = 0;
-    IData/*31:0*/ __VdlyMask__svo_traversal__DOT__t_max;
-    __VdlyMask__svo_traversal__DOT__t_max = 0;
     IData/*31:0*/ __Vdly__svo_traversal__DOT__t_next_x;
     __Vdly__svo_traversal__DOT__t_next_x = 0;
     IData/*31:0*/ __Vdly__svo_traversal__DOT__t_next_y;
@@ -591,16 +768,12 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     __Vdly__svo_traversal__DOT__cy = 0;
     CData/*5:0*/ __Vdly__svo_traversal__DOT__cz;
     __Vdly__svo_traversal__DOT__cz = 0;
-    CData/*5:0*/ __Vdly__svo_traversal__DOT__node_half;
-    __Vdly__svo_traversal__DOT__node_half = 0;
     CData/*5:0*/ __Vdly__svo_traversal__DOT__node_origin_x;
     __Vdly__svo_traversal__DOT__node_origin_x = 0;
     CData/*5:0*/ __Vdly__svo_traversal__DOT__node_origin_y;
     __Vdly__svo_traversal__DOT__node_origin_y = 0;
     CData/*5:0*/ __Vdly__svo_traversal__DOT__node_origin_z;
     __Vdly__svo_traversal__DOT__node_origin_z = 0;
-    SData/*15:0*/ __Vdly__svo_traversal__DOT__r_bitmask;
-    __Vdly__svo_traversal__DOT__r_bitmask = 0;
     CData/*2:0*/ __Vdly__svo_traversal__DOT__bram_field;
     __Vdly__svo_traversal__DOT__bram_field = 0;
     SData/*15:0*/ __VdlyVal__svo_traversal__DOT__stk_node_idx__v0;
@@ -609,6 +782,12 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     __VdlyDim0__svo_traversal__DOT__stk_node_idx__v0 = 0;
     CData/*0:0*/ __VdlySet__svo_traversal__DOT__stk_node_idx__v0;
     __VdlySet__svo_traversal__DOT__stk_node_idx__v0 = 0;
+    SData/*15:0*/ __VdlyVal__svo_traversal__DOT__stk_bitmask__v0;
+    __VdlyVal__svo_traversal__DOT__stk_bitmask__v0 = 0;
+    CData/*3:0*/ __VdlyDim0__svo_traversal__DOT__stk_bitmask__v0;
+    __VdlyDim0__svo_traversal__DOT__stk_bitmask__v0 = 0;
+    CData/*0:0*/ __VdlySet__svo_traversal__DOT__stk_bitmask__v0;
+    __VdlySet__svo_traversal__DOT__stk_bitmask__v0 = 0;
     IData/*31:0*/ __VdlyVal__svo_traversal__DOT__stk_t_min__v0;
     __VdlyVal__svo_traversal__DOT__stk_t_min__v0 = 0;
     CData/*3:0*/ __VdlyDim0__svo_traversal__DOT__stk_t_min__v0;
@@ -697,6 +876,8 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     __VdlySet__svo_traversal__DOT__r_block__v4 = 0;
     CData/*7:0*/ __VdlyVal__svo_traversal__DOT__r_block__v5;
     __VdlyVal__svo_traversal__DOT__r_block__v5 = 0;
+    CData/*0:0*/ __VdlySet__svo_traversal__DOT__r_block__v5;
+    __VdlySet__svo_traversal__DOT__r_block__v5 = 0;
     CData/*7:0*/ __VdlyVal__svo_traversal__DOT__r_block__v6;
     __VdlyVal__svo_traversal__DOT__r_block__v6 = 0;
     CData/*7:0*/ __VdlyVal__svo_traversal__DOT__r_block__v7;
@@ -707,43 +888,49 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     __VdlySet__svo_traversal__DOT__r_child__v0 = 0;
     SData/*15:0*/ __VdlyVal__svo_traversal__DOT__r_child__v1;
     __VdlyVal__svo_traversal__DOT__r_child__v1 = 0;
+    CData/*0:0*/ __VdlySet__svo_traversal__DOT__r_child__v1;
+    __VdlySet__svo_traversal__DOT__r_child__v1 = 0;
     SData/*15:0*/ __VdlyVal__svo_traversal__DOT__r_child__v2;
     __VdlyVal__svo_traversal__DOT__r_child__v2 = 0;
     CData/*0:0*/ __VdlySet__svo_traversal__DOT__r_child__v2;
     __VdlySet__svo_traversal__DOT__r_child__v2 = 0;
     SData/*15:0*/ __VdlyVal__svo_traversal__DOT__r_child__v3;
     __VdlyVal__svo_traversal__DOT__r_child__v3 = 0;
+    CData/*0:0*/ __VdlySet__svo_traversal__DOT__r_child__v3;
+    __VdlySet__svo_traversal__DOT__r_child__v3 = 0;
     SData/*15:0*/ __VdlyVal__svo_traversal__DOT__r_child__v4;
     __VdlyVal__svo_traversal__DOT__r_child__v4 = 0;
     CData/*0:0*/ __VdlySet__svo_traversal__DOT__r_child__v4;
     __VdlySet__svo_traversal__DOT__r_child__v4 = 0;
     SData/*15:0*/ __VdlyVal__svo_traversal__DOT__r_child__v5;
     __VdlyVal__svo_traversal__DOT__r_child__v5 = 0;
+    CData/*0:0*/ __VdlySet__svo_traversal__DOT__r_child__v5;
+    __VdlySet__svo_traversal__DOT__r_child__v5 = 0;
     SData/*15:0*/ __VdlyVal__svo_traversal__DOT__r_child__v6;
     __VdlyVal__svo_traversal__DOT__r_child__v6 = 0;
     CData/*0:0*/ __VdlySet__svo_traversal__DOT__r_child__v6;
     __VdlySet__svo_traversal__DOT__r_child__v6 = 0;
     SData/*15:0*/ __VdlyVal__svo_traversal__DOT__r_child__v7;
     __VdlyVal__svo_traversal__DOT__r_child__v7 = 0;
+    CData/*0:0*/ __VdlySet__svo_traversal__DOT__r_child__v7;
+    __VdlySet__svo_traversal__DOT__r_child__v7 = 0;
     // Body
-    __Vdly__svo_traversal__DOT__state = vlSelfRef.svo_traversal__DOT__state;
-    __Vdly__svo_traversal__DOT__px = vlSelfRef.svo_traversal__DOT__px;
-    __Vdly__svo_traversal__DOT__py = vlSelfRef.svo_traversal__DOT__py;
-    __Vdly__svo_traversal__DOT__sp = vlSelfRef.svo_traversal__DOT__sp;
+    __Vdly__svo_traversal__DOT__post_pop = vlSelfRef.svo_traversal__DOT__post_pop;
     __Vdly__svo_traversal__DOT__node_idx = vlSelfRef.svo_traversal__DOT__node_idx;
+    __Vdly__svo_traversal__DOT__dt_x = vlSelfRef.svo_traversal__DOT__dt_x;
+    __Vdly__svo_traversal__DOT__dt_y = vlSelfRef.svo_traversal__DOT__dt_y;
+    __Vdly__svo_traversal__DOT__dt_z = vlSelfRef.svo_traversal__DOT__dt_z;
+    __Vdly__svo_traversal__DOT__r_bitmask = vlSelfRef.svo_traversal__DOT__r_bitmask;
+    __Vdly__svo_traversal__DOT__t_max = vlSelfRef.svo_traversal__DOT__t_max;
     __Vdly__svo_traversal__DOT__t_next_x = vlSelfRef.svo_traversal__DOT__t_next_x;
     __Vdly__svo_traversal__DOT__t_next_y = vlSelfRef.svo_traversal__DOT__t_next_y;
     __Vdly__svo_traversal__DOT__t_next_z = vlSelfRef.svo_traversal__DOT__t_next_z;
     __Vdly__svo_traversal__DOT__cx = vlSelfRef.svo_traversal__DOT__cx;
     __Vdly__svo_traversal__DOT__cy = vlSelfRef.svo_traversal__DOT__cy;
     __Vdly__svo_traversal__DOT__cz = vlSelfRef.svo_traversal__DOT__cz;
-    __Vdly__svo_traversal__DOT__node_half = vlSelfRef.svo_traversal__DOT__node_half;
-    __Vdly__svo_traversal__DOT__node_origin_x = vlSelfRef.svo_traversal__DOT__node_origin_x;
-    __Vdly__svo_traversal__DOT__node_origin_y = vlSelfRef.svo_traversal__DOT__node_origin_y;
-    __Vdly__svo_traversal__DOT__node_origin_z = vlSelfRef.svo_traversal__DOT__node_origin_z;
-    __Vdly__svo_traversal__DOT__r_bitmask = vlSelfRef.svo_traversal__DOT__r_bitmask;
     __Vdly__svo_traversal__DOT__bram_field = vlSelfRef.svo_traversal__DOT__bram_field;
     __VdlySet__svo_traversal__DOT__stk_node_idx__v0 = 0U;
+    __VdlySet__svo_traversal__DOT__stk_bitmask__v0 = 0U;
     __VdlySet__svo_traversal__DOT__stk_t_min__v0 = 0U;
     __VdlySet__svo_traversal__DOT__stk_t_max__v0 = 0U;
     __VdlySet__svo_traversal__DOT__stk_t_next_x__v0 = 0U;
@@ -752,16 +939,31 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     __VdlySet__svo_traversal__DOT__stk_cx__v0 = 0U;
     __VdlySet__svo_traversal__DOT__stk_cy__v0 = 0U;
     __VdlySet__svo_traversal__DOT__stk_cz__v0 = 0U;
-    __VdlySet__svo_traversal__DOT__stk_node_half__v0 = 0U;
     __VdlySet__svo_traversal__DOT__stk_orig_x__v0 = 0U;
     __VdlySet__svo_traversal__DOT__stk_orig_y__v0 = 0U;
     __VdlySet__svo_traversal__DOT__stk_orig_z__v0 = 0U;
+    __Vdly__svo_traversal__DOT__px = vlSelfRef.svo_traversal__DOT__px;
+    __Vdly__svo_traversal__DOT__py = vlSelfRef.svo_traversal__DOT__py;
+    __Vdly__svo_traversal__DOT__rs_wait = vlSelfRef.svo_traversal__DOT__rs_wait;
+    __Vdly__svo_traversal__DOT__state = vlSelfRef.svo_traversal__DOT__state;
     __VdlySet__svo_traversal__DOT__r_block__v0 = 0U;
     __VdlySet__svo_traversal__DOT__r_block__v4 = 0U;
+    __VdlySet__svo_traversal__DOT__r_block__v5 = 0U;
     __VdlySet__svo_traversal__DOT__r_child__v0 = 0U;
+    __VdlySet__svo_traversal__DOT__r_child__v1 = 0U;
     __VdlySet__svo_traversal__DOT__r_child__v2 = 0U;
+    __VdlySet__svo_traversal__DOT__r_child__v3 = 0U;
     __VdlySet__svo_traversal__DOT__r_child__v4 = 0U;
+    __VdlySet__svo_traversal__DOT__r_child__v5 = 0U;
     __VdlySet__svo_traversal__DOT__r_child__v6 = 0U;
+    __VdlySet__svo_traversal__DOT__r_child__v7 = 0U;
+    __Vdly__svo_traversal__DOT__node_origin_x = vlSelfRef.svo_traversal__DOT__node_origin_x;
+    __Vdly__svo_traversal__DOT__node_origin_y = vlSelfRef.svo_traversal__DOT__node_origin_y;
+    __Vdly__svo_traversal__DOT__node_origin_z = vlSelfRef.svo_traversal__DOT__node_origin_z;
+    __Vdly__svo_traversal__DOT__sp = vlSelfRef.svo_traversal__DOT__sp;
+    __VdlySet__svo_traversal__DOT__stk_node_half__v0 = 0U;
+    __Vdly__svo_traversal__DOT__t_min = vlSelfRef.svo_traversal__DOT__t_min;
+    __Vdly__svo_traversal__DOT__node_half = vlSelfRef.svo_traversal__DOT__node_half;
     if (vlSelfRef.svo_traversal__DOT__rst) {
         __Vdly__svo_traversal__DOT__state = 0U;
         vlSelfRef.svo_traversal__DOT__busy = 0U;
@@ -770,19 +972,30 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
         vlSelfRef.svo_traversal__DOT__fb_wr_en = 0U;
         vlSelfRef.svo_traversal__DOT__svo_rd_en = 0U;
         vlSelfRef.svo_traversal__DOT__shade_start = 0U;
+        vlSelfRef.svo_traversal__DOT__axis_tvalid = 0U;
+        vlSelfRef.svo_traversal__DOT__axis_tdata = 0U;
+        vlSelfRef.svo_traversal__DOT__axis_tlast = 0U;
+        vlSelfRef.svo_traversal__DOT__axis_tuser = 0U;
         __Vdly__svo_traversal__DOT__px = 0U;
         __Vdly__svo_traversal__DOT__py = 0U;
         __Vdly__svo_traversal__DOT__sp = 0U;
+        __Vdly__svo_traversal__DOT__rs_wait = 0U;
+        __Vdly__svo_traversal__DOT__post_pop = 0U;
     } else {
         vlSelfRef.svo_traversal__DOT__fb_wr_en = 0U;
-        vlSelfRef.svo_traversal__DOT__any_hit = 0U;
         vlSelfRef.svo_traversal__DOT__frame_done = 0U;
+        vlSelfRef.svo_traversal__DOT__any_hit = 0U;
         vlSelfRef.svo_traversal__DOT__shade_start = 0U;
+        vlSelfRef.svo_traversal__DOT__axis_tvalid = 0U;
         if ((8U & (IData)(vlSelfRef.svo_traversal__DOT__state))) {
             if ((4U & (IData)(vlSelfRef.svo_traversal__DOT__state))) {
                 if ((1U & (~ ((IData)(vlSelfRef.svo_traversal__DOT__state) 
                               >> 1U)))) {
                     if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__state))) {
+                        vlSelfRef.svo_traversal__DOT__axis_tvalid = 0U;
+                        __Vdly__svo_traversal__DOT__sp = 0U;
+                        __Vdly__svo_traversal__DOT__post_pop = 0U;
+                        __Vdly__svo_traversal__DOT__node_half = 0x20U;
                         if ((0x013fU == (IData)(vlSelfRef.svo_traversal__DOT__px))) {
                             __Vdly__svo_traversal__DOT__px = 0U;
                             if ((0xefU == (IData)(vlSelfRef.svo_traversal__DOT__py))) {
@@ -794,23 +1007,28 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                                     = (0x000000ffU 
                                        & ((IData)(1U) 
                                           + (IData)(vlSelfRef.svo_traversal__DOT__py)));
+                                __Vdly__svo_traversal__DOT__rs_wait = 0U;
                                 __Vdly__svo_traversal__DOT__state = 1U;
                             }
                         } else {
                             __Vdly__svo_traversal__DOT__px 
                                 = (0x000001ffU & ((IData)(1U) 
                                                   + (IData)(vlSelfRef.svo_traversal__DOT__px)));
+                            __Vdly__svo_traversal__DOT__rs_wait = 0U;
                             __Vdly__svo_traversal__DOT__state = 1U;
                         }
                     } else {
-                        vlSelfRef.svo_traversal__DOT__fb_wr_en = 1U;
-                        vlSelfRef.svo_traversal__DOT__fb_wr_addr 
-                            = (0x0001ffffU & ((VL_SHIFTL_III(17,17,32, (IData)(vlSelfRef.svo_traversal__DOT__py), 8U) 
-                                               + VL_SHIFTL_III(17,17,32, (IData)(vlSelfRef.svo_traversal__DOT__py), 6U)) 
-                                              + (IData)(vlSelfRef.svo_traversal__DOT__px)));
-                        vlSelfRef.svo_traversal__DOT__fb_wr_data 
+                        vlSelfRef.svo_traversal__DOT__axis_tvalid = 1U;
+                        vlSelfRef.svo_traversal__DOT__axis_tdata 
                             = vlSelfRef.svo_traversal__DOT__pixel_color;
-                        __Vdly__svo_traversal__DOT__state = 0x0dU;
+                        vlSelfRef.svo_traversal__DOT__axis_tlast 
+                            = (0x013fU == (IData)(vlSelfRef.svo_traversal__DOT__px));
+                        if (vlSelfRef.svo_traversal__DOT__axis_tready) {
+                            __Vdly__svo_traversal__DOT__state = 0x0dU;
+                        }
+                        vlSelfRef.svo_traversal__DOT__axis_tuser 
+                            = ((0U == (IData)(vlSelfRef.svo_traversal__DOT__px)) 
+                               & (0U == (IData)(vlSelfRef.svo_traversal__DOT__py)));
                     }
                 }
             } else if ((2U & (IData)(vlSelfRef.svo_traversal__DOT__state))) {
@@ -837,6 +1055,10 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                                                   - (IData)(1U))))) {
                         __Vdly__svo_traversal__DOT__node_idx 
                             = vlSelfRef.svo_traversal__DOT__stk_node_idx
+                            [(0x0000000fU & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
+                                             - (IData)(1U)))];
+                        __Vdly__svo_traversal__DOT__r_bitmask 
+                            = vlSelfRef.svo_traversal__DOT__stk_bitmask
                             [(0x0000000fU & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
                                              - (IData)(1U)))];
                         __Vdly__svo_traversal__DOT__t_min 
@@ -889,6 +1111,7 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                                              - (IData)(1U)))];
                     } else {
                         __Vdly__svo_traversal__DOT__node_idx = 0U;
+                        __Vdly__svo_traversal__DOT__r_bitmask = 0U;
                         __Vdly__svo_traversal__DOT__t_min = 0U;
                         __Vdly__svo_traversal__DOT__t_max = 0U;
                         __Vdly__svo_traversal__DOT__t_next_x = 0U;
@@ -902,19 +1125,26 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                         __Vdly__svo_traversal__DOT__node_origin_y = 0U;
                         __Vdly__svo_traversal__DOT__node_origin_z = 0U;
                     }
-                    __Vdly__svo_traversal__DOT__state = 6U;
-                    __VdlyMask__svo_traversal__DOT__t_min = 0xffffffffU;
-                    __VdlyMask__svo_traversal__DOT__t_max = 0xffffffffU;
+                    __Vdly__svo_traversal__DOT__dt_x 
+                        = vlSelfRef.svo_traversal__DOT__dt_x_pop_c;
+                    __Vdly__svo_traversal__DOT__dt_y 
+                        = vlSelfRef.svo_traversal__DOT__dt_y_pop_c;
+                    __Vdly__svo_traversal__DOT__dt_z 
+                        = vlSelfRef.svo_traversal__DOT__dt_z_pop_c;
+                    __Vdly__svo_traversal__DOT__post_pop = 1U;
+                    __Vdly__svo_traversal__DOT__state = 3U;
                 }
             } else {
                 vlSelfRef.svo_traversal__DOT____Vlvbound_h3fbd9737__0 
                     = vlSelfRef.svo_traversal__DOT__node_idx;
                 __Vdly__svo_traversal__DOT__state = 3U;
-                vlSelfRef.svo_traversal__DOT____Vlvbound_h20b934f4__0 
-                    = vlSelfRef.svo_traversal__DOT__t_min;
+                vlSelfRef.svo_traversal__DOT____Vlvbound_h5d517a59__0 
+                    = vlSelfRef.svo_traversal__DOT__r_bitmask;
                 __Vdly__svo_traversal__DOT__node_idx 
                     = vlSelfRef.svo_traversal__DOT__r_child
                     [vlSelfRef.svo_traversal__DOT__cidx];
+                vlSelfRef.svo_traversal__DOT____Vlvbound_h20b934f4__0 
+                    = vlSelfRef.svo_traversal__DOT__t_min;
                 vlSelfRef.svo_traversal__DOT____Vlvbound_h46c1a37b__0 
                     = vlSelfRef.svo_traversal__DOT__t_max;
                 vlSelfRef.svo_traversal__DOT____Vlvbound_h10022533__0 
@@ -943,6 +1173,11 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                     __VdlyDim0__svo_traversal__DOT__stk_node_idx__v0 
                         = vlSelfRef.svo_traversal__DOT__sp;
                     __VdlySet__svo_traversal__DOT__stk_node_idx__v0 = 1U;
+                    __VdlyVal__svo_traversal__DOT__stk_bitmask__v0 
+                        = vlSelfRef.svo_traversal__DOT____Vlvbound_h5d517a59__0;
+                    __VdlyDim0__svo_traversal__DOT__stk_bitmask__v0 
+                        = vlSelfRef.svo_traversal__DOT__sp;
+                    __VdlySet__svo_traversal__DOT__stk_bitmask__v0 = 1U;
                     __VdlyVal__svo_traversal__DOT__stk_t_min__v0 
                         = vlSelfRef.svo_traversal__DOT____Vlvbound_h20b934f4__0;
                     __VdlyDim0__svo_traversal__DOT__stk_t_min__v0 
@@ -1033,104 +1268,90 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                     vlSelfRef.svo_traversal__DOT__block_id_hit 
                         = vlSelfRef.svo_traversal__DOT__r_block
                         [vlSelfRef.svo_traversal__DOT__cidx];
+                    vlSelfRef.svo_traversal__DOT__hit_px_r 
+                        = vlSelfRef.svo_traversal__DOT__bw_ex_c;
+                    vlSelfRef.svo_traversal__DOT__hit_py_r 
+                        = vlSelfRef.svo_traversal__DOT__bw_ey_c;
+                    vlSelfRef.svo_traversal__DOT__hit_pz_r 
+                        = vlSelfRef.svo_traversal__DOT__bw_ez_c;
                     vlSelfRef.svo_traversal__DOT__pixel_color = 0x00ffffffU;
                     __Vdly__svo_traversal__DOT__state = 0x0cU;
-                    __Vfunc_svo_traversal__DOT__qmul__0__b 
-                        = vlSelfRef.svo_traversal__DOT__rd_x;
-                    __Vfunc_svo_traversal__DOT__qmul__0__a 
-                        = vlSelfRef.svo_traversal__DOT__t_min;
-                    __Vfunc_svo_traversal__DOT__qmul__0__p 
-                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__0__a), 
-                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__0__b));
-                    vlSelfRef.svo_traversal__DOT____VlemCall_17__qmul 
-                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__0__p 
-                                   >> 0x10U));
-                    vlSelfRef.svo_traversal__DOT__hit_px_r 
-                        = (vlSelfRef.svo_traversal__DOT__ro_x 
-                           + vlSelfRef.svo_traversal__DOT____VlemCall_17__qmul);
-                    __Vfunc_svo_traversal__DOT__qmul__1__b 
-                        = vlSelfRef.svo_traversal__DOT__rd_y;
-                    __Vfunc_svo_traversal__DOT__qmul__1__a 
-                        = vlSelfRef.svo_traversal__DOT__t_min;
-                    __Vfunc_svo_traversal__DOT__qmul__1__p 
-                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__1__a), 
-                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__1__b));
-                    vlSelfRef.svo_traversal__DOT____VlemCall_18__qmul 
-                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__1__p 
-                                   >> 0x10U));
-                    vlSelfRef.svo_traversal__DOT__hit_py_r 
-                        = (vlSelfRef.svo_traversal__DOT__ro_y 
-                           + vlSelfRef.svo_traversal__DOT____VlemCall_18__qmul);
-                    __Vfunc_svo_traversal__DOT__qmul__2__b 
-                        = vlSelfRef.svo_traversal__DOT__rd_z;
-                    __Vfunc_svo_traversal__DOT__qmul__2__a 
-                        = vlSelfRef.svo_traversal__DOT__t_min;
-                    __Vfunc_svo_traversal__DOT__qmul__2__p 
-                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__2__a), 
-                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__2__b));
-                    vlSelfRef.svo_traversal__DOT____VlemCall_19__qmul 
-                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__2__p 
-                                   >> 0x10U));
-                    vlSelfRef.svo_traversal__DOT__hit_pz_r 
-                        = (vlSelfRef.svo_traversal__DOT__ro_z 
-                           + vlSelfRef.svo_traversal__DOT____VlemCall_19__qmul);
                 } else {
                     if ((VL_LTES_III(32, vlSelfRef.svo_traversal__DOT__t_next_x, vlSelfRef.svo_traversal__DOT__t_next_y) 
                          & VL_LTES_III(32, vlSelfRef.svo_traversal__DOT__t_next_x, vlSelfRef.svo_traversal__DOT__t_next_z))) {
                         __Vdly__svo_traversal__DOT__cx 
                             = (0x0000003fU & ((IData)(vlSelfRef.svo_traversal__DOT__cx) 
-                                              + VL_EXTENDS_II(6,3, (IData)(vlSelfRef.svo_traversal__DOT__step_x))));
-                        vlSelfRef.svo_traversal__DOT__unnamedblk4__DOT__face = 0U;
-                        vlSelfRef.svo_traversal__DOT__unnamedblk4__DOT__fsign 
-                            = VL_GTS_III(32, 0U, VL_EXTENDS_II(32,3, (IData)(vlSelfRef.svo_traversal__DOT__step_x)));
+                                              + ((0x00000038U 
+                                                  & ((- (IData)(
+                                                                (1U 
+                                                                 & ((IData)(vlSelfRef.svo_traversal__DOT__step_x) 
+                                                                    >> 2U)))) 
+                                                     << 3U)) 
+                                                 | (IData)(vlSelfRef.svo_traversal__DOT__step_x))));
+                        vlSelfRef.svo_traversal__DOT__em_face = 0U;
+                        vlSelfRef.svo_traversal__DOT__em_fsign 
+                            = (1U & ((IData)(vlSelfRef.svo_traversal__DOT__step_x) 
+                                     >> 2U));
                         __Vdly__svo_traversal__DOT__t_min 
                             = vlSelfRef.svo_traversal__DOT__t_next_x;
-                        __VdlyMask__svo_traversal__DOT__t_min = 0xffffffffU;
+                        __Vdly__svo_traversal__DOT__state 
+                            = ((1U & (((IData)(vlSelfRef.svo_traversal__DOT__step_x) 
+                                       >> 2U) ^ (IData)(vlSelfRef.svo_traversal__DOT__cx)))
+                                ? 9U : 5U);
                         __Vdly__svo_traversal__DOT__t_next_x 
                             = (vlSelfRef.svo_traversal__DOT__t_next_x 
                                + vlSelfRef.svo_traversal__DOT__dt_x);
                     } else if (VL_LTES_III(32, vlSelfRef.svo_traversal__DOT__t_next_y, vlSelfRef.svo_traversal__DOT__t_next_z)) {
                         __Vdly__svo_traversal__DOT__cy 
                             = (0x0000003fU & ((IData)(vlSelfRef.svo_traversal__DOT__cy) 
-                                              + VL_EXTENDS_II(6,3, (IData)(vlSelfRef.svo_traversal__DOT__step_y))));
-                        vlSelfRef.svo_traversal__DOT__unnamedblk4__DOT__face = 1U;
-                        vlSelfRef.svo_traversal__DOT__unnamedblk4__DOT__fsign 
-                            = VL_GTS_III(32, 0U, VL_EXTENDS_II(32,3, (IData)(vlSelfRef.svo_traversal__DOT__step_y)));
+                                              + ((0x00000038U 
+                                                  & ((- (IData)(
+                                                                (1U 
+                                                                 & ((IData)(vlSelfRef.svo_traversal__DOT__step_y) 
+                                                                    >> 2U)))) 
+                                                     << 3U)) 
+                                                 | (IData)(vlSelfRef.svo_traversal__DOT__step_y))));
+                        vlSelfRef.svo_traversal__DOT__em_face = 1U;
+                        vlSelfRef.svo_traversal__DOT__em_fsign 
+                            = (1U & ((IData)(vlSelfRef.svo_traversal__DOT__step_y) 
+                                     >> 2U));
                         __Vdly__svo_traversal__DOT__t_min 
                             = vlSelfRef.svo_traversal__DOT__t_next_y;
-                        __VdlyMask__svo_traversal__DOT__t_min = 0xffffffffU;
+                        __Vdly__svo_traversal__DOT__state 
+                            = ((1U & (((IData)(vlSelfRef.svo_traversal__DOT__step_y) 
+                                       >> 2U) ^ (IData)(vlSelfRef.svo_traversal__DOT__cy)))
+                                ? 9U : 5U);
                         __Vdly__svo_traversal__DOT__t_next_y 
                             = (vlSelfRef.svo_traversal__DOT__t_next_y 
                                + vlSelfRef.svo_traversal__DOT__dt_y);
                     } else {
                         __Vdly__svo_traversal__DOT__cz 
                             = (0x0000003fU & ((IData)(vlSelfRef.svo_traversal__DOT__cz) 
-                                              + VL_EXTENDS_II(6,3, (IData)(vlSelfRef.svo_traversal__DOT__step_z))));
-                        vlSelfRef.svo_traversal__DOT__unnamedblk4__DOT__face = 2U;
-                        vlSelfRef.svo_traversal__DOT__unnamedblk4__DOT__fsign 
-                            = VL_GTS_III(32, 0U, VL_EXTENDS_II(32,3, (IData)(vlSelfRef.svo_traversal__DOT__step_z)));
+                                              + ((0x00000038U 
+                                                  & ((- (IData)(
+                                                                (1U 
+                                                                 & ((IData)(vlSelfRef.svo_traversal__DOT__step_z) 
+                                                                    >> 2U)))) 
+                                                     << 3U)) 
+                                                 | (IData)(vlSelfRef.svo_traversal__DOT__step_z))));
+                        vlSelfRef.svo_traversal__DOT__em_face = 2U;
+                        vlSelfRef.svo_traversal__DOT__em_fsign 
+                            = (1U & ((IData)(vlSelfRef.svo_traversal__DOT__step_z) 
+                                     >> 2U));
                         __Vdly__svo_traversal__DOT__t_min 
                             = vlSelfRef.svo_traversal__DOT__t_next_z;
-                        __VdlyMask__svo_traversal__DOT__t_min = 0xffffffffU;
+                        __Vdly__svo_traversal__DOT__state 
+                            = ((1U & (((IData)(vlSelfRef.svo_traversal__DOT__step_z) 
+                                       >> 2U) ^ (IData)(vlSelfRef.svo_traversal__DOT__cz)))
+                                ? 9U : 5U);
                         __Vdly__svo_traversal__DOT__t_next_z 
                             = (vlSelfRef.svo_traversal__DOT__t_next_z 
                                + vlSelfRef.svo_traversal__DOT__dt_z);
                     }
                     vlSelfRef.svo_traversal__DOT__hit_face 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk4__DOT__face;
+                        = vlSelfRef.svo_traversal__DOT__em_face;
                     vlSelfRef.svo_traversal__DOT__hit_face_sign_r 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk4__DOT__fsign;
-                    __Vdly__svo_traversal__DOT__state 
-                        = ((IData)((((((IData)(vlSelfRef.svo_traversal__DOT__cx) 
-                                       | (IData)(vlSelfRef.svo_traversal__DOT__cy)) 
-                                      | (IData)(vlSelfRef.svo_traversal__DOT__cz)) 
-                                     >> 5U) | (((1U 
-                                                 < (IData)(vlSelfRef.svo_traversal__DOT__cx)) 
-                                                | (1U 
-                                                   < (IData)(vlSelfRef.svo_traversal__DOT__cy))) 
-                                               | (1U 
-                                                  < (IData)(vlSelfRef.svo_traversal__DOT__cz)))))
-                            ? 9U : 5U);
+                        = vlSelfRef.svo_traversal__DOT__em_fsign;
                 }
             } else if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__state))) {
                 vlSelfRef.svo_traversal__DOT__cidx 
@@ -1244,7 +1465,7 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                                                                                | (1U 
                                                                                 & (IData)(vlSelfRef.svo_traversal__DOT__cx)))), 1U)))))))) {
                         if (VL_UNLIKELY((vlSymsp->_vm_contextp__->assertOn()))) {
-                            VL_WRITEF_NX("[%0t] %%Error: svo_traversal.sv:319: Assertion failed in %m: unique case, but multiple matches found for '2'h%X'\n",4, 'M',vlSymsp->name(),"svo_traversal", 'T',-9
+                            VL_WRITEF_NX("[%0t] %%Error: svo_traversal.sv:599: Assertion failed in %m: unique case, but multiple matches found for '2'h%X'\n",4, 'M',vlSymsp->name(),"svo_traversal", 'T',-9
                                          , '#',64,VL_TIME_UNITED_Q(1000)
                                          , '#',2,(3U 
                                                   & VL_SHIFTR_III(2,16,32, (IData)(vlSelfRef.svo_traversal__DOT__r_bitmask), 
@@ -1257,246 +1478,157 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                                                                                 << 1U)) 
                                                                                 | (1U 
                                                                                 & (IData)(vlSelfRef.svo_traversal__DOT__cx)))), 1U))));
-                            VL_STOP_MT("/home/ali/git/fyp/vivado/ip/svo_raytracer/hdl/svo_traversal.sv", 319, "");
+                            VL_STOP_MT("/home/ali/git/fyp/vivado/ip/svo_raytracer/hdl/svo_traversal.sv", 599, "");
                         }
                     }
                 }
             } else {
                 if ((4U & (IData)(vlSelfRef.svo_traversal__DOT__bram_field))) {
                     if ((2U & (IData)(vlSelfRef.svo_traversal__DOT__bram_field))) {
-                        if ((1U & (~ (IData)(vlSelfRef.svo_traversal__DOT__bram_field)))) {
+                        if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__bram_field))) {
+                            vlSelfRef.svo_traversal__DOT__svo_rd_addr 
+                                = (1U | (0x00007ff8U 
+                                         & ((IData)(vlSelfRef.svo_traversal__DOT__node_idx) 
+                                            << 3U)));
+                            __Vdly__svo_traversal__DOT__bram_field = 0U;
+                        } else {
                             __VdlyVal__svo_traversal__DOT__r_block__v0 
-                                = (vlSelfRef.svo_traversal__DOT__svo_rd_data 
-                                   >> 0x18U);
+                                = (0x000000ffU & vlSelfRef.svo_traversal__DOT__svo_rd_data);
                             __VdlySet__svo_traversal__DOT__r_block__v0 = 1U;
                             __VdlyVal__svo_traversal__DOT__r_block__v1 
                                 = (0x000000ffU & (vlSelfRef.svo_traversal__DOT__svo_rd_data 
-                                                  >> 0x10U));
+                                                  >> 8U));
                             __VdlyVal__svo_traversal__DOT__r_block__v2 
                                 = (0x000000ffU & (vlSelfRef.svo_traversal__DOT__svo_rd_data 
-                                                  >> 8U));
+                                                  >> 0x10U));
                             __VdlyVal__svo_traversal__DOT__r_block__v3 
-                                = (0x000000ffU & vlSelfRef.svo_traversal__DOT__svo_rd_data);
+                                = (vlSelfRef.svo_traversal__DOT__svo_rd_data 
+                                   >> 0x18U);
                         }
                     } else if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__bram_field))) {
                         __VdlyVal__svo_traversal__DOT__r_block__v4 
-                            = (vlSelfRef.svo_traversal__DOT__svo_rd_data 
-                               >> 0x18U);
+                            = (0x000000ffU & vlSelfRef.svo_traversal__DOT__svo_rd_data);
                         __VdlySet__svo_traversal__DOT__r_block__v4 = 1U;
+                        vlSelfRef.svo_traversal__DOT__svo_rd_en = 0U;
+                        __Vdly__svo_traversal__DOT__bram_field = 6U;
                         __VdlyVal__svo_traversal__DOT__r_block__v5 
                             = (0x000000ffU & (vlSelfRef.svo_traversal__DOT__svo_rd_data 
-                                              >> 0x10U));
+                                              >> 8U));
+                        __VdlySet__svo_traversal__DOT__r_block__v5 = 1U;
                         __VdlyVal__svo_traversal__DOT__r_block__v6 
                             = (0x000000ffU & (vlSelfRef.svo_traversal__DOT__svo_rd_data 
-                                              >> 8U));
+                                              >> 0x10U));
                         __VdlyVal__svo_traversal__DOT__r_block__v7 
-                            = (0x000000ffU & vlSelfRef.svo_traversal__DOT__svo_rd_data);
+                            = (vlSelfRef.svo_traversal__DOT__svo_rd_data 
+                               >> 0x18U);
                     } else {
                         __VdlyVal__svo_traversal__DOT__r_child__v0 
+                            = (0x0000ffffU & vlSelfRef.svo_traversal__DOT__svo_rd_data);
+                        __VdlySet__svo_traversal__DOT__r_child__v0 = 1U;
+                        vlSelfRef.svo_traversal__DOT__svo_rd_addr 
+                            = (6U | (0x00007ff8U & 
+                                     ((IData)(vlSelfRef.svo_traversal__DOT__node_idx) 
+                                      << 3U)));
+                        __Vdly__svo_traversal__DOT__bram_field = 5U;
+                        __VdlyVal__svo_traversal__DOT__r_child__v1 
                             = (vlSelfRef.svo_traversal__DOT__svo_rd_data 
                                >> 0x10U);
-                        __VdlySet__svo_traversal__DOT__r_child__v0 = 1U;
-                        __VdlyVal__svo_traversal__DOT__r_child__v1 
-                            = (0x0000ffffU & vlSelfRef.svo_traversal__DOT__svo_rd_data);
+                        __VdlySet__svo_traversal__DOT__r_child__v1 = 1U;
                     }
                 } else if ((2U & (IData)(vlSelfRef.svo_traversal__DOT__bram_field))) {
                     if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__bram_field))) {
                         __VdlyVal__svo_traversal__DOT__r_child__v2 
+                            = (0x0000ffffU & vlSelfRef.svo_traversal__DOT__svo_rd_data);
+                        __VdlySet__svo_traversal__DOT__r_child__v2 = 1U;
+                        vlSelfRef.svo_traversal__DOT__svo_rd_addr 
+                            = (5U | (0x00007ff8U & 
+                                     ((IData)(vlSelfRef.svo_traversal__DOT__node_idx) 
+                                      << 3U)));
+                        __Vdly__svo_traversal__DOT__bram_field = 4U;
+                        __VdlyVal__svo_traversal__DOT__r_child__v3 
                             = (vlSelfRef.svo_traversal__DOT__svo_rd_data 
                                >> 0x10U);
-                        __VdlySet__svo_traversal__DOT__r_child__v2 = 1U;
-                        __VdlyVal__svo_traversal__DOT__r_child__v3 
-                            = (0x0000ffffU & vlSelfRef.svo_traversal__DOT__svo_rd_data);
+                        __VdlySet__svo_traversal__DOT__r_child__v3 = 1U;
                     } else {
                         __VdlyVal__svo_traversal__DOT__r_child__v4 
+                            = (0x0000ffffU & vlSelfRef.svo_traversal__DOT__svo_rd_data);
+                        __VdlySet__svo_traversal__DOT__r_child__v4 = 1U;
+                        vlSelfRef.svo_traversal__DOT__svo_rd_addr 
+                            = (4U | (0x00007ff8U & 
+                                     ((IData)(vlSelfRef.svo_traversal__DOT__node_idx) 
+                                      << 3U)));
+                        __Vdly__svo_traversal__DOT__bram_field = 3U;
+                        __VdlyVal__svo_traversal__DOT__r_child__v5 
                             = (vlSelfRef.svo_traversal__DOT__svo_rd_data 
                                >> 0x10U);
-                        __VdlySet__svo_traversal__DOT__r_child__v4 = 1U;
-                        __VdlyVal__svo_traversal__DOT__r_child__v5 
-                            = (0x0000ffffU & vlSelfRef.svo_traversal__DOT__svo_rd_data);
+                        __VdlySet__svo_traversal__DOT__r_child__v5 = 1U;
                     }
                 } else if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__bram_field))) {
                     __VdlyVal__svo_traversal__DOT__r_child__v6 
+                        = (0x0000ffffU & vlSelfRef.svo_traversal__DOT__svo_rd_data);
+                    __VdlySet__svo_traversal__DOT__r_child__v6 = 1U;
+                    vlSelfRef.svo_traversal__DOT__svo_rd_addr 
+                        = (3U | (0x00007ff8U & ((IData)(vlSelfRef.svo_traversal__DOT__node_idx) 
+                                                << 3U)));
+                    __Vdly__svo_traversal__DOT__bram_field = 2U;
+                    __VdlyVal__svo_traversal__DOT__r_child__v7 
                         = (vlSelfRef.svo_traversal__DOT__svo_rd_data 
                            >> 0x10U);
-                    __VdlySet__svo_traversal__DOT__r_child__v6 = 1U;
-                    __VdlyVal__svo_traversal__DOT__r_child__v7 
-                        = (0x0000ffffU & vlSelfRef.svo_traversal__DOT__svo_rd_data);
+                    __VdlySet__svo_traversal__DOT__r_child__v7 = 1U;
                 } else {
                     __Vdly__svo_traversal__DOT__r_bitmask 
                         = (0x0000ffffU & vlSelfRef.svo_traversal__DOT__svo_rd_data);
-                }
-                if ((6U > (IData)(vlSelfRef.svo_traversal__DOT__bram_field))) {
-                    __Vdly__svo_traversal__DOT__bram_field 
-                        = (7U & ((IData)(1U) + (IData)(vlSelfRef.svo_traversal__DOT__bram_field)));
                     vlSelfRef.svo_traversal__DOT__svo_rd_addr 
-                        = ((0x00007ff8U & ((IData)(vlSelfRef.svo_traversal__DOT__node_idx) 
-                                           << 3U)) 
-                           | (7U & ((IData)(1U) + (IData)(vlSelfRef.svo_traversal__DOT__bram_field))));
-                } else {
-                    __Vfunc_svo_traversal__DOT__qmul__3__b 
-                        = vlSelfRef.svo_traversal__DOT__rd_x;
-                    __Vfunc_svo_traversal__DOT__qmul__3__a 
-                        = vlSelfRef.svo_traversal__DOT__t_min;
+                        = (2U | (0x00007ff8U & ((IData)(vlSelfRef.svo_traversal__DOT__node_idx) 
+                                                << 3U)));
+                    __Vdly__svo_traversal__DOT__bram_field = 1U;
+                }
+                if ((6U == (IData)(vlSelfRef.svo_traversal__DOT__bram_field))) {
                     vlSelfRef.svo_traversal__DOT__svo_rd_en = 0U;
                     vlSelfRef.svo_traversal__DOT__bitmask 
                         = vlSelfRef.svo_traversal__DOT__r_bitmask;
-                    __Vfunc_svo_traversal__DOT__qmul__3__p 
-                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__3__a), 
-                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__3__b));
-                    __Vdly__svo_traversal__DOT__state = 5U;
-                    vlSelfRef.svo_traversal__DOT____VlemCall_11__qmul 
-                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__3__p 
-                                   >> 0x10U));
-                    vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__ex 
-                        = (vlSelfRef.svo_traversal__DOT__ro_x 
-                           + vlSelfRef.svo_traversal__DOT____VlemCall_11__qmul);
-                    __Vfunc_svo_traversal__DOT__qmul__4__b 
-                        = vlSelfRef.svo_traversal__DOT__rd_y;
-                    __Vfunc_svo_traversal__DOT__qmul__4__a 
-                        = vlSelfRef.svo_traversal__DOT__t_min;
-                    __Vfunc_svo_traversal__DOT__qmul__4__p 
-                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__4__a), 
-                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__4__b));
-                    vlSelfRef.svo_traversal__DOT____VlemCall_12__qmul 
-                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__4__p 
-                                   >> 0x10U));
-                    vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__ey 
-                        = (vlSelfRef.svo_traversal__DOT__ro_y 
-                           + vlSelfRef.svo_traversal__DOT____VlemCall_12__qmul);
-                    __Vfunc_svo_traversal__DOT__qmul__5__b 
-                        = vlSelfRef.svo_traversal__DOT__rd_z;
-                    __Vfunc_svo_traversal__DOT__qmul__5__a 
-                        = vlSelfRef.svo_traversal__DOT__t_min;
-                    __Vfunc_svo_traversal__DOT__qmul__5__p 
-                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__5__a), 
-                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__5__b));
-                    vlSelfRef.svo_traversal__DOT____VlemCall_13__qmul 
-                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__5__p 
-                                   >> 0x10U));
-                    vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__ez 
-                        = (vlSelfRef.svo_traversal__DOT__ro_z 
-                           + vlSelfRef.svo_traversal__DOT____VlemCall_13__qmul);
-                    vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__icx 
-                        = (0x0000003fU & ((vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__ex 
-                                           >> 0x10U) 
-                                          - (IData)(vlSelfRef.svo_traversal__DOT__node_origin_x)));
-                    vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__icy 
-                        = (0x0000003fU & ((vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__ey 
-                                           >> 0x10U) 
-                                          - (IData)(vlSelfRef.svo_traversal__DOT__node_origin_y)));
-                    vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__icz 
-                        = (0x0000003fU & ((vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__ez 
-                                           >> 0x10U) 
-                                          - (IData)(vlSelfRef.svo_traversal__DOT__node_origin_z)));
-                    __Vdly__svo_traversal__DOT__cx 
-                        = VL_SHIFTR_III(6,6,32, (IData)(vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__icx), 
-                                        VL_CLOG2_I((IData)(vlSelfRef.svo_traversal__DOT__node_half)));
-                    __Vdly__svo_traversal__DOT__cy 
-                        = VL_SHIFTR_III(6,6,32, (IData)(vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__icy), 
-                                        VL_CLOG2_I((IData)(vlSelfRef.svo_traversal__DOT__node_half)));
-                    __Vdly__svo_traversal__DOT__cz 
-                        = VL_SHIFTR_III(6,6,32, (IData)(vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__icz), 
-                                        VL_CLOG2_I((IData)(vlSelfRef.svo_traversal__DOT__node_half)));
-                    vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__abs_ix 
-                        = (VL_LTES_III(32, 0U, vlSelfRef.svo_traversal__DOT__inv_x)
-                            ? vlSelfRef.svo_traversal__DOT__inv_x
-                            : (- vlSelfRef.svo_traversal__DOT__inv_x));
-                    vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__abs_iy 
-                        = (VL_LTES_III(32, 0U, vlSelfRef.svo_traversal__DOT__inv_y)
-                            ? vlSelfRef.svo_traversal__DOT__inv_y
-                            : (- vlSelfRef.svo_traversal__DOT__inv_y));
-                    vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__abs_iz 
-                        = (VL_LTES_III(32, 0U, vlSelfRef.svo_traversal__DOT__inv_z)
-                            ? vlSelfRef.svo_traversal__DOT__inv_z
-                            : (- vlSelfRef.svo_traversal__DOT__inv_z));
-                    __Vfunc_svo_traversal__DOT__qmul__6__b 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__abs_ix;
-                    __Vfunc_svo_traversal__DOT__qmul__6__a 
-                        = VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_half), 0x00000010U);
-                    __Vfunc_svo_traversal__DOT__qmul__6__p 
-                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__6__a), 
-                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__6__b));
-                    __Vfunc_svo_traversal__DOT__qmul__6__Vfuncout 
-                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__6__p 
-                                   >> 0x10U));
-                    vlSelfRef.svo_traversal__DOT__dt_x 
-                        = __Vfunc_svo_traversal__DOT__qmul__6__Vfuncout;
-                    __Vfunc_svo_traversal__DOT__qmul__7__b 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__abs_iy;
-                    __Vfunc_svo_traversal__DOT__qmul__7__a 
-                        = VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_half), 0x00000010U);
-                    __Vfunc_svo_traversal__DOT__qmul__7__p 
-                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__7__a), 
-                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__7__b));
-                    __Vfunc_svo_traversal__DOT__qmul__7__Vfuncout 
-                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__7__p 
-                                   >> 0x10U));
-                    vlSelfRef.svo_traversal__DOT__dt_y 
-                        = __Vfunc_svo_traversal__DOT__qmul__7__Vfuncout;
-                    __Vfunc_svo_traversal__DOT__qmul__8__b 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__abs_iz;
-                    __Vfunc_svo_traversal__DOT__qmul__8__a 
-                        = VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_half), 0x00000010U);
-                    __Vfunc_svo_traversal__DOT__qmul__8__p 
-                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__8__a), 
-                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__8__b));
-                    __Vfunc_svo_traversal__DOT__qmul__8__Vfuncout 
-                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__8__p 
-                                   >> 0x10U));
-                    vlSelfRef.svo_traversal__DOT__dt_z 
-                        = __Vfunc_svo_traversal__DOT__qmul__8__Vfuncout;
-                    __Vfunc_svo_traversal__DOT__qmul__9__b 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__abs_ix;
-                    __Vfunc_svo_traversal__DOT__qmul__9__a 
-                        = VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_half), 0x00000010U);
-                    __Vfunc_svo_traversal__DOT__qmul__9__p 
-                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__9__a), 
-                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__9__b));
-                    vlSelfRef.svo_traversal__DOT____VlemCall_14__qmul 
-                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__9__p 
-                                   >> 0x10U));
-                    __Vdly__svo_traversal__DOT__t_next_x 
-                        = (vlSelfRef.svo_traversal__DOT__t_min 
-                           + vlSelfRef.svo_traversal__DOT____VlemCall_14__qmul);
-                    __Vfunc_svo_traversal__DOT__qmul__10__b 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__abs_iy;
-                    __Vfunc_svo_traversal__DOT__qmul__10__a 
-                        = VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_half), 0x00000010U);
-                    __Vfunc_svo_traversal__DOT__qmul__10__p 
-                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__10__a), 
-                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__10__b));
-                    vlSelfRef.svo_traversal__DOT____VlemCall_15__qmul 
-                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__10__p 
-                                   >> 0x10U));
-                    __Vdly__svo_traversal__DOT__t_next_y 
-                        = (vlSelfRef.svo_traversal__DOT__t_min 
-                           + vlSelfRef.svo_traversal__DOT____VlemCall_15__qmul);
-                    __Vfunc_svo_traversal__DOT__qmul__11__b 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk3__DOT__abs_iz;
-                    __Vfunc_svo_traversal__DOT__qmul__11__a 
-                        = VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_half), 0x00000010U);
-                    __Vfunc_svo_traversal__DOT__qmul__11__p 
-                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__11__a), 
-                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__11__b));
-                    vlSelfRef.svo_traversal__DOT____VlemCall_16__qmul 
-                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__11__p 
-                                   >> 0x10U));
-                    __Vdly__svo_traversal__DOT__t_next_z 
-                        = (vlSelfRef.svo_traversal__DOT__t_min 
-                           + vlSelfRef.svo_traversal__DOT____VlemCall_16__qmul);
+                    if (vlSelfRef.svo_traversal__DOT__post_pop) {
+                        __Vdly__svo_traversal__DOT__post_pop = 0U;
+                        __Vdly__svo_traversal__DOT__state = 6U;
+                    } else {
+                        __Vdly__svo_traversal__DOT__cx 
+                            = (((IData)(vlSelfRef.svo_traversal__DOT__bw_icx_c) 
+                                >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                ? 1U : 0U);
+                        __Vdly__svo_traversal__DOT__dt_x 
+                            = vlSelfRef.svo_traversal__DOT__dt_x_bw_c;
+                        __Vdly__svo_traversal__DOT__dt_y 
+                            = vlSelfRef.svo_traversal__DOT__dt_y_bw_c;
+                        __Vdly__svo_traversal__DOT__dt_z 
+                            = vlSelfRef.svo_traversal__DOT__dt_z_bw_c;
+                        __Vdly__svo_traversal__DOT__t_next_x 
+                            = vlSelfRef.svo_traversal__DOT__t_next_x_bw_c;
+                        __Vdly__svo_traversal__DOT__t_next_y 
+                            = vlSelfRef.svo_traversal__DOT__t_next_y_bw_c;
+                        __Vdly__svo_traversal__DOT__t_next_z 
+                            = vlSelfRef.svo_traversal__DOT__t_next_z_bw_c;
+                        __Vdly__svo_traversal__DOT__state = 5U;
+                        __Vdly__svo_traversal__DOT__cy 
+                            = (((IData)(vlSelfRef.svo_traversal__DOT__bw_icy_c) 
+                                >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                ? 1U : 0U);
+                        __Vdly__svo_traversal__DOT__cz 
+                            = (((IData)(vlSelfRef.svo_traversal__DOT__bw_icz_c) 
+                                >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                ? 1U : 0U);
+                    }
                 }
             }
         } else if ((2U & (IData)(vlSelfRef.svo_traversal__DOT__state))) {
             if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__state))) {
-                __Vdly__svo_traversal__DOT__bram_field = 0U;
+                __Vdly__svo_traversal__DOT__bram_field = 7U;
                 vlSelfRef.svo_traversal__DOT__svo_rd_en = 1U;
                 vlSelfRef.svo_traversal__DOT__svo_rd_addr 
                     = (0x00007ff8U & ((IData)(vlSelfRef.svo_traversal__DOT__node_idx) 
                                       << 3U));
                 __Vdly__svo_traversal__DOT__state = 4U;
             } else {
-                vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__world_q = 0x00400000U;
+                vlSelfRef.svo_traversal__DOT__rs_world_q = 0x00400000U;
                 __Vfunc_svo_traversal__DOT__qmul__12__b 
                     = vlSelfRef.svo_traversal__DOT__inv_x;
                 __Vfunc_svo_traversal__DOT__qmul__12__a 
@@ -1507,12 +1639,12 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                 __Vfunc_svo_traversal__DOT__qmul__12__Vfuncout 
                     = (IData)((__Vfunc_svo_traversal__DOT__qmul__12__p 
                                >> 0x10U));
-                vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx0 
+                vlSelfRef.svo_traversal__DOT__rs_tx0 
                     = __Vfunc_svo_traversal__DOT__qmul__12__Vfuncout;
                 __Vfunc_svo_traversal__DOT__qmul__13__b 
                     = vlSelfRef.svo_traversal__DOT__inv_x;
                 __Vfunc_svo_traversal__DOT__qmul__13__a 
-                    = (vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__world_q 
+                    = (vlSelfRef.svo_traversal__DOT__rs_world_q 
                        - vlSelfRef.svo_traversal__DOT__ro_x);
                 __Vfunc_svo_traversal__DOT__qmul__13__p 
                     = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__13__a), 
@@ -1520,7 +1652,7 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                 __Vfunc_svo_traversal__DOT__qmul__13__Vfuncout 
                     = (IData)((__Vfunc_svo_traversal__DOT__qmul__13__p 
                                >> 0x10U));
-                vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx1 
+                vlSelfRef.svo_traversal__DOT__rs_tx1 
                     = __Vfunc_svo_traversal__DOT__qmul__13__Vfuncout;
                 __Vfunc_svo_traversal__DOT__qmul__14__b 
                     = vlSelfRef.svo_traversal__DOT__inv_y;
@@ -1532,12 +1664,12 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                 __Vfunc_svo_traversal__DOT__qmul__14__Vfuncout 
                     = (IData)((__Vfunc_svo_traversal__DOT__qmul__14__p 
                                >> 0x10U));
-                vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty0 
+                vlSelfRef.svo_traversal__DOT__rs_ty0 
                     = __Vfunc_svo_traversal__DOT__qmul__14__Vfuncout;
                 __Vfunc_svo_traversal__DOT__qmul__15__b 
                     = vlSelfRef.svo_traversal__DOT__inv_y;
                 __Vfunc_svo_traversal__DOT__qmul__15__a 
-                    = (vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__world_q 
+                    = (vlSelfRef.svo_traversal__DOT__rs_world_q 
                        - vlSelfRef.svo_traversal__DOT__ro_y);
                 __Vfunc_svo_traversal__DOT__qmul__15__p 
                     = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__15__a), 
@@ -1545,7 +1677,7 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                 __Vfunc_svo_traversal__DOT__qmul__15__Vfuncout 
                     = (IData)((__Vfunc_svo_traversal__DOT__qmul__15__p 
                                >> 0x10U));
-                vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty1 
+                vlSelfRef.svo_traversal__DOT__rs_ty1 
                     = __Vfunc_svo_traversal__DOT__qmul__15__Vfuncout;
                 __Vfunc_svo_traversal__DOT__qmul__16__b 
                     = vlSelfRef.svo_traversal__DOT__inv_z;
@@ -1557,12 +1689,12 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                 __Vfunc_svo_traversal__DOT__qmul__16__Vfuncout 
                     = (IData)((__Vfunc_svo_traversal__DOT__qmul__16__p 
                                >> 0x10U));
-                vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz0 
+                vlSelfRef.svo_traversal__DOT__rs_tz0 
                     = __Vfunc_svo_traversal__DOT__qmul__16__Vfuncout;
                 __Vfunc_svo_traversal__DOT__qmul__17__b 
                     = vlSelfRef.svo_traversal__DOT__inv_z;
                 __Vfunc_svo_traversal__DOT__qmul__17__a 
-                    = (vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__world_q 
+                    = (vlSelfRef.svo_traversal__DOT__rs_world_q 
                        - vlSelfRef.svo_traversal__DOT__ro_z);
                 __Vfunc_svo_traversal__DOT__qmul__17__p 
                     = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__17__a), 
@@ -1570,53 +1702,65 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                 __Vfunc_svo_traversal__DOT__qmul__17__Vfuncout 
                     = (IData)((__Vfunc_svo_traversal__DOT__qmul__17__p 
                                >> 0x10U));
-                vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz1 
+                vlSelfRef.svo_traversal__DOT__rs_tz1 
                     = __Vfunc_svo_traversal__DOT__qmul__17__Vfuncout;
-                if (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx0, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx1)) {
-                    vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tmp 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx0;
-                    vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx0 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx1;
-                    vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx1 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tmp;
+                if (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__rs_tx0, vlSelfRef.svo_traversal__DOT__rs_tx1)) {
+                    vlSelfRef.svo_traversal__DOT__rs_tmp 
+                        = vlSelfRef.svo_traversal__DOT__rs_tx0;
+                    vlSelfRef.svo_traversal__DOT__rs_tx0 
+                        = vlSelfRef.svo_traversal__DOT__rs_tx1;
+                    vlSelfRef.svo_traversal__DOT__rs_tx1 
+                        = vlSelfRef.svo_traversal__DOT__rs_tmp;
                 }
-                if (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty0, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty1)) {
-                    vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tmp 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty0;
-                    vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty0 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty1;
-                    vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty1 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tmp;
+                if (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__rs_ty0, vlSelfRef.svo_traversal__DOT__rs_ty1)) {
+                    vlSelfRef.svo_traversal__DOT__rs_tmp 
+                        = vlSelfRef.svo_traversal__DOT__rs_ty0;
+                    vlSelfRef.svo_traversal__DOT__rs_ty0 
+                        = vlSelfRef.svo_traversal__DOT__rs_ty1;
+                    vlSelfRef.svo_traversal__DOT__rs_ty1 
+                        = vlSelfRef.svo_traversal__DOT__rs_tmp;
                 }
-                if (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz0, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz1)) {
-                    vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tmp 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz0;
-                    vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz0 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz1;
-                    vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz1 
-                        = vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tmp;
+                if (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__rs_tz0, vlSelfRef.svo_traversal__DOT__rs_tz1)) {
+                    vlSelfRef.svo_traversal__DOT__rs_tmp 
+                        = vlSelfRef.svo_traversal__DOT__rs_tz0;
+                    vlSelfRef.svo_traversal__DOT__rs_tz0 
+                        = vlSelfRef.svo_traversal__DOT__rs_tz1;
+                    vlSelfRef.svo_traversal__DOT__rs_tz1 
+                        = vlSelfRef.svo_traversal__DOT__rs_tmp;
                 }
-                vlSelfRef.svo_traversal__DOT__t_min 
-                    = (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx0, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty0)
-                        ? (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx0, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz0)
-                            ? vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx0
-                            : vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz0)
-                        : (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty0, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz0)
-                            ? vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty0
-                            : vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz0));
-                vlSelfRef.svo_traversal__DOT__t_max 
-                    = (VL_LTS_III(32, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx1, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty1)
-                        ? (VL_LTS_III(32, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx1, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz1)
-                            ? vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tx1
-                            : vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz1)
-                        : (VL_LTS_III(32, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty1, vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz1)
-                            ? vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__ty1
-                            : vlSelfRef.svo_traversal__DOT__unnamedblk2__DOT__tz1));
-                if (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__t_min, vlSelfRef.svo_traversal__DOT__t_max)) {
+                __Vdly__svo_traversal__DOT__t_min = 
+                    (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__rs_tx0, vlSelfRef.svo_traversal__DOT__rs_ty0)
+                      ? (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__rs_tx0, vlSelfRef.svo_traversal__DOT__rs_tz0)
+                          ? vlSelfRef.svo_traversal__DOT__rs_tx0
+                          : vlSelfRef.svo_traversal__DOT__rs_tz0)
+                      : (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__rs_ty0, vlSelfRef.svo_traversal__DOT__rs_tz0)
+                          ? vlSelfRef.svo_traversal__DOT__rs_ty0
+                          : vlSelfRef.svo_traversal__DOT__rs_tz0));
+                __Vdly__svo_traversal__DOT__t_max = 
+                    (VL_LTS_III(32, vlSelfRef.svo_traversal__DOT__rs_tx1, vlSelfRef.svo_traversal__DOT__rs_ty1)
+                      ? (VL_LTS_III(32, vlSelfRef.svo_traversal__DOT__rs_tx1, vlSelfRef.svo_traversal__DOT__rs_tz1)
+                          ? vlSelfRef.svo_traversal__DOT__rs_tx1
+                          : vlSelfRef.svo_traversal__DOT__rs_tz1)
+                      : (VL_LTS_III(32, vlSelfRef.svo_traversal__DOT__rs_ty1, vlSelfRef.svo_traversal__DOT__rs_tz1)
+                          ? vlSelfRef.svo_traversal__DOT__rs_ty1
+                          : vlSelfRef.svo_traversal__DOT__rs_tz1));
+                if (VL_GTS_III(32, (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__rs_tx0, vlSelfRef.svo_traversal__DOT__rs_ty0)
+                                     ? (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__rs_tx0, vlSelfRef.svo_traversal__DOT__rs_tz0)
+                                         ? vlSelfRef.svo_traversal__DOT__rs_tx0
+                                         : vlSelfRef.svo_traversal__DOT__rs_tz0)
+                                     : (VL_GTS_III(32, vlSelfRef.svo_traversal__DOT__rs_ty0, vlSelfRef.svo_traversal__DOT__rs_tz0)
+                                         ? vlSelfRef.svo_traversal__DOT__rs_ty0
+                                         : vlSelfRef.svo_traversal__DOT__rs_tz0)), 
+                               (VL_LTS_III(32, vlSelfRef.svo_traversal__DOT__rs_tx1, vlSelfRef.svo_traversal__DOT__rs_ty1)
+                                 ? (VL_LTS_III(32, vlSelfRef.svo_traversal__DOT__rs_tx1, vlSelfRef.svo_traversal__DOT__rs_tz1)
+                                     ? vlSelfRef.svo_traversal__DOT__rs_tx1
+                                     : vlSelfRef.svo_traversal__DOT__rs_tz1)
+                                 : (VL_LTS_III(32, vlSelfRef.svo_traversal__DOT__rs_ty1, vlSelfRef.svo_traversal__DOT__rs_tz1)
+                                     ? vlSelfRef.svo_traversal__DOT__rs_ty1
+                                     : vlSelfRef.svo_traversal__DOT__rs_tz1)))) {
                     __Vdly__svo_traversal__DOT__state = 0x0aU;
                 } else {
                     __Vdly__svo_traversal__DOT__node_idx = 0U;
-                    __Vdly__svo_traversal__DOT__node_half = 0x20U;
                     __Vdly__svo_traversal__DOT__node_origin_x = 0U;
                     __Vdly__svo_traversal__DOT__node_origin_y = 0U;
                     __Vdly__svo_traversal__DOT__node_origin_z = 0U;
@@ -1624,538 +1768,624 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
                 }
             }
         } else if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__state))) {
-            __Vfunc_svo_traversal__DOT__qmul__18__b 
-                = vlSelfRef.svo_traversal__DOT__cam_scale;
-            __Vfunc_svo_traversal__DOT__qmul__18__a 
-                = ((IData)(vlSelfRef.svo_traversal__DOT__px) 
-                   - (IData)(0x000a0000U));
-            __Vfunc_svo_traversal__DOT__qrecip__43__x 
-                = vlSelfRef.svo_traversal__DOT__rd_x;
-            __Vfunc_svo_traversal__DOT__qrecip__48__x 
-                = vlSelfRef.svo_traversal__DOT__rd_y;
-            __Vfunc_svo_traversal__DOT__qrecip__53__x 
-                = vlSelfRef.svo_traversal__DOT__rd_z;
-            __Vfunc_svo_traversal__DOT__qmul__18__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__18__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__18__b));
-            vlSelfRef.svo_traversal__DOT__ro_x = vlSelfRef.svo_traversal__DOT__cam_pos_x;
-            vlSelfRef.svo_traversal__DOT__ro_y = vlSelfRef.svo_traversal__DOT__cam_pos_y;
-            vlSelfRef.svo_traversal__DOT__ro_z = vlSelfRef.svo_traversal__DOT__cam_pos_z;
-            __Vdly__svo_traversal__DOT__sp = 0U;
-            __Vdly__svo_traversal__DOT__state = 2U;
-            __Vfunc_svo_traversal__DOT__qmul__18__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__18__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qrecip__43__xabs 
-                = (VL_GTS_III(32, 0U, __Vfunc_svo_traversal__DOT__qrecip__43__x)
-                    ? (- __Vfunc_svo_traversal__DOT__qrecip__43__x)
-                    : __Vfunc_svo_traversal__DOT__qrecip__43__x);
-            __Vfunc_svo_traversal__DOT__qmul__44__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__43__xabs;
-            __Vfunc_svo_traversal__DOT__qrecip__48__xabs 
-                = (VL_GTS_III(32, 0U, __Vfunc_svo_traversal__DOT__qrecip__48__x)
-                    ? (- __Vfunc_svo_traversal__DOT__qrecip__48__x)
-                    : __Vfunc_svo_traversal__DOT__qrecip__48__x);
-            __Vfunc_svo_traversal__DOT__qmul__49__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__48__xabs;
-            __Vfunc_svo_traversal__DOT__qrecip__53__xabs 
-                = (VL_GTS_III(32, 0U, __Vfunc_svo_traversal__DOT__qrecip__53__x)
-                    ? (- __Vfunc_svo_traversal__DOT__qrecip__53__x)
-                    : __Vfunc_svo_traversal__DOT__qrecip__53__x);
-            __Vfunc_svo_traversal__DOT__qmul__54__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__53__xabs;
-            vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__u 
-                = __Vfunc_svo_traversal__DOT__qmul__18__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qmul__44__p 
-                = VL_MULS_QQQ(64, 0x0000000000010000ULL, 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__44__a));
-            __Vfunc_svo_traversal__DOT__qmul__49__p 
-                = VL_MULS_QQQ(64, 0x0000000000010000ULL, 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__49__a));
-            __Vfunc_svo_traversal__DOT__qmul__54__p 
-                = VL_MULS_QQQ(64, 0x0000000000010000ULL, 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__54__a));
-            __Vfunc_svo_traversal__DOT__qmul__19__b 
-                = vlSelfRef.svo_traversal__DOT__cam_scale;
-            __Vfunc_svo_traversal__DOT__qmul__44__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__44__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__49__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__49__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__54__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__54__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__19__a 
-                = ((IData)(vlSelfRef.svo_traversal__DOT__py) 
-                   - (IData)(0x00780000U));
-            __Vfunc_svo_traversal__DOT__qrecip__43__r2 
-                = __Vfunc_svo_traversal__DOT__qmul__44__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__48__r2 
-                = __Vfunc_svo_traversal__DOT__qmul__49__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__53__r2 
-                = __Vfunc_svo_traversal__DOT__qmul__54__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qmul__19__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__19__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__19__b));
-            __Vfunc_svo_traversal__DOT__qrecip__43__r2 
-                = ((IData)(0x00020000U) - __Vfunc_svo_traversal__DOT__qrecip__43__r2);
-            __Vfunc_svo_traversal__DOT__qrecip__48__r2 
-                = ((IData)(0x00020000U) - __Vfunc_svo_traversal__DOT__qrecip__48__r2);
-            __Vfunc_svo_traversal__DOT__qrecip__53__r2 
-                = ((IData)(0x00020000U) - __Vfunc_svo_traversal__DOT__qrecip__53__r2);
-            __Vfunc_svo_traversal__DOT__qmul__19__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__19__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__45__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__43__r2;
-            __Vfunc_svo_traversal__DOT__qmul__50__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__48__r2;
-            __Vfunc_svo_traversal__DOT__qmul__55__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__53__r2;
-            vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__v 
-                = __Vfunc_svo_traversal__DOT__qmul__19__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qmul__45__p 
-                = VL_MULS_QQQ(64, 0x0000000000010000ULL, 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__45__b));
-            __Vfunc_svo_traversal__DOT__qmul__50__p 
-                = VL_MULS_QQQ(64, 0x0000000000010000ULL, 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__50__b));
-            __Vfunc_svo_traversal__DOT__qmul__55__p 
-                = VL_MULS_QQQ(64, 0x0000000000010000ULL, 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__55__b));
-            __Vfunc_svo_traversal__DOT__qmul__20__b 
-                = vlSelfRef.svo_traversal__DOT__cam_right_x;
-            __Vfunc_svo_traversal__DOT__qmul__45__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__45__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__50__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__50__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__55__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__55__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__20__a 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__u;
-            __Vfunc_svo_traversal__DOT__qrecip__43__r 
-                = __Vfunc_svo_traversal__DOT__qmul__45__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__48__r 
-                = __Vfunc_svo_traversal__DOT__qmul__50__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__53__r 
-                = __Vfunc_svo_traversal__DOT__qmul__55__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qmul__20__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__20__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__20__b));
-            __Vfunc_svo_traversal__DOT__qmul__46__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__43__r;
-            __Vfunc_svo_traversal__DOT__qmul__51__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__48__r;
-            __Vfunc_svo_traversal__DOT__qmul__56__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__53__r;
-            vlSelfRef.svo_traversal__DOT____VlemCall_0__qmul 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__20__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__46__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__43__xabs;
-            __Vfunc_svo_traversal__DOT__qmul__51__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__48__xabs;
-            __Vfunc_svo_traversal__DOT__qmul__56__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__53__xabs;
-            __Vfunc_svo_traversal__DOT__qmul__21__b 
-                = vlSelfRef.svo_traversal__DOT__cam_up_x;
-            __Vfunc_svo_traversal__DOT__qmul__46__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__46__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__46__b));
-            __Vfunc_svo_traversal__DOT__qmul__51__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__51__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__51__b));
-            __Vfunc_svo_traversal__DOT__qmul__56__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__56__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__56__b));
-            __Vfunc_svo_traversal__DOT__qmul__21__a 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__v;
-            __Vfunc_svo_traversal__DOT__qmul__46__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__46__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__51__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__51__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__56__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__56__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__21__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__21__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__21__b));
-            __Vfunc_svo_traversal__DOT__qrecip__43__r2 
-                = __Vfunc_svo_traversal__DOT__qmul__46__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__48__r2 
-                = __Vfunc_svo_traversal__DOT__qmul__51__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__53__r2 
-                = __Vfunc_svo_traversal__DOT__qmul__56__Vfuncout;
-            vlSelfRef.svo_traversal__DOT____VlemCall_1__qmul 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__21__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qrecip__43__r2 
-                = ((IData)(0x00020000U) - __Vfunc_svo_traversal__DOT__qrecip__43__r2);
-            __Vfunc_svo_traversal__DOT__qrecip__48__r2 
-                = ((IData)(0x00020000U) - __Vfunc_svo_traversal__DOT__qrecip__48__r2);
-            __Vfunc_svo_traversal__DOT__qrecip__53__r2 
-                = ((IData)(0x00020000U) - __Vfunc_svo_traversal__DOT__qrecip__53__r2);
-            vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__dx 
-                = ((vlSelfRef.svo_traversal__DOT__cam_fwd_x 
-                    + vlSelfRef.svo_traversal__DOT____VlemCall_0__qmul) 
-                   - vlSelfRef.svo_traversal__DOT____VlemCall_1__qmul);
-            __Vfunc_svo_traversal__DOT__qmul__47__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__43__r2;
-            __Vfunc_svo_traversal__DOT__qmul__52__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__48__r2;
-            __Vfunc_svo_traversal__DOT__qmul__57__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__53__r2;
-            __Vfunc_svo_traversal__DOT__qmul__22__b 
-                = vlSelfRef.svo_traversal__DOT__cam_right_y;
-            __Vfunc_svo_traversal__DOT__qmul__47__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__43__r;
-            __Vfunc_svo_traversal__DOT__qmul__52__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__48__r;
-            __Vfunc_svo_traversal__DOT__qmul__57__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__53__r;
-            __Vfunc_svo_traversal__DOT__qmul__22__a 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__u;
-            __Vfunc_svo_traversal__DOT__qmul__47__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__47__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__47__b));
-            __Vfunc_svo_traversal__DOT__qmul__52__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__52__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__52__b));
-            __Vfunc_svo_traversal__DOT__qmul__57__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__57__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__57__b));
-            __Vfunc_svo_traversal__DOT__qmul__22__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__22__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__22__b));
-            __Vfunc_svo_traversal__DOT__qmul__47__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__47__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__52__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__52__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__57__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__57__p 
-                           >> 0x10U));
-            vlSelfRef.svo_traversal__DOT____VlemCall_2__qmul 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__22__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qrecip__43__r 
-                = __Vfunc_svo_traversal__DOT__qmul__47__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__43__Vfuncout 
-                = (VL_GTS_III(32, 0U, __Vfunc_svo_traversal__DOT__qrecip__43__x)
-                    ? (- __Vfunc_svo_traversal__DOT__qrecip__43__r)
-                    : __Vfunc_svo_traversal__DOT__qrecip__43__r);
-            __Vfunc_svo_traversal__DOT__qrecip__48__r 
-                = __Vfunc_svo_traversal__DOT__qmul__52__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__48__Vfuncout 
-                = (VL_GTS_III(32, 0U, __Vfunc_svo_traversal__DOT__qrecip__48__x)
-                    ? (- __Vfunc_svo_traversal__DOT__qrecip__48__r)
-                    : __Vfunc_svo_traversal__DOT__qrecip__48__r);
-            __Vfunc_svo_traversal__DOT__qrecip__53__r 
-                = __Vfunc_svo_traversal__DOT__qmul__57__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__53__Vfuncout 
-                = (VL_GTS_III(32, 0U, __Vfunc_svo_traversal__DOT__qrecip__53__x)
-                    ? (- __Vfunc_svo_traversal__DOT__qrecip__53__r)
-                    : __Vfunc_svo_traversal__DOT__qrecip__53__r);
-            __Vfunc_svo_traversal__DOT__qmul__23__b 
-                = vlSelfRef.svo_traversal__DOT__cam_up_y;
-            __Vfunc_svo_traversal__DOT__qmul__23__a 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__v;
-            vlSelfRef.svo_traversal__DOT__inv_x = __Vfunc_svo_traversal__DOT__qrecip__43__Vfuncout;
-            vlSelfRef.svo_traversal__DOT__inv_y = __Vfunc_svo_traversal__DOT__qrecip__48__Vfuncout;
-            vlSelfRef.svo_traversal__DOT__inv_z = __Vfunc_svo_traversal__DOT__qrecip__53__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qmul__23__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__23__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__23__b));
-            vlSelfRef.svo_traversal__DOT__step_x = 
-                (VL_LTES_III(32, 0U, vlSelfRef.svo_traversal__DOT__rd_x)
-                  ? 1U : 7U);
-            vlSelfRef.svo_traversal__DOT__step_y = 
-                (VL_LTES_III(32, 0U, vlSelfRef.svo_traversal__DOT__rd_y)
-                  ? 1U : 7U);
-            vlSelfRef.svo_traversal__DOT__step_z = 
-                (VL_LTES_III(32, 0U, vlSelfRef.svo_traversal__DOT__rd_z)
-                  ? 1U : 7U);
-            vlSelfRef.svo_traversal__DOT____VlemCall_3__qmul 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__23__p 
-                           >> 0x10U));
-            vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__dy 
-                = ((vlSelfRef.svo_traversal__DOT__cam_fwd_y 
-                    + vlSelfRef.svo_traversal__DOT____VlemCall_2__qmul) 
-                   - vlSelfRef.svo_traversal__DOT____VlemCall_3__qmul);
-            __Vfunc_svo_traversal__DOT__qmul__24__b 
-                = vlSelfRef.svo_traversal__DOT__cam_right_z;
-            __Vfunc_svo_traversal__DOT__qmul__24__a 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__u;
-            __Vfunc_svo_traversal__DOT__qmul__24__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__24__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__24__b));
-            vlSelfRef.svo_traversal__DOT____VlemCall_4__qmul 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__24__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__25__b 
-                = vlSelfRef.svo_traversal__DOT__cam_up_z;
-            __Vfunc_svo_traversal__DOT__qmul__25__a 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__v;
-            __Vfunc_svo_traversal__DOT__qmul__25__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__25__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__25__b));
-            vlSelfRef.svo_traversal__DOT____VlemCall_5__qmul 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__25__p 
-                           >> 0x10U));
-            vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__dz 
-                = ((vlSelfRef.svo_traversal__DOT__cam_fwd_z 
-                    + vlSelfRef.svo_traversal__DOT____VlemCall_4__qmul) 
-                   - vlSelfRef.svo_traversal__DOT____VlemCall_5__qmul);
-            __Vfunc_svo_traversal__DOT__qmul__26__b 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__dx;
-            __Vfunc_svo_traversal__DOT__qmul__26__a 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__dx;
-            __Vfunc_svo_traversal__DOT__qmul__26__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__26__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__26__b));
-            vlSelfRef.svo_traversal__DOT____VlemCall_6__qmul 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__26__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__27__b 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__dy;
-            __Vfunc_svo_traversal__DOT__qmul__27__a 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__dy;
-            __Vfunc_svo_traversal__DOT__qmul__27__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__27__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__27__b));
-            vlSelfRef.svo_traversal__DOT____VlemCall_7__qmul 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__27__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qmul__28__b 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__dz;
-            __Vfunc_svo_traversal__DOT__qmul__28__a 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__dz;
-            __Vfunc_svo_traversal__DOT__qmul__28__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__28__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__28__b));
-            vlSelfRef.svo_traversal__DOT____VlemCall_8__qmul 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__28__p 
-                           >> 0x10U));
-            vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__len2 
-                = ((vlSelfRef.svo_traversal__DOT____VlemCall_6__qmul 
-                    + vlSelfRef.svo_traversal__DOT____VlemCall_7__qmul) 
-                   + vlSelfRef.svo_traversal__DOT____VlemCall_8__qmul);
-            __Vfunc_svo_traversal__DOT__qrecip__29__x 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__len2;
-            __Vfunc_svo_traversal__DOT__qrecip__29__xabs 
-                = (VL_GTS_III(32, 0U, __Vfunc_svo_traversal__DOT__qrecip__29__x)
-                    ? (- __Vfunc_svo_traversal__DOT__qrecip__29__x)
-                    : __Vfunc_svo_traversal__DOT__qrecip__29__x);
-            __Vfunc_svo_traversal__DOT__qmul__30__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__29__xabs;
-            __Vfunc_svo_traversal__DOT__qmul__30__p 
-                = VL_MULS_QQQ(64, 0x0000000000010000ULL, 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__30__a));
-            __Vfunc_svo_traversal__DOT__qmul__30__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__30__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qrecip__29__r2 
-                = __Vfunc_svo_traversal__DOT__qmul__30__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__29__r2 
-                = ((IData)(0x00020000U) - __Vfunc_svo_traversal__DOT__qrecip__29__r2);
-            __Vfunc_svo_traversal__DOT__qmul__31__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__29__r2;
-            __Vfunc_svo_traversal__DOT__qmul__31__p 
-                = VL_MULS_QQQ(64, 0x0000000000010000ULL, 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__31__b));
-            __Vfunc_svo_traversal__DOT__qmul__31__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__31__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qrecip__29__r 
-                = __Vfunc_svo_traversal__DOT__qmul__31__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qmul__32__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__29__r;
-            __Vfunc_svo_traversal__DOT__qmul__32__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__29__xabs;
-            __Vfunc_svo_traversal__DOT__qmul__32__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__32__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__32__b));
-            __Vfunc_svo_traversal__DOT__qmul__32__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__32__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qrecip__29__r2 
-                = __Vfunc_svo_traversal__DOT__qmul__32__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__29__r2 
-                = ((IData)(0x00020000U) - __Vfunc_svo_traversal__DOT__qrecip__29__r2);
-            __Vfunc_svo_traversal__DOT__qmul__33__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__29__r2;
-            __Vfunc_svo_traversal__DOT__qmul__33__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__29__r;
-            __Vfunc_svo_traversal__DOT__qmul__33__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__33__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__33__b));
-            __Vfunc_svo_traversal__DOT__qmul__33__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__33__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qrecip__29__r 
-                = __Vfunc_svo_traversal__DOT__qmul__33__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__29__Vfuncout 
-                = (VL_GTS_III(32, 0U, __Vfunc_svo_traversal__DOT__qrecip__29__x)
-                    ? (- __Vfunc_svo_traversal__DOT__qrecip__29__r)
-                    : __Vfunc_svo_traversal__DOT__qrecip__29__r);
-            vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__inv_len 
-                = __Vfunc_svo_traversal__DOT__qrecip__29__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qmul__34__b 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__inv_len;
-            __Vfunc_svo_traversal__DOT__qmul__34__a 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__len2;
-            __Vfunc_svo_traversal__DOT__qmul__34__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__34__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__34__b));
-            vlSelfRef.svo_traversal__DOT____VlemCall_9__qmul 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__34__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qrecip__35__x 
-                = (vlSelfRef.svo_traversal__DOT____VlemCall_9__qmul 
-                   + vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__inv_len);
-            __Vfunc_svo_traversal__DOT__qrecip__35__xabs 
-                = (VL_GTS_III(32, 0U, __Vfunc_svo_traversal__DOT__qrecip__35__x)
-                    ? (- __Vfunc_svo_traversal__DOT__qrecip__35__x)
-                    : __Vfunc_svo_traversal__DOT__qrecip__35__x);
-            __Vfunc_svo_traversal__DOT__qmul__36__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__35__xabs;
-            __Vfunc_svo_traversal__DOT__qmul__36__p 
-                = VL_MULS_QQQ(64, 0x0000000000010000ULL, 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__36__a));
-            __Vfunc_svo_traversal__DOT__qmul__36__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__36__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qrecip__35__r2 
-                = __Vfunc_svo_traversal__DOT__qmul__36__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__35__r2 
-                = ((IData)(0x00020000U) - __Vfunc_svo_traversal__DOT__qrecip__35__r2);
-            __Vfunc_svo_traversal__DOT__qmul__37__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__35__r2;
-            __Vfunc_svo_traversal__DOT__qmul__37__p 
-                = VL_MULS_QQQ(64, 0x0000000000010000ULL, 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__37__b));
-            __Vfunc_svo_traversal__DOT__qmul__37__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__37__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qrecip__35__r 
-                = __Vfunc_svo_traversal__DOT__qmul__37__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qmul__38__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__35__r;
-            __Vfunc_svo_traversal__DOT__qmul__38__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__35__xabs;
-            __Vfunc_svo_traversal__DOT__qmul__38__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__38__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__38__b));
-            __Vfunc_svo_traversal__DOT__qmul__38__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__38__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qrecip__35__r2 
-                = __Vfunc_svo_traversal__DOT__qmul__38__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qrecip__35__r2 
-                = ((IData)(0x00020000U) - __Vfunc_svo_traversal__DOT__qrecip__35__r2);
-            __Vfunc_svo_traversal__DOT__qmul__39__b 
-                = __Vfunc_svo_traversal__DOT__qrecip__35__r2;
-            __Vfunc_svo_traversal__DOT__qmul__39__a 
-                = __Vfunc_svo_traversal__DOT__qrecip__35__r;
-            __Vfunc_svo_traversal__DOT__qmul__39__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__39__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__39__b));
-            __Vfunc_svo_traversal__DOT__qmul__39__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__39__p 
-                           >> 0x10U));
-            __Vfunc_svo_traversal__DOT__qrecip__35__r 
-                = __Vfunc_svo_traversal__DOT__qmul__39__Vfuncout;
-            vlSelfRef.svo_traversal__DOT____VlemCall_10__qrecip 
-                = (VL_GTS_III(32, 0U, __Vfunc_svo_traversal__DOT__qrecip__35__x)
-                    ? (- __Vfunc_svo_traversal__DOT__qrecip__35__r)
-                    : __Vfunc_svo_traversal__DOT__qrecip__35__r);
-            vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__inv_len 
-                = VL_SHIFTL_III(32,32,32, vlSelfRef.svo_traversal__DOT____VlemCall_10__qrecip, 1U);
-            __Vfunc_svo_traversal__DOT__qmul__40__b 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__inv_len;
-            __Vfunc_svo_traversal__DOT__qmul__40__a 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__dx;
-            __Vfunc_svo_traversal__DOT__qmul__40__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__40__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__40__b));
-            __Vfunc_svo_traversal__DOT__qmul__40__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__40__p 
-                           >> 0x10U));
-            vlSelfRef.svo_traversal__DOT__rd_x = __Vfunc_svo_traversal__DOT__qmul__40__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qmul__41__b 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__inv_len;
-            __Vfunc_svo_traversal__DOT__qmul__41__a 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__dy;
-            __Vfunc_svo_traversal__DOT__qmul__41__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__41__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__41__b));
-            __Vfunc_svo_traversal__DOT__qmul__41__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__41__p 
-                           >> 0x10U));
-            vlSelfRef.svo_traversal__DOT__rd_y = __Vfunc_svo_traversal__DOT__qmul__41__Vfuncout;
-            __Vfunc_svo_traversal__DOT__qmul__42__b 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__inv_len;
-            __Vfunc_svo_traversal__DOT__qmul__42__a 
-                = vlSelfRef.svo_traversal__DOT__unnamedblk1__DOT__dz;
-            __Vfunc_svo_traversal__DOT__qmul__42__p 
-                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__42__a), 
-                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__42__b));
-            __Vfunc_svo_traversal__DOT__qmul__42__Vfuncout 
-                = (IData)((__Vfunc_svo_traversal__DOT__qmul__42__p 
-                           >> 0x10U));
-            vlSelfRef.svo_traversal__DOT__rd_z = __Vfunc_svo_traversal__DOT__qmul__42__Vfuncout;
+            __Vdly__svo_traversal__DOT__rs_wait = (0x0000001fU 
+                                                   & ((IData)(1U) 
+                                                      + (IData)(vlSelfRef.svo_traversal__DOT__rs_wait)));
+            if ((1U & (~ ((IData)(vlSelfRef.svo_traversal__DOT__rs_wait) 
+                          >> 4U)))) {
+                if ((8U & (IData)(vlSelfRef.svo_traversal__DOT__rs_wait))) {
+                    if ((4U & (IData)(vlSelfRef.svo_traversal__DOT__rs_wait))) {
+                        if ((1U & (~ ((IData)(vlSelfRef.svo_traversal__DOT__rs_wait) 
+                                      >> 1U)))) {
+                            if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__rs_wait))) {
+                                if ((vlSelfRef.svo_traversal__DOT__rs_ndx_r 
+                                     >> 0x1fU)) {
+                                    __Vfunc_svo_traversal__DOT__qmul__18__b 
+                                        = ((IData)(0x00020000U) 
+                                           - vlSelfRef.svo_traversal__DOT__rs_rmb_x_r);
+                                    __Vfunc_svo_traversal__DOT__qmul__18__a 
+                                        = vlSelfRef.svo_traversal__DOT__rs_r1x_r;
+                                    __Vfunc_svo_traversal__DOT__qmul__18__p 
+                                        = VL_MULS_QQQ(64, 
+                                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__18__a), 
+                                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__18__b));
+                                    vlSelfRef.svo_traversal__DOT____VlemCall_17__qmul 
+                                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__18__p 
+                                                   >> 0x10U));
+                                    vlSelfRef.svo_traversal__DOT____VlemCall_18__qmul 
+                                        = (- vlSelfRef.svo_traversal__DOT____VlemCall_17__qmul);
+                                } else {
+                                    __Vfunc_svo_traversal__DOT__qmul__19__b 
+                                        = ((IData)(0x00020000U) 
+                                           - vlSelfRef.svo_traversal__DOT__rs_rmb_x_r);
+                                    __Vfunc_svo_traversal__DOT__qmul__19__a 
+                                        = vlSelfRef.svo_traversal__DOT__rs_r1x_r;
+                                    __Vfunc_svo_traversal__DOT__qmul__19__p 
+                                        = VL_MULS_QQQ(64, 
+                                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__19__a), 
+                                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__19__b));
+                                    vlSelfRef.svo_traversal__DOT____VlemCall_18__qmul 
+                                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__19__p 
+                                                   >> 0x10U));
+                                }
+                                if ((vlSelfRef.svo_traversal__DOT__rs_ndy_r 
+                                     >> 0x1fU)) {
+                                    __Vfunc_svo_traversal__DOT__qmul__20__b 
+                                        = ((IData)(0x00020000U) 
+                                           - vlSelfRef.svo_traversal__DOT__rs_rmb_y_r);
+                                    __Vfunc_svo_traversal__DOT__qmul__20__a 
+                                        = vlSelfRef.svo_traversal__DOT__rs_r1y_r;
+                                    __Vfunc_svo_traversal__DOT__qmul__20__p 
+                                        = VL_MULS_QQQ(64, 
+                                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__20__a), 
+                                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__20__b));
+                                    vlSelfRef.svo_traversal__DOT____VlemCall_19__qmul 
+                                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__20__p 
+                                                   >> 0x10U));
+                                    vlSelfRef.svo_traversal__DOT____VlemCall_20__qmul 
+                                        = (- vlSelfRef.svo_traversal__DOT____VlemCall_19__qmul);
+                                } else {
+                                    __Vfunc_svo_traversal__DOT__qmul__21__b 
+                                        = ((IData)(0x00020000U) 
+                                           - vlSelfRef.svo_traversal__DOT__rs_rmb_y_r);
+                                    __Vfunc_svo_traversal__DOT__qmul__21__a 
+                                        = vlSelfRef.svo_traversal__DOT__rs_r1y_r;
+                                    __Vfunc_svo_traversal__DOT__qmul__21__p 
+                                        = VL_MULS_QQQ(64, 
+                                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__21__a), 
+                                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__21__b));
+                                    vlSelfRef.svo_traversal__DOT____VlemCall_20__qmul 
+                                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__21__p 
+                                                   >> 0x10U));
+                                }
+                                if ((vlSelfRef.svo_traversal__DOT__rs_ndz_r 
+                                     >> 0x1fU)) {
+                                    __Vfunc_svo_traversal__DOT__qmul__22__b 
+                                        = ((IData)(0x00020000U) 
+                                           - vlSelfRef.svo_traversal__DOT__rs_rmb_z_r);
+                                    __Vfunc_svo_traversal__DOT__qmul__22__a 
+                                        = vlSelfRef.svo_traversal__DOT__rs_r1z_r;
+                                    __Vfunc_svo_traversal__DOT__qmul__22__p 
+                                        = VL_MULS_QQQ(64, 
+                                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__22__a), 
+                                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__22__b));
+                                    vlSelfRef.svo_traversal__DOT____VlemCall_21__qmul 
+                                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__22__p 
+                                                   >> 0x10U));
+                                    vlSelfRef.svo_traversal__DOT____VlemCall_22__qmul 
+                                        = (- vlSelfRef.svo_traversal__DOT____VlemCall_21__qmul);
+                                } else {
+                                    __Vfunc_svo_traversal__DOT__qmul__23__b 
+                                        = ((IData)(0x00020000U) 
+                                           - vlSelfRef.svo_traversal__DOT__rs_rmb_z_r);
+                                    __Vfunc_svo_traversal__DOT__qmul__23__a 
+                                        = vlSelfRef.svo_traversal__DOT__rs_r1z_r;
+                                    __Vfunc_svo_traversal__DOT__qmul__23__p 
+                                        = VL_MULS_QQQ(64, 
+                                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__23__a), 
+                                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__23__b));
+                                    vlSelfRef.svo_traversal__DOT____VlemCall_22__qmul 
+                                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__23__p 
+                                                   >> 0x10U));
+                                }
+                                vlSelfRef.svo_traversal__DOT__rd_x 
+                                    = vlSelfRef.svo_traversal__DOT__rs_ndx_r;
+                                vlSelfRef.svo_traversal__DOT__rd_y 
+                                    = vlSelfRef.svo_traversal__DOT__rs_ndy_r;
+                                vlSelfRef.svo_traversal__DOT__rd_z 
+                                    = vlSelfRef.svo_traversal__DOT__rs_ndz_r;
+                                vlSelfRef.svo_traversal__DOT__ro_x 
+                                    = vlSelfRef.svo_traversal__DOT__cam_pos_x;
+                                vlSelfRef.svo_traversal__DOT__ro_y 
+                                    = vlSelfRef.svo_traversal__DOT__cam_pos_y;
+                                vlSelfRef.svo_traversal__DOT__ro_z 
+                                    = vlSelfRef.svo_traversal__DOT__cam_pos_z;
+                                vlSelfRef.svo_traversal__DOT__inv_x 
+                                    = vlSelfRef.svo_traversal__DOT____VlemCall_18__qmul;
+                                vlSelfRef.svo_traversal__DOT__inv_y 
+                                    = vlSelfRef.svo_traversal__DOT____VlemCall_20__qmul;
+                                vlSelfRef.svo_traversal__DOT__inv_z 
+                                    = vlSelfRef.svo_traversal__DOT____VlemCall_22__qmul;
+                                vlSelfRef.svo_traversal__DOT__step_x 
+                                    = (VL_LTES_III(32, 0U, vlSelfRef.svo_traversal__DOT__rs_ndx_r)
+                                        ? 1U : 7U);
+                                vlSelfRef.svo_traversal__DOT__step_y 
+                                    = (VL_LTES_III(32, 0U, vlSelfRef.svo_traversal__DOT__rs_ndy_r)
+                                        ? 1U : 7U);
+                                vlSelfRef.svo_traversal__DOT__step_z 
+                                    = (VL_LTES_III(32, 0U, vlSelfRef.svo_traversal__DOT__rs_ndz_r)
+                                        ? 1U : 7U);
+                                __Vdly__svo_traversal__DOT__sp = 0U;
+                                __Vdly__svo_traversal__DOT__rs_wait = 0U;
+                                __Vdly__svo_traversal__DOT__state = 2U;
+                            } else {
+                                __Vfunc_svo_traversal__DOT__qmul__24__b 
+                                    = vlSelfRef.svo_traversal__DOT__rs_r1x_r;
+                                __Vfunc_svo_traversal__DOT__qmul__25__b 
+                                    = vlSelfRef.svo_traversal__DOT__rs_r1y_r;
+                                __Vfunc_svo_traversal__DOT__qmul__26__b 
+                                    = vlSelfRef.svo_traversal__DOT__rs_r1z_r;
+                                __Vfunc_svo_traversal__DOT__qmul__24__a 
+                                    = vlSelfRef.svo_traversal__DOT__rs_ax_r;
+                                __Vfunc_svo_traversal__DOT__qmul__25__a 
+                                    = vlSelfRef.svo_traversal__DOT__rs_ay_r;
+                                __Vfunc_svo_traversal__DOT__qmul__26__a 
+                                    = vlSelfRef.svo_traversal__DOT__rs_az_r;
+                                __Vfunc_svo_traversal__DOT__qmul__24__p 
+                                    = VL_MULS_QQQ(64, 
+                                                  VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__24__a), 
+                                                  VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__24__b));
+                                __Vfunc_svo_traversal__DOT__qmul__25__p 
+                                    = VL_MULS_QQQ(64, 
+                                                  VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__25__a), 
+                                                  VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__25__b));
+                                __Vfunc_svo_traversal__DOT__qmul__26__p 
+                                    = VL_MULS_QQQ(64, 
+                                                  VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__26__a), 
+                                                  VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__26__b));
+                                __Vfunc_svo_traversal__DOT__qmul__24__Vfuncout 
+                                    = (IData)((__Vfunc_svo_traversal__DOT__qmul__24__p 
+                                               >> 0x10U));
+                                __Vfunc_svo_traversal__DOT__qmul__25__Vfuncout 
+                                    = (IData)((__Vfunc_svo_traversal__DOT__qmul__25__p 
+                                               >> 0x10U));
+                                __Vfunc_svo_traversal__DOT__qmul__26__Vfuncout 
+                                    = (IData)((__Vfunc_svo_traversal__DOT__qmul__26__p 
+                                               >> 0x10U));
+                                vlSelfRef.svo_traversal__DOT__rs_rmb_x_r 
+                                    = __Vfunc_svo_traversal__DOT__qmul__24__Vfuncout;
+                                vlSelfRef.svo_traversal__DOT__rs_rmb_y_r 
+                                    = __Vfunc_svo_traversal__DOT__qmul__25__Vfuncout;
+                                vlSelfRef.svo_traversal__DOT__rs_rmb_z_r 
+                                    = __Vfunc_svo_traversal__DOT__qmul__26__Vfuncout;
+                            }
+                        }
+                    } else if ((2U & (IData)(vlSelfRef.svo_traversal__DOT__rs_wait))) {
+                        if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__rs_wait))) {
+                            __Vfunc_svo_traversal__DOT__qmul__27__b 
+                                = ((IData)(0x00020000U) 
+                                   - vlSelfRef.svo_traversal__DOT__rs_rma_x_r);
+                            __Vfunc_svo_traversal__DOT__qmul__28__b 
+                                = ((IData)(0x00020000U) 
+                                   - vlSelfRef.svo_traversal__DOT__rs_rma_y_r);
+                            __Vfunc_svo_traversal__DOT__qmul__29__b 
+                                = ((IData)(0x00020000U) 
+                                   - vlSelfRef.svo_traversal__DOT__rs_rma_z_r);
+                            __Vfunc_svo_traversal__DOT__qmul__27__a 
+                                = vlSelfRef.svo_traversal__DOT__rs_r0x_r;
+                            __Vfunc_svo_traversal__DOT__qmul__28__a 
+                                = vlSelfRef.svo_traversal__DOT__rs_r0y_r;
+                            __Vfunc_svo_traversal__DOT__qmul__29__a 
+                                = vlSelfRef.svo_traversal__DOT__rs_r0z_r;
+                            __Vfunc_svo_traversal__DOT__qmul__27__p 
+                                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__27__a), 
+                                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__27__b));
+                            __Vfunc_svo_traversal__DOT__qmul__28__p 
+                                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__28__a), 
+                                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__28__b));
+                            __Vfunc_svo_traversal__DOT__qmul__29__p 
+                                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__29__a), 
+                                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__29__b));
+                            __Vfunc_svo_traversal__DOT__qmul__27__Vfuncout 
+                                = (IData)((__Vfunc_svo_traversal__DOT__qmul__27__p 
+                                           >> 0x10U));
+                            __Vfunc_svo_traversal__DOT__qmul__28__Vfuncout 
+                                = (IData)((__Vfunc_svo_traversal__DOT__qmul__28__p 
+                                           >> 0x10U));
+                            __Vfunc_svo_traversal__DOT__qmul__29__Vfuncout 
+                                = (IData)((__Vfunc_svo_traversal__DOT__qmul__29__p 
+                                           >> 0x10U));
+                            vlSelfRef.svo_traversal__DOT__rs_r1x_r 
+                                = __Vfunc_svo_traversal__DOT__qmul__27__Vfuncout;
+                            vlSelfRef.svo_traversal__DOT__rs_r1y_r 
+                                = __Vfunc_svo_traversal__DOT__qmul__28__Vfuncout;
+                            vlSelfRef.svo_traversal__DOT__rs_r1z_r 
+                                = __Vfunc_svo_traversal__DOT__qmul__29__Vfuncout;
+                        } else {
+                            __Vfunc_svo_traversal__DOT__qmul__30__b 
+                                = vlSelfRef.svo_traversal__DOT__rs_r0x_r;
+                            __Vfunc_svo_traversal__DOT__qmul__31__b 
+                                = vlSelfRef.svo_traversal__DOT__rs_r0y_r;
+                            __Vfunc_svo_traversal__DOT__qmul__32__b 
+                                = vlSelfRef.svo_traversal__DOT__rs_r0z_r;
+                            __Vfunc_svo_traversal__DOT__qmul__30__a 
+                                = vlSelfRef.svo_traversal__DOT__rs_ax_r;
+                            __Vfunc_svo_traversal__DOT__qmul__31__a 
+                                = vlSelfRef.svo_traversal__DOT__rs_ay_r;
+                            __Vfunc_svo_traversal__DOT__qmul__32__a 
+                                = vlSelfRef.svo_traversal__DOT__rs_az_r;
+                            __Vfunc_svo_traversal__DOT__qmul__30__p 
+                                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__30__a), 
+                                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__30__b));
+                            __Vfunc_svo_traversal__DOT__qmul__31__p 
+                                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__31__a), 
+                                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__31__b));
+                            __Vfunc_svo_traversal__DOT__qmul__32__p 
+                                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__32__a), 
+                                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__32__b));
+                            __Vfunc_svo_traversal__DOT__qmul__30__Vfuncout 
+                                = (IData)((__Vfunc_svo_traversal__DOT__qmul__30__p 
+                                           >> 0x10U));
+                            __Vfunc_svo_traversal__DOT__qmul__31__Vfuncout 
+                                = (IData)((__Vfunc_svo_traversal__DOT__qmul__31__p 
+                                           >> 0x10U));
+                            __Vfunc_svo_traversal__DOT__qmul__32__Vfuncout 
+                                = (IData)((__Vfunc_svo_traversal__DOT__qmul__32__p 
+                                           >> 0x10U));
+                            vlSelfRef.svo_traversal__DOT__rs_rma_x_r 
+                                = __Vfunc_svo_traversal__DOT__qmul__30__Vfuncout;
+                            vlSelfRef.svo_traversal__DOT__rs_rma_y_r 
+                                = __Vfunc_svo_traversal__DOT__qmul__31__Vfuncout;
+                            vlSelfRef.svo_traversal__DOT__rs_rma_z_r 
+                                = __Vfunc_svo_traversal__DOT__qmul__32__Vfuncout;
+                        }
+                    } else if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__rs_wait))) {
+                        if ((vlSelfRef.svo_traversal__DOT__rs_ndx_r 
+                             >> 0x1fU)) {
+                            __Vfunc_svo_traversal__DOT__qrecip_r0__33__xabs 
+                                = (- vlSelfRef.svo_traversal__DOT__rs_ndx_r);
+                            vlSelfRef.svo_traversal__DOT__rs_ax_r 
+                                = (- vlSelfRef.svo_traversal__DOT__rs_ndx_r);
+                        } else {
+                            __Vfunc_svo_traversal__DOT__qrecip_r0__33__xabs 
+                                = vlSelfRef.svo_traversal__DOT__rs_ndx_r;
+                            vlSelfRef.svo_traversal__DOT__rs_ax_r 
+                                = vlSelfRef.svo_traversal__DOT__rs_ndx_r;
+                        }
+                        if ((vlSelfRef.svo_traversal__DOT__rs_ndy_r 
+                             >> 0x1fU)) {
+                            __Vfunc_svo_traversal__DOT__qrecip_r0__34__xabs 
+                                = (- vlSelfRef.svo_traversal__DOT__rs_ndy_r);
+                            vlSelfRef.svo_traversal__DOT__rs_ay_r 
+                                = (- vlSelfRef.svo_traversal__DOT__rs_ndy_r);
+                        } else {
+                            __Vfunc_svo_traversal__DOT__qrecip_r0__34__xabs 
+                                = vlSelfRef.svo_traversal__DOT__rs_ndy_r;
+                            vlSelfRef.svo_traversal__DOT__rs_ay_r 
+                                = vlSelfRef.svo_traversal__DOT__rs_ndy_r;
+                        }
+                        if ((vlSelfRef.svo_traversal__DOT__rs_ndz_r 
+                             >> 0x1fU)) {
+                            __Vfunc_svo_traversal__DOT__qrecip_r0__35__xabs 
+                                = (- vlSelfRef.svo_traversal__DOT__rs_ndz_r);
+                            vlSelfRef.svo_traversal__DOT__rs_az_r 
+                                = (- vlSelfRef.svo_traversal__DOT__rs_ndz_r);
+                        } else {
+                            __Vfunc_svo_traversal__DOT__qrecip_r0__35__xabs 
+                                = vlSelfRef.svo_traversal__DOT__rs_ndz_r;
+                            vlSelfRef.svo_traversal__DOT__rs_az_r 
+                                = vlSelfRef.svo_traversal__DOT__rs_ndz_r;
+                        }
+                        __Vfunc_svo_traversal__DOT__qrecip_r0__33__Vfuncout 
+                            = ((0U != (__Vfunc_svo_traversal__DOT__qrecip_r0__33__xabs 
+                                       >> 0x10U)) ? 0x00010000U
+                                : ((0x00008000U & __Vfunc_svo_traversal__DOT__qrecip_r0__33__xabs)
+                                    ? 0x00018000U : 
+                                   ((0x00004000U & __Vfunc_svo_traversal__DOT__qrecip_r0__33__xabs)
+                                     ? 0x00030000U : 
+                                    ((0x00002000U & __Vfunc_svo_traversal__DOT__qrecip_r0__33__xabs)
+                                      ? 0x00060000U
+                                      : ((0x00001000U 
+                                          & __Vfunc_svo_traversal__DOT__qrecip_r0__33__xabs)
+                                          ? 0x000c0000U
+                                          : 0x00180000U)))));
+                        __Vfunc_svo_traversal__DOT__qrecip_r0__34__Vfuncout 
+                            = ((0U != (__Vfunc_svo_traversal__DOT__qrecip_r0__34__xabs 
+                                       >> 0x10U)) ? 0x00010000U
+                                : ((0x00008000U & __Vfunc_svo_traversal__DOT__qrecip_r0__34__xabs)
+                                    ? 0x00018000U : 
+                                   ((0x00004000U & __Vfunc_svo_traversal__DOT__qrecip_r0__34__xabs)
+                                     ? 0x00030000U : 
+                                    ((0x00002000U & __Vfunc_svo_traversal__DOT__qrecip_r0__34__xabs)
+                                      ? 0x00060000U
+                                      : ((0x00001000U 
+                                          & __Vfunc_svo_traversal__DOT__qrecip_r0__34__xabs)
+                                          ? 0x000c0000U
+                                          : 0x00180000U)))));
+                        __Vfunc_svo_traversal__DOT__qrecip_r0__35__Vfuncout 
+                            = ((0U != (__Vfunc_svo_traversal__DOT__qrecip_r0__35__xabs 
+                                       >> 0x10U)) ? 0x00010000U
+                                : ((0x00008000U & __Vfunc_svo_traversal__DOT__qrecip_r0__35__xabs)
+                                    ? 0x00018000U : 
+                                   ((0x00004000U & __Vfunc_svo_traversal__DOT__qrecip_r0__35__xabs)
+                                     ? 0x00030000U : 
+                                    ((0x00002000U & __Vfunc_svo_traversal__DOT__qrecip_r0__35__xabs)
+                                      ? 0x00060000U
+                                      : ((0x00001000U 
+                                          & __Vfunc_svo_traversal__DOT__qrecip_r0__35__xabs)
+                                          ? 0x000c0000U
+                                          : 0x00180000U)))));
+                        vlSelfRef.svo_traversal__DOT__rs_r0x_r 
+                            = __Vfunc_svo_traversal__DOT__qrecip_r0__33__Vfuncout;
+                        vlSelfRef.svo_traversal__DOT__rs_r0y_r 
+                            = __Vfunc_svo_traversal__DOT__qrecip_r0__34__Vfuncout;
+                        vlSelfRef.svo_traversal__DOT__rs_r0z_r 
+                            = __Vfunc_svo_traversal__DOT__qrecip_r0__35__Vfuncout;
+                    } else {
+                        __Vfunc_svo_traversal__DOT__qmul__36__b 
+                            = vlSelfRef.svo_traversal__DOT__rs_rilinv2_r;
+                        __Vfunc_svo_traversal__DOT__qmul__37__b 
+                            = vlSelfRef.svo_traversal__DOT__rs_rilinv2_r;
+                        __Vfunc_svo_traversal__DOT__qmul__38__b 
+                            = vlSelfRef.svo_traversal__DOT__rs_rilinv2_r;
+                        __Vfunc_svo_traversal__DOT__qmul__36__a 
+                            = vlSelfRef.svo_traversal__DOT__rs_rsdx_r;
+                        __Vfunc_svo_traversal__DOT__qmul__37__a 
+                            = vlSelfRef.svo_traversal__DOT__rs_rsdy_r;
+                        __Vfunc_svo_traversal__DOT__qmul__38__a 
+                            = vlSelfRef.svo_traversal__DOT__rs_rsdz_r;
+                        __Vfunc_svo_traversal__DOT__qmul__36__p 
+                            = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__36__a), 
+                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__36__b));
+                        __Vfunc_svo_traversal__DOT__qmul__37__p 
+                            = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__37__a), 
+                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__37__b));
+                        __Vfunc_svo_traversal__DOT__qmul__38__p 
+                            = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__38__a), 
+                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__38__b));
+                        __Vfunc_svo_traversal__DOT__qmul__36__Vfuncout 
+                            = (IData)((__Vfunc_svo_traversal__DOT__qmul__36__p 
+                                       >> 0x10U));
+                        __Vfunc_svo_traversal__DOT__qmul__37__Vfuncout 
+                            = (IData)((__Vfunc_svo_traversal__DOT__qmul__37__p 
+                                       >> 0x10U));
+                        __Vfunc_svo_traversal__DOT__qmul__38__Vfuncout 
+                            = (IData)((__Vfunc_svo_traversal__DOT__qmul__38__p 
+                                       >> 0x10U));
+                        vlSelfRef.svo_traversal__DOT__rs_ndx_r 
+                            = __Vfunc_svo_traversal__DOT__qmul__36__Vfuncout;
+                        vlSelfRef.svo_traversal__DOT__rs_ndy_r 
+                            = __Vfunc_svo_traversal__DOT__qmul__37__Vfuncout;
+                        vlSelfRef.svo_traversal__DOT__rs_ndz_r 
+                            = __Vfunc_svo_traversal__DOT__qmul__38__Vfuncout;
+                    }
+                } else if ((4U & (IData)(vlSelfRef.svo_traversal__DOT__rs_wait))) {
+                    if ((2U & (IData)(vlSelfRef.svo_traversal__DOT__rs_wait))) {
+                        if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__rs_wait))) {
+                            __Vfunc_svo_traversal__DOT__qmul__39__b 
+                                = vlSelfRef.svo_traversal__DOT__rs_rilsub_r;
+                            __Vfunc_svo_traversal__DOT__qmul__39__a 
+                                = vlSelfRef.svo_traversal__DOT__rs_rilinv_r;
+                            __Vfunc_svo_traversal__DOT__qmul__39__p 
+                                = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__39__a), 
+                                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__39__b));
+                            __Vfunc_svo_traversal__DOT__qmul__39__Vfuncout 
+                                = (IData)((__Vfunc_svo_traversal__DOT__qmul__39__p 
+                                           >> 0x10U));
+                            vlSelfRef.svo_traversal__DOT__rs_rilinv2_r 
+                                = __Vfunc_svo_traversal__DOT__qmul__39__Vfuncout;
+                        } else {
+                            __Vfunc_svo_traversal__DOT__qmul__40__b 
+                                = vlSelfRef.svo_traversal__DOT__rs_riltmp_r;
+                            __Vfunc_svo_traversal__DOT__qmul__40__p 
+                                = VL_MULS_QQQ(64, 0x0000000000008000ULL, 
+                                              VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__40__b));
+                            vlSelfRef.svo_traversal__DOT____VlemCall_16__qmul 
+                                = (IData)((__Vfunc_svo_traversal__DOT__qmul__40__p 
+                                           >> 0x10U));
+                            vlSelfRef.svo_traversal__DOT__rs_rilsub_r 
+                                = ((IData)(0x00018000U) 
+                                   - vlSelfRef.svo_traversal__DOT____VlemCall_16__qmul);
+                        }
+                    } else if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__rs_wait))) {
+                        __Vfunc_svo_traversal__DOT__qmul__41__b 
+                            = vlSelfRef.svo_traversal__DOT__rs_rilsq_r;
+                        __Vfunc_svo_traversal__DOT__qmul__41__a 
+                            = vlSelfRef.svo_traversal__DOT__rs_rslen2_r;
+                        __Vfunc_svo_traversal__DOT__qmul__41__p 
+                            = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__41__a), 
+                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__41__b));
+                        __Vfunc_svo_traversal__DOT__qmul__41__Vfuncout 
+                            = (IData)((__Vfunc_svo_traversal__DOT__qmul__41__p 
+                                       >> 0x10U));
+                        vlSelfRef.svo_traversal__DOT__rs_riltmp_r 
+                            = __Vfunc_svo_traversal__DOT__qmul__41__Vfuncout;
+                    } else {
+                        __Vfunc_svo_traversal__DOT__qmul__42__b 
+                            = vlSelfRef.svo_traversal__DOT__rs_rilinv_r;
+                        __Vfunc_svo_traversal__DOT__qmul__42__a 
+                            = vlSelfRef.svo_traversal__DOT__rs_rilinv_r;
+                        __Vfunc_svo_traversal__DOT__qmul__42__p 
+                            = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__42__a), 
+                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__42__b));
+                        __Vfunc_svo_traversal__DOT__qmul__42__Vfuncout 
+                            = (IData)((__Vfunc_svo_traversal__DOT__qmul__42__p 
+                                       >> 0x10U));
+                        vlSelfRef.svo_traversal__DOT__rs_rilsq_r 
+                            = __Vfunc_svo_traversal__DOT__qmul__42__Vfuncout;
+                    }
+                } else if ((2U & (IData)(vlSelfRef.svo_traversal__DOT__rs_wait))) {
+                    if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__rs_wait))) {
+                        __Vfunc_svo_traversal__DOT__qmul__43__b 
+                            = vlSelfRef.svo_traversal__DOT__rs_rslen2_r;
+                        __Vfunc_svo_traversal__DOT__qmul__43__p 
+                            = VL_MULS_QQQ(64, 0x0000000000008000ULL, 
+                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__43__b));
+                        vlSelfRef.svo_traversal__DOT____VlemCall_15__qmul 
+                            = (IData)((__Vfunc_svo_traversal__DOT__qmul__43__p 
+                                       >> 0x10U));
+                        vlSelfRef.svo_traversal__DOT__rs_rilinv_r 
+                            = ((IData)(0x00018000U) 
+                               - vlSelfRef.svo_traversal__DOT____VlemCall_15__qmul);
+                    } else {
+                        __Vfunc_svo_traversal__DOT__qmul__44__b 
+                            = vlSelfRef.svo_traversal__DOT__rs_rsdx_r;
+                        __Vfunc_svo_traversal__DOT__qmul__44__a 
+                            = vlSelfRef.svo_traversal__DOT__rs_rsdx_r;
+                        __Vfunc_svo_traversal__DOT__qmul__44__p 
+                            = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__44__a), 
+                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__44__b));
+                        vlSelfRef.svo_traversal__DOT____VlemCall_12__qmul 
+                            = (IData)((__Vfunc_svo_traversal__DOT__qmul__44__p 
+                                       >> 0x10U));
+                        __Vfunc_svo_traversal__DOT__qmul__45__b 
+                            = vlSelfRef.svo_traversal__DOT__rs_rsdy_r;
+                        __Vfunc_svo_traversal__DOT__qmul__45__a 
+                            = vlSelfRef.svo_traversal__DOT__rs_rsdy_r;
+                        __Vfunc_svo_traversal__DOT__qmul__45__p 
+                            = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__45__a), 
+                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__45__b));
+                        vlSelfRef.svo_traversal__DOT____VlemCall_13__qmul 
+                            = (IData)((__Vfunc_svo_traversal__DOT__qmul__45__p 
+                                       >> 0x10U));
+                        __Vfunc_svo_traversal__DOT__qmul__46__b 
+                            = vlSelfRef.svo_traversal__DOT__rs_rsdz_r;
+                        __Vfunc_svo_traversal__DOT__qmul__46__a 
+                            = vlSelfRef.svo_traversal__DOT__rs_rsdz_r;
+                        __Vfunc_svo_traversal__DOT__qmul__46__p 
+                            = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__46__a), 
+                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__46__b));
+                        vlSelfRef.svo_traversal__DOT____VlemCall_14__qmul 
+                            = (IData)((__Vfunc_svo_traversal__DOT__qmul__46__p 
+                                       >> 0x10U));
+                        vlSelfRef.svo_traversal__DOT__rs_rslen2_r 
+                            = ((vlSelfRef.svo_traversal__DOT____VlemCall_12__qmul 
+                                + vlSelfRef.svo_traversal__DOT____VlemCall_13__qmul) 
+                               + vlSelfRef.svo_traversal__DOT____VlemCall_14__qmul);
+                    }
+                } else if ((1U & (IData)(vlSelfRef.svo_traversal__DOT__rs_wait))) {
+                    __Vfunc_svo_traversal__DOT__qmul__47__b 
+                        = vlSelfRef.svo_traversal__DOT__cam_right_x;
+                    __Vfunc_svo_traversal__DOT__qmul__49__b 
+                        = vlSelfRef.svo_traversal__DOT__cam_right_y;
+                    __Vfunc_svo_traversal__DOT__qmul__51__b 
+                        = vlSelfRef.svo_traversal__DOT__cam_right_z;
+                    __Vfunc_svo_traversal__DOT__qmul__47__a 
+                        = vlSelfRef.svo_traversal__DOT__rs_rsu_r;
+                    __Vfunc_svo_traversal__DOT__qmul__49__a 
+                        = vlSelfRef.svo_traversal__DOT__rs_rsu_r;
+                    __Vfunc_svo_traversal__DOT__qmul__51__a 
+                        = vlSelfRef.svo_traversal__DOT__rs_rsu_r;
+                    __Vfunc_svo_traversal__DOT__qmul__47__p 
+                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__47__a), 
+                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__47__b));
+                    __Vfunc_svo_traversal__DOT__qmul__49__p 
+                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__49__a), 
+                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__49__b));
+                    __Vfunc_svo_traversal__DOT__qmul__51__p 
+                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__51__a), 
+                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__51__b));
+                    vlSelfRef.svo_traversal__DOT____VlemCall_6__qmul 
+                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__47__p 
+                                   >> 0x10U));
+                    vlSelfRef.svo_traversal__DOT____VlemCall_8__qmul 
+                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__49__p 
+                                   >> 0x10U));
+                    vlSelfRef.svo_traversal__DOT____VlemCall_10__qmul 
+                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__51__p 
+                                   >> 0x10U));
+                    __Vfunc_svo_traversal__DOT__qmul__48__b 
+                        = vlSelfRef.svo_traversal__DOT__cam_up_x;
+                    __Vfunc_svo_traversal__DOT__qmul__50__b 
+                        = vlSelfRef.svo_traversal__DOT__cam_up_y;
+                    __Vfunc_svo_traversal__DOT__qmul__52__b 
+                        = vlSelfRef.svo_traversal__DOT__cam_up_z;
+                    __Vfunc_svo_traversal__DOT__qmul__48__a 
+                        = vlSelfRef.svo_traversal__DOT__rs_rsv_r;
+                    __Vfunc_svo_traversal__DOT__qmul__50__a 
+                        = vlSelfRef.svo_traversal__DOT__rs_rsv_r;
+                    __Vfunc_svo_traversal__DOT__qmul__52__a 
+                        = vlSelfRef.svo_traversal__DOT__rs_rsv_r;
+                    __Vfunc_svo_traversal__DOT__qmul__48__p 
+                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__48__a), 
+                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__48__b));
+                    __Vfunc_svo_traversal__DOT__qmul__50__p 
+                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__50__a), 
+                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__50__b));
+                    __Vfunc_svo_traversal__DOT__qmul__52__p 
+                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__52__a), 
+                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__52__b));
+                    vlSelfRef.svo_traversal__DOT____VlemCall_7__qmul 
+                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__48__p 
+                                   >> 0x10U));
+                    vlSelfRef.svo_traversal__DOT____VlemCall_9__qmul 
+                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__50__p 
+                                   >> 0x10U));
+                    vlSelfRef.svo_traversal__DOT____VlemCall_11__qmul 
+                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__52__p 
+                                   >> 0x10U));
+                    vlSelfRef.svo_traversal__DOT__rs_rsdx_r 
+                        = ((vlSelfRef.svo_traversal__DOT__cam_fwd_x 
+                            + vlSelfRef.svo_traversal__DOT____VlemCall_6__qmul) 
+                           - vlSelfRef.svo_traversal__DOT____VlemCall_7__qmul);
+                    vlSelfRef.svo_traversal__DOT__rs_rsdy_r 
+                        = ((vlSelfRef.svo_traversal__DOT__cam_fwd_y 
+                            + vlSelfRef.svo_traversal__DOT____VlemCall_8__qmul) 
+                           - vlSelfRef.svo_traversal__DOT____VlemCall_9__qmul);
+                    vlSelfRef.svo_traversal__DOT__rs_rsdz_r 
+                        = ((vlSelfRef.svo_traversal__DOT__cam_fwd_z 
+                            + vlSelfRef.svo_traversal__DOT____VlemCall_10__qmul) 
+                           - vlSelfRef.svo_traversal__DOT____VlemCall_11__qmul);
+                } else {
+                    __Vfunc_svo_traversal__DOT__qmul__53__b 
+                        = vlSelfRef.svo_traversal__DOT__cam_scale;
+                    __Vfunc_svo_traversal__DOT__qmul__54__b 
+                        = vlSelfRef.svo_traversal__DOT__cam_scale;
+                    __Vfunc_svo_traversal__DOT__qmul__53__a 
+                        = (VL_EXTENDS_II(32,26, ((IData)(vlSelfRef.svo_traversal__DOT__px) 
+                                                 << 0x00000010U)) 
+                           - (IData)(0x00a00000U));
+                    __Vfunc_svo_traversal__DOT__qmul__54__a 
+                        = (VL_EXTENDS_II(32,25, ((IData)(vlSelfRef.svo_traversal__DOT__py) 
+                                                 << 0x00000010U)) 
+                           - (IData)(0x00780000U));
+                    __Vfunc_svo_traversal__DOT__qmul__53__p 
+                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__53__a), 
+                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__53__b));
+                    __Vfunc_svo_traversal__DOT__qmul__54__p 
+                        = VL_MULS_QQQ(64, VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__54__a), 
+                                      VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__54__b));
+                    __Vfunc_svo_traversal__DOT__qmul__53__Vfuncout 
+                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__53__p 
+                                   >> 0x10U));
+                    __Vfunc_svo_traversal__DOT__qmul__54__Vfuncout 
+                        = (IData)((__Vfunc_svo_traversal__DOT__qmul__54__p 
+                                   >> 0x10U));
+                    vlSelfRef.svo_traversal__DOT__rs_rsu_r 
+                        = __Vfunc_svo_traversal__DOT__qmul__53__Vfuncout;
+                    vlSelfRef.svo_traversal__DOT__rs_rsv_r 
+                        = __Vfunc_svo_traversal__DOT__qmul__54__Vfuncout;
+                }
+            }
         } else {
             vlSelfRef.svo_traversal__DOT__busy = 0U;
             if (vlSelfRef.svo_traversal__DOT__start) {
                 vlSelfRef.svo_traversal__DOT__busy = 1U;
                 __Vdly__svo_traversal__DOT__px = 0U;
                 __Vdly__svo_traversal__DOT__py = 0U;
+                __Vdly__svo_traversal__DOT__sp = 0U;
+                __Vdly__svo_traversal__DOT__rs_wait = 0U;
+                __Vdly__svo_traversal__DOT__node_half = 0x20U;
                 __Vdly__svo_traversal__DOT__state = 1U;
             }
         }
     }
-    vlSelfRef.svo_traversal__DOT__state = __Vdly__svo_traversal__DOT__state;
-    vlSelfRef.svo_traversal__DOT__px = __Vdly__svo_traversal__DOT__px;
-    vlSelfRef.svo_traversal__DOT__py = __Vdly__svo_traversal__DOT__py;
-    vlSelfRef.svo_traversal__DOT__sp = __Vdly__svo_traversal__DOT__sp;
+    vlSelfRef.svo_traversal__DOT__post_pop = __Vdly__svo_traversal__DOT__post_pop;
     vlSelfRef.svo_traversal__DOT__node_idx = __Vdly__svo_traversal__DOT__node_idx;
+    vlSelfRef.svo_traversal__DOT__dt_x = __Vdly__svo_traversal__DOT__dt_x;
+    vlSelfRef.svo_traversal__DOT__dt_y = __Vdly__svo_traversal__DOT__dt_y;
+    vlSelfRef.svo_traversal__DOT__dt_z = __Vdly__svo_traversal__DOT__dt_z;
+    vlSelfRef.svo_traversal__DOT__r_bitmask = __Vdly__svo_traversal__DOT__r_bitmask;
+    vlSelfRef.svo_traversal__DOT__t_max = __Vdly__svo_traversal__DOT__t_max;
     vlSelfRef.svo_traversal__DOT__t_next_x = __Vdly__svo_traversal__DOT__t_next_x;
     vlSelfRef.svo_traversal__DOT__t_next_y = __Vdly__svo_traversal__DOT__t_next_y;
     vlSelfRef.svo_traversal__DOT__t_next_z = __Vdly__svo_traversal__DOT__t_next_z;
     vlSelfRef.svo_traversal__DOT__cx = __Vdly__svo_traversal__DOT__cx;
     vlSelfRef.svo_traversal__DOT__cy = __Vdly__svo_traversal__DOT__cy;
     vlSelfRef.svo_traversal__DOT__cz = __Vdly__svo_traversal__DOT__cz;
-    vlSelfRef.svo_traversal__DOT__node_half = __Vdly__svo_traversal__DOT__node_half;
-    vlSelfRef.svo_traversal__DOT__node_origin_x = __Vdly__svo_traversal__DOT__node_origin_x;
-    vlSelfRef.svo_traversal__DOT__node_origin_y = __Vdly__svo_traversal__DOT__node_origin_y;
-    vlSelfRef.svo_traversal__DOT__node_origin_z = __Vdly__svo_traversal__DOT__node_origin_z;
-    vlSelfRef.svo_traversal__DOT__r_bitmask = __Vdly__svo_traversal__DOT__r_bitmask;
     vlSelfRef.svo_traversal__DOT__bram_field = __Vdly__svo_traversal__DOT__bram_field;
     if (__VdlySet__svo_traversal__DOT__stk_node_idx__v0) {
         vlSelfRef.svo_traversal__DOT__stk_node_idx[__VdlyDim0__svo_traversal__DOT__stk_node_idx__v0] 
             = __VdlyVal__svo_traversal__DOT__stk_node_idx__v0;
     }
-    vlSelfRef.svo_traversal__DOT__t_min = ((__Vdly__svo_traversal__DOT__t_min 
-                                            & __VdlyMask__svo_traversal__DOT__t_min) 
-                                           | (vlSelfRef.svo_traversal__DOT__t_min 
-                                              & (~ __VdlyMask__svo_traversal__DOT__t_min)));
-    __VdlyMask__svo_traversal__DOT__t_min = 0U;
+    if (__VdlySet__svo_traversal__DOT__stk_bitmask__v0) {
+        vlSelfRef.svo_traversal__DOT__stk_bitmask[__VdlyDim0__svo_traversal__DOT__stk_bitmask__v0] 
+            = __VdlyVal__svo_traversal__DOT__stk_bitmask__v0;
+    }
     if (__VdlySet__svo_traversal__DOT__stk_t_min__v0) {
         vlSelfRef.svo_traversal__DOT__stk_t_min[__VdlyDim0__svo_traversal__DOT__stk_t_min__v0] 
             = __VdlyVal__svo_traversal__DOT__stk_t_min__v0;
     }
-    vlSelfRef.svo_traversal__DOT__t_max = ((__Vdly__svo_traversal__DOT__t_max 
-                                            & __VdlyMask__svo_traversal__DOT__t_max) 
-                                           | (vlSelfRef.svo_traversal__DOT__t_max 
-                                              & (~ __VdlyMask__svo_traversal__DOT__t_max)));
-    __VdlyMask__svo_traversal__DOT__t_max = 0U;
     if (__VdlySet__svo_traversal__DOT__stk_t_max__v0) {
         vlSelfRef.svo_traversal__DOT__stk_t_max[__VdlyDim0__svo_traversal__DOT__stk_t_max__v0] 
             = __VdlyVal__svo_traversal__DOT__stk_t_max__v0;
@@ -2184,10 +2414,6 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
         vlSelfRef.svo_traversal__DOT__stk_cz[__VdlyDim0__svo_traversal__DOT__stk_cz__v0] 
             = __VdlyVal__svo_traversal__DOT__stk_cz__v0;
     }
-    if (__VdlySet__svo_traversal__DOT__stk_node_half__v0) {
-        vlSelfRef.svo_traversal__DOT__stk_node_half[__VdlyDim0__svo_traversal__DOT__stk_node_half__v0] 
-            = __VdlyVal__svo_traversal__DOT__stk_node_half__v0;
-    }
     if (__VdlySet__svo_traversal__DOT__stk_orig_x__v0) {
         vlSelfRef.svo_traversal__DOT__stk_orig_x[__VdlyDim0__svo_traversal__DOT__stk_orig_x__v0] 
             = __VdlyVal__svo_traversal__DOT__stk_orig_x__v0;
@@ -2200,6 +2426,10 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
         vlSelfRef.svo_traversal__DOT__stk_orig_z[__VdlyDim0__svo_traversal__DOT__stk_orig_z__v0] 
             = __VdlyVal__svo_traversal__DOT__stk_orig_z__v0;
     }
+    vlSelfRef.svo_traversal__DOT__px = __Vdly__svo_traversal__DOT__px;
+    vlSelfRef.svo_traversal__DOT__py = __Vdly__svo_traversal__DOT__py;
+    vlSelfRef.svo_traversal__DOT__rs_wait = __Vdly__svo_traversal__DOT__rs_wait;
+    vlSelfRef.svo_traversal__DOT__state = __Vdly__svo_traversal__DOT__state;
     if (__VdlySet__svo_traversal__DOT__r_block__v0) {
         vlSelfRef.svo_traversal__DOT__r_block[4U] = __VdlyVal__svo_traversal__DOT__r_block__v0;
         vlSelfRef.svo_traversal__DOT__r_block[5U] = __VdlyVal__svo_traversal__DOT__r_block__v1;
@@ -2208,35 +2438,288 @@ void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     }
     if (__VdlySet__svo_traversal__DOT__r_block__v4) {
         vlSelfRef.svo_traversal__DOT__r_block[0U] = __VdlyVal__svo_traversal__DOT__r_block__v4;
+    }
+    if (__VdlySet__svo_traversal__DOT__r_block__v5) {
         vlSelfRef.svo_traversal__DOT__r_block[1U] = __VdlyVal__svo_traversal__DOT__r_block__v5;
         vlSelfRef.svo_traversal__DOT__r_block[2U] = __VdlyVal__svo_traversal__DOT__r_block__v6;
         vlSelfRef.svo_traversal__DOT__r_block[3U] = __VdlyVal__svo_traversal__DOT__r_block__v7;
     }
     if (__VdlySet__svo_traversal__DOT__r_child__v0) {
         vlSelfRef.svo_traversal__DOT__r_child[6U] = __VdlyVal__svo_traversal__DOT__r_child__v0;
+    }
+    if (__VdlySet__svo_traversal__DOT__r_child__v1) {
         vlSelfRef.svo_traversal__DOT__r_child[7U] = __VdlyVal__svo_traversal__DOT__r_child__v1;
     }
     if (__VdlySet__svo_traversal__DOT__r_child__v2) {
         vlSelfRef.svo_traversal__DOT__r_child[4U] = __VdlyVal__svo_traversal__DOT__r_child__v2;
+    }
+    if (__VdlySet__svo_traversal__DOT__r_child__v3) {
         vlSelfRef.svo_traversal__DOT__r_child[5U] = __VdlyVal__svo_traversal__DOT__r_child__v3;
     }
     if (__VdlySet__svo_traversal__DOT__r_child__v4) {
         vlSelfRef.svo_traversal__DOT__r_child[2U] = __VdlyVal__svo_traversal__DOT__r_child__v4;
+    }
+    if (__VdlySet__svo_traversal__DOT__r_child__v5) {
         vlSelfRef.svo_traversal__DOT__r_child[3U] = __VdlyVal__svo_traversal__DOT__r_child__v5;
     }
     if (__VdlySet__svo_traversal__DOT__r_child__v6) {
         vlSelfRef.svo_traversal__DOT__r_child[0U] = __VdlyVal__svo_traversal__DOT__r_child__v6;
+    }
+    if (__VdlySet__svo_traversal__DOT__r_child__v7) {
         vlSelfRef.svo_traversal__DOT__r_child[1U] = __VdlyVal__svo_traversal__DOT__r_child__v7;
     }
+    vlSelfRef.svo_traversal__DOT__node_origin_x = __Vdly__svo_traversal__DOT__node_origin_x;
+    vlSelfRef.svo_traversal__DOT__node_origin_y = __Vdly__svo_traversal__DOT__node_origin_y;
+    vlSelfRef.svo_traversal__DOT__node_origin_z = __Vdly__svo_traversal__DOT__node_origin_z;
+    vlSelfRef.svo_traversal__DOT__sp = __Vdly__svo_traversal__DOT__sp;
+    if (__VdlySet__svo_traversal__DOT__stk_node_half__v0) {
+        vlSelfRef.svo_traversal__DOT__stk_node_half[__VdlyDim0__svo_traversal__DOT__stk_node_half__v0] 
+            = __VdlyVal__svo_traversal__DOT__stk_node_half__v0;
+    }
+    vlSelfRef.svo_traversal__DOT__t_min = __Vdly__svo_traversal__DOT__t_min;
+    vlSelfRef.svo_traversal__DOT__node_half = __Vdly__svo_traversal__DOT__node_half;
     vlSelfRef.busy = vlSelfRef.svo_traversal__DOT__busy;
     vlSelfRef.frame_done = vlSelfRef.svo_traversal__DOT__frame_done;
     vlSelfRef.any_hit = vlSelfRef.svo_traversal__DOT__any_hit;
     vlSelfRef.fb_wr_en = vlSelfRef.svo_traversal__DOT__fb_wr_en;
     vlSelfRef.svo_rd_en = vlSelfRef.svo_traversal__DOT__svo_rd_en;
     vlSelfRef.shade_start = vlSelfRef.svo_traversal__DOT__shade_start;
-    vlSelfRef.fb_wr_addr = vlSelfRef.svo_traversal__DOT__fb_wr_addr;
-    vlSelfRef.fb_wr_data = vlSelfRef.svo_traversal__DOT__fb_wr_data;
+    vlSelfRef.axis_tdata = vlSelfRef.svo_traversal__DOT__axis_tdata;
+    vlSelfRef.axis_tlast = vlSelfRef.svo_traversal__DOT__axis_tlast;
+    vlSelfRef.axis_tuser = vlSelfRef.svo_traversal__DOT__axis_tuser;
     vlSelfRef.svo_rd_addr = vlSelfRef.svo_traversal__DOT__svo_rd_addr;
+    vlSelfRef.svo_traversal__DOT__dbg_px = vlSelfRef.svo_traversal__DOT__px;
+    vlSelfRef.svo_traversal__DOT__dbg_py = vlSelfRef.svo_traversal__DOT__py;
+    vlSelfRef.svo_traversal__DOT__dbg_rs_wait = vlSelfRef.svo_traversal__DOT__rs_wait;
+    vlSelfRef.svo_traversal__DOT__state_raw = vlSelfRef.svo_traversal__DOT__state;
+    vlSelfRef.axis_tvalid = vlSelfRef.svo_traversal__DOT__axis_tvalid;
+    vlSelfRef.svo_traversal__DOT__dbg_tvalid = vlSelfRef.svo_traversal__DOT__axis_tvalid;
+    vlSelfRef.svo_traversal__DOT__bw_abs_ix_c = ((vlSelfRef.svo_traversal__DOT__inv_x 
+                                                  >> 0x0000001fU)
+                                                  ? 
+                                                 (- vlSelfRef.svo_traversal__DOT__inv_x)
+                                                  : vlSelfRef.svo_traversal__DOT__inv_x);
+    vlSelfRef.svo_traversal__DOT__bw_abs_iy_c = ((vlSelfRef.svo_traversal__DOT__inv_y 
+                                                  >> 0x0000001fU)
+                                                  ? 
+                                                 (- vlSelfRef.svo_traversal__DOT__inv_y)
+                                                  : vlSelfRef.svo_traversal__DOT__inv_y);
+    vlSelfRef.svo_traversal__DOT__bw_abs_iz_c = ((vlSelfRef.svo_traversal__DOT__inv_z 
+                                                  >> 0x0000001fU)
+                                                  ? 
+                                                 (- vlSelfRef.svo_traversal__DOT__inv_z)
+                                                  : vlSelfRef.svo_traversal__DOT__inv_z);
+    vlSelfRef.svo_traversal__DOT__bw_ex_c = (vlSelfRef.svo_traversal__DOT__ro_x 
+                                             + (IData)(
+                                                       (VL_MULS_QQQ(64, 
+                                                                    VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__t_min), 
+                                                                    VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__rd_x)) 
+                                                        >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__bw_ey_c = (vlSelfRef.svo_traversal__DOT__ro_y 
+                                             + (IData)(
+                                                       (VL_MULS_QQQ(64, 
+                                                                    VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__t_min), 
+                                                                    VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__rd_y)) 
+                                                        >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__bw_ez_c = (vlSelfRef.svo_traversal__DOT__ro_z 
+                                             + (IData)(
+                                                       (VL_MULS_QQQ(64, 
+                                                                    VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__t_min), 
+                                                                    VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__rd_z)) 
+                                                        >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__bw_nh_c = VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_half), 0x00000010U);
+    vlSelfRef.dbg_px = vlSelfRef.svo_traversal__DOT__dbg_px;
+    vlSelfRef.dbg_py = vlSelfRef.svo_traversal__DOT__dbg_py;
+    vlSelfRef.dbg_rs_wait = vlSelfRef.svo_traversal__DOT__dbg_rs_wait;
+    vlSelfRef.svo_traversal__DOT__dbg_state = vlSelfRef.svo_traversal__DOT__state_raw;
+    vlSelfRef.dbg_tvalid = vlSelfRef.svo_traversal__DOT__dbg_tvalid;
+    __Vfunc_svo_traversal__DOT__qmul__9__b = vlSelfRef.svo_traversal__DOT__bw_abs_ix_c;
+    __Vfunc_svo_traversal__DOT__qmul__9__a = (((0x0bU 
+                                                >= 
+                                                (0x0000000fU 
+                                                 & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
+                                                    - (IData)(1U))))
+                                                ? vlSelfRef.svo_traversal__DOT__stk_node_half
+                                               [(0x0000000fU 
+                                                 & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
+                                                    - (IData)(1U)))]
+                                                : 0U) 
+                                              << 0x00000010U);
+    __Vfunc_svo_traversal__DOT__qmul__9__p = VL_MULS_QQQ(64, 
+                                                         VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__9__a), 
+                                                         VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__9__b));
+    __Vfunc_svo_traversal__DOT__qmul__9__Vfuncout = (IData)(
+                                                            (__Vfunc_svo_traversal__DOT__qmul__9__p 
+                                                             >> 0x10U));
+    vlSelfRef.svo_traversal__DOT__dt_x_pop_c = __Vfunc_svo_traversal__DOT__qmul__9__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__10__b = vlSelfRef.svo_traversal__DOT__bw_abs_iy_c;
+    __Vfunc_svo_traversal__DOT__qmul__10__a = (((0x0bU 
+                                                 >= 
+                                                 (0x0000000fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
+                                                     - (IData)(1U))))
+                                                 ? vlSelfRef.svo_traversal__DOT__stk_node_half
+                                                [(0x0000000fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
+                                                     - (IData)(1U)))]
+                                                 : 0U) 
+                                               << 0x00000010U);
+    __Vfunc_svo_traversal__DOT__qmul__10__p = VL_MULS_QQQ(64, 
+                                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__10__a), 
+                                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__10__b));
+    __Vfunc_svo_traversal__DOT__qmul__10__Vfuncout 
+        = (IData)((__Vfunc_svo_traversal__DOT__qmul__10__p 
+                   >> 0x10U));
+    vlSelfRef.svo_traversal__DOT__dt_y_pop_c = __Vfunc_svo_traversal__DOT__qmul__10__Vfuncout;
+    __Vfunc_svo_traversal__DOT__qmul__11__b = vlSelfRef.svo_traversal__DOT__bw_abs_iz_c;
+    __Vfunc_svo_traversal__DOT__qmul__11__a = (((0x0bU 
+                                                 >= 
+                                                 (0x0000000fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
+                                                     - (IData)(1U))))
+                                                 ? vlSelfRef.svo_traversal__DOT__stk_node_half
+                                                [(0x0000000fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__sp) 
+                                                     - (IData)(1U)))]
+                                                 : 0U) 
+                                               << 0x00000010U);
+    __Vfunc_svo_traversal__DOT__qmul__11__p = VL_MULS_QQQ(64, 
+                                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__11__a), 
+                                                          VL_EXTENDS_QI(64,32, __Vfunc_svo_traversal__DOT__qmul__11__b));
+    __Vfunc_svo_traversal__DOT__qmul__11__Vfuncout 
+        = (IData)((__Vfunc_svo_traversal__DOT__qmul__11__p 
+                   >> 0x10U));
+    vlSelfRef.svo_traversal__DOT__dt_z_pop_c = __Vfunc_svo_traversal__DOT__qmul__11__Vfuncout;
+    vlSelfRef.svo_traversal__DOT__dt_x_bw_c = (IData)(
+                                                      (VL_MULS_QQQ(64, 
+                                                                   VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_nh_c), 
+                                                                   VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_abs_ix_c)) 
+                                                       >> 0x00000010U));
+    vlSelfRef.svo_traversal__DOT__dt_y_bw_c = (IData)(
+                                                      (VL_MULS_QQQ(64, 
+                                                                   VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_nh_c), 
+                                                                   VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_abs_iy_c)) 
+                                                       >> 0x00000010U));
+    vlSelfRef.svo_traversal__DOT__dt_z_bw_c = (IData)(
+                                                      (VL_MULS_QQQ(64, 
+                                                                   VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_nh_c), 
+                                                                   VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_abs_iz_c)) 
+                                                       >> 0x00000010U));
+    vlSelfRef.svo_traversal__DOT__bw_icx_c = (VL_GTS_III(32, 0U, vlSelfRef.svo_traversal__DOT__bw_ex_c)
+                                               ? 0U
+                                               : (0x0000007fU 
+                                                  & (vlSelfRef.svo_traversal__DOT__bw_ex_c 
+                                                     >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__bw_icx_c = (((IData)(vlSelfRef.svo_traversal__DOT__bw_icx_c) 
+                                               >= (IData)(vlSelfRef.svo_traversal__DOT__node_origin_x))
+                                               ? (0x0000007fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__bw_icx_c) 
+                                                     - (IData)(vlSelfRef.svo_traversal__DOT__node_origin_x)))
+                                               : 0U);
+    vlSelfRef.svo_traversal__DOT__bw_ex_rel_c = (vlSelfRef.svo_traversal__DOT__bw_ex_c 
+                                                 - 
+                                                 VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_origin_x), 0x00000010U));
+    vlSelfRef.svo_traversal__DOT__bw_dist_x_c = ((4U 
+                                                  & (IData)(vlSelfRef.svo_traversal__DOT__step_x))
+                                                  ? 
+                                                 (((IData)(vlSelfRef.svo_traversal__DOT__bw_icx_c) 
+                                                   >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                                   ? 
+                                                  (vlSelfRef.svo_traversal__DOT__bw_ex_rel_c 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_nh_c)
+                                                   : vlSelfRef.svo_traversal__DOT__bw_ex_rel_c)
+                                                  : 
+                                                 (((IData)(vlSelfRef.svo_traversal__DOT__bw_icx_c) 
+                                                   >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                                   ? 
+                                                  (VL_SHIFTL_III(32,32,32, vlSelfRef.svo_traversal__DOT__bw_nh_c, 1U) 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_ex_rel_c)
+                                                   : 
+                                                  (vlSelfRef.svo_traversal__DOT__bw_nh_c 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_ex_rel_c)));
+    vlSelfRef.svo_traversal__DOT__bw_icy_c = (VL_GTS_III(32, 0U, vlSelfRef.svo_traversal__DOT__bw_ey_c)
+                                               ? 0U
+                                               : (0x0000007fU 
+                                                  & (vlSelfRef.svo_traversal__DOT__bw_ey_c 
+                                                     >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__bw_icy_c = (((IData)(vlSelfRef.svo_traversal__DOT__bw_icy_c) 
+                                               >= (IData)(vlSelfRef.svo_traversal__DOT__node_origin_y))
+                                               ? (0x0000007fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__bw_icy_c) 
+                                                     - (IData)(vlSelfRef.svo_traversal__DOT__node_origin_y)))
+                                               : 0U);
+    vlSelfRef.svo_traversal__DOT__bw_ey_rel_c = (vlSelfRef.svo_traversal__DOT__bw_ey_c 
+                                                 - 
+                                                 VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_origin_y), 0x00000010U));
+    vlSelfRef.svo_traversal__DOT__bw_dist_y_c = ((4U 
+                                                  & (IData)(vlSelfRef.svo_traversal__DOT__step_y))
+                                                  ? 
+                                                 (((IData)(vlSelfRef.svo_traversal__DOT__bw_icy_c) 
+                                                   >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                                   ? 
+                                                  (vlSelfRef.svo_traversal__DOT__bw_ey_rel_c 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_nh_c)
+                                                   : vlSelfRef.svo_traversal__DOT__bw_ey_rel_c)
+                                                  : 
+                                                 (((IData)(vlSelfRef.svo_traversal__DOT__bw_icy_c) 
+                                                   >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                                   ? 
+                                                  (VL_SHIFTL_III(32,32,32, vlSelfRef.svo_traversal__DOT__bw_nh_c, 1U) 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_ey_rel_c)
+                                                   : 
+                                                  (vlSelfRef.svo_traversal__DOT__bw_nh_c 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_ey_rel_c)));
+    vlSelfRef.svo_traversal__DOT__bw_icz_c = (VL_GTS_III(32, 0U, vlSelfRef.svo_traversal__DOT__bw_ez_c)
+                                               ? 0U
+                                               : (0x0000007fU 
+                                                  & (vlSelfRef.svo_traversal__DOT__bw_ez_c 
+                                                     >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__bw_icz_c = (((IData)(vlSelfRef.svo_traversal__DOT__bw_icz_c) 
+                                               >= (IData)(vlSelfRef.svo_traversal__DOT__node_origin_z))
+                                               ? (0x0000007fU 
+                                                  & ((IData)(vlSelfRef.svo_traversal__DOT__bw_icz_c) 
+                                                     - (IData)(vlSelfRef.svo_traversal__DOT__node_origin_z)))
+                                               : 0U);
+    vlSelfRef.svo_traversal__DOT__bw_ez_rel_c = (vlSelfRef.svo_traversal__DOT__bw_ez_c 
+                                                 - 
+                                                 VL_SHIFTL_III(32,32,32, (IData)(vlSelfRef.svo_traversal__DOT__node_origin_z), 0x00000010U));
+    vlSelfRef.svo_traversal__DOT__bw_dist_z_c = ((4U 
+                                                  & (IData)(vlSelfRef.svo_traversal__DOT__step_z))
+                                                  ? 
+                                                 (((IData)(vlSelfRef.svo_traversal__DOT__bw_icz_c) 
+                                                   >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                                   ? 
+                                                  (vlSelfRef.svo_traversal__DOT__bw_ez_rel_c 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_nh_c)
+                                                   : vlSelfRef.svo_traversal__DOT__bw_ez_rel_c)
+                                                  : 
+                                                 (((IData)(vlSelfRef.svo_traversal__DOT__bw_icz_c) 
+                                                   >= (IData)(vlSelfRef.svo_traversal__DOT__node_half))
+                                                   ? 
+                                                  (VL_SHIFTL_III(32,32,32, vlSelfRef.svo_traversal__DOT__bw_nh_c, 1U) 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_ez_rel_c)
+                                                   : 
+                                                  (vlSelfRef.svo_traversal__DOT__bw_nh_c 
+                                                   - vlSelfRef.svo_traversal__DOT__bw_ez_rel_c)));
+    vlSelfRef.dbg_state = vlSelfRef.svo_traversal__DOT__dbg_state;
+    vlSelfRef.svo_traversal__DOT__t_next_x_bw_c = (vlSelfRef.svo_traversal__DOT__t_min 
+                                                   + (IData)(
+                                                             (VL_MULS_QQQ(64, 
+                                                                          VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_abs_ix_c), 
+                                                                          VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_dist_x_c)) 
+                                                              >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__t_next_y_bw_c = (vlSelfRef.svo_traversal__DOT__t_min 
+                                                   + (IData)(
+                                                             (VL_MULS_QQQ(64, 
+                                                                          VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_abs_iy_c), 
+                                                                          VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_dist_y_c)) 
+                                                              >> 0x00000010U)));
+    vlSelfRef.svo_traversal__DOT__t_next_z_bw_c = (vlSelfRef.svo_traversal__DOT__t_min 
+                                                   + (IData)(
+                                                             (VL_MULS_QQQ(64, 
+                                                                          VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_abs_iz_c), 
+                                                                          VL_EXTENDS_QI(64,32, vlSelfRef.svo_traversal__DOT__bw_dist_z_c)) 
+                                                              >> 0x00000010U)));
 }
 
 void Vtop___024root___eval_nba(Vtop___024root* vlSelf) {
@@ -2370,6 +2853,9 @@ void Vtop___024root___eval_debug_assertions(Vtop___024root* vlSelf) {
     }
     if (VL_UNLIKELY(((vlSelfRef.sky_color & 0xff000000U)))) {
         Verilated::overWidthError("sky_color");
+    }
+    if (VL_UNLIKELY(((vlSelfRef.axis_tready & 0xfeU)))) {
+        Verilated::overWidthError("axis_tready");
     }
     if (VL_UNLIKELY(((vlSelfRef.shade_done & 0xfeU)))) {
         Verilated::overWidthError("shade_done");

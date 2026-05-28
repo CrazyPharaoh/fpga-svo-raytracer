@@ -14,6 +14,10 @@ Vtop::Vtop(VerilatedContext* _vcontextp__, const char* _vcname__)
     , start{vlSymsp->TOP.start}
     , svo_rd_en{vlSymsp->TOP.svo_rd_en}
     , fb_wr_en{vlSymsp->TOP.fb_wr_en}
+    , axis_tvalid{vlSymsp->TOP.axis_tvalid}
+    , axis_tlast{vlSymsp->TOP.axis_tlast}
+    , axis_tuser{vlSymsp->TOP.axis_tuser}
+    , axis_tready{vlSymsp->TOP.axis_tready}
     , shade_start{vlSymsp->TOP.shade_start}
     , shade_is_miss{vlSymsp->TOP.shade_is_miss}
     , shade_hit_face{vlSymsp->TOP.shade_hit_face}
@@ -23,7 +27,13 @@ Vtop::Vtop(VerilatedContext* _vcontextp__, const char* _vcname__)
     , busy{vlSymsp->TOP.busy}
     , frame_done{vlSymsp->TOP.frame_done}
     , any_hit{vlSymsp->TOP.any_hit}
+    , dbg_state{vlSymsp->TOP.dbg_state}
+    , dbg_rs_wait{vlSymsp->TOP.dbg_rs_wait}
+    , dbg_py{vlSymsp->TOP.dbg_py}
+    , dbg_tvalid{vlSymsp->TOP.dbg_tvalid}
+    , dbg_tready{vlSymsp->TOP.dbg_tready}
     , svo_rd_addr{vlSymsp->TOP.svo_rd_addr}
+    , dbg_px{vlSymsp->TOP.dbg_px}
     , cam_pos_x{vlSymsp->TOP.cam_pos_x}
     , cam_pos_y{vlSymsp->TOP.cam_pos_y}
     , cam_pos_z{vlSymsp->TOP.cam_pos_z}
@@ -41,6 +51,7 @@ Vtop::Vtop(VerilatedContext* _vcontextp__, const char* _vcname__)
     , svo_rd_data{vlSymsp->TOP.svo_rd_data}
     , fb_wr_addr{vlSymsp->TOP.fb_wr_addr}
     , fb_wr_data{vlSymsp->TOP.fb_wr_data}
+    , axis_tdata{vlSymsp->TOP.axis_tdata}
     , shade_t_hit{vlSymsp->TOP.shade_t_hit}
     , shade_ray_dx{vlSymsp->TOP.shade_ray_dx}
     , shade_ray_dy{vlSymsp->TOP.shade_ray_dy}

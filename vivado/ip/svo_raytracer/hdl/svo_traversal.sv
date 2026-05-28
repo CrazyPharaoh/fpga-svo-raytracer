@@ -70,7 +70,7 @@ module svo_traversal #(
 
     // Debug: readable via AXI at run-time to diagnose hangs
     output logic [3:0]  dbg_state,    // current FSM state integer (S_WRITE_PIXEL=12)
-    output logic [3:0]  dbg_rs_wait,  // rs_wait counter (0-15); stuck≠advancing→hang
+    output logic [4:0]  dbg_rs_wait,  // pipeline stage counter (0-13 primary, 0-4 shadow)
     output logic [8:0]  dbg_px,       // current pixel X
     output logic [7:0]  dbg_py,       // current pixel Y
     output logic        dbg_tvalid,   // axis_tvalid: IP is outputting a pixel
@@ -88,26 +88,16 @@ module svo_traversal #(
         return p[47:16];
     endfunction
 
-    function automatic logic signed [31:0] qrecip(
-        input logic signed [31:0] x
-    );
-        logic signed [31:0] xabs, r, r2;
-        xabs = (x < 0) ? -x : x;
-        // Initial estimate chosen by magnitude so N-R converges within 3 iterations.
-        // Ray components are normalised so |x| ≤ 1 in practice.
-        if      (|xabs[31:16]) r = 32'h0001_0000;  // x ≥ 1.0      → r₀=1.0
-        else if (xabs[15])     r = 32'h0001_8000;  // x ∈ [0.5,1)  → r₀=1.5
-        else if (xabs[14])     r = 32'h0003_0000;  // x ∈ [0.25,0.5) → r₀=3.0
-        else if (xabs[13])     r = 32'h0006_0000;  // x ∈ [0.125,0.25) → r₀=6.0
-        else if (xabs[12])     r = 32'h000C_0000;  // x ∈ [0.0625,0.125) → r₀=12.0
-        else                   r = 32'h0018_0000;  // x < 0.0625    → r₀=24.0
-        // 2 N-R iterations: r ← r·(2 − x·r)
-        // 3 iterations caused a 140ns combinational chain (23 DSPs, 103 levels),
-        // violating the 110ns multicycle budget. With the 6-way initial estimate,
-        // 2 iterations give ≤0.4% error for |x|≥0.125, acceptable for DDA traversal.
-        r2 = qmul(xabs, r); r2 = 32'h0002_0000 - r2; r = qmul(r, r2);
-        r2 = qmul(xabs, r); r2 = 32'h0002_0000 - r2; r = qmul(r, r2);
-        return (x < 0) ? -r : r;
+    // qrecip is no longer used as a single-cycle combinational call.
+    // The pipelined S_RAY_SETUP spreads the two N-R iterations across
+    // registered stages; qrecip_r0 returns the initial estimate only.
+    function automatic logic signed [31:0] qrecip_r0(input logic signed [31:0] xabs);
+        if      (|xabs[31:16]) return 32'h0001_0000;
+        else if (xabs[15])     return 32'h0001_8000;
+        else if (xabs[14])     return 32'h0003_0000;
+        else if (xabs[13])     return 32'h0006_0000;
+        else if (xabs[12])     return 32'h000C_0000;
+        else                   return 32'h0018_0000;
     endfunction
 
     // -------------------------------------------------------------------------
@@ -150,7 +140,8 @@ module svo_traversal #(
     // -------------------------------------------------------------------------
     logic signed [31:0] ro_x, ro_y, ro_z;
     logic signed [31:0] rd_x, rd_y, rd_z;
-    logic signed [31:0] inv_x, inv_y, inv_z;
+    // keep prevents Vivado retiming these across the stage 13→0 pipeline boundary
+    (* keep = "true" *) logic signed [31:0] inv_x, inv_y, inv_z;
 
     // -------------------------------------------------------------------------
     // DDA registers
@@ -163,15 +154,39 @@ module svo_traversal #(
     logic [5:0] node_half;
     logic [5:0] node_origin_x, node_origin_y, node_origin_z;
 
-    logic signed [31:0] rs_tx0, rs_tx1, rs_ty0, rs_ty1, rs_tz0, rs_tz1, rs_world_q, rs_tmp;
-    logic signed [31:0] bw_ex, bw_ey, bw_ez, bw_abs_ix, bw_abs_iy, bw_abs_iz;
-    logic signed [31:0] bw_ex_rel, bw_ey_rel, bw_ez_rel;   // position within node (Q16.16)
-    logic signed [31:0] bw_dist_x, bw_dist_y, bw_dist_z;   // distance to next boundary
-    logic signed [31:0] bw_nh;                               // node_half in Q16.16
-    logic [6:0]         bw_icx, bw_icy, bw_icz;
+    // S_ROOT_SLAB pipeline registers (5 stages via rs_wait 0→4)
+    // keep prevents Vivado retiming these across the stage 0→1 pipeline boundary
+    (* keep = "true" *) logic signed [31:0] rs_tx0, rs_tx1, rs_ty0, rs_ty1, rs_tz0, rs_tz1; // stage 0: qmul results
+    logic signed [31:0] rs_min_x, rs_max_x, rs_min_y, rs_max_y, rs_min_z, rs_max_z; // stage 1: sorted pairs
+    logic signed [31:0] rs_tmin_xy, rs_tmax_xy; // stage 2: partial XY max/min
+    logic [6:0]         bw_icx_c, bw_icy_c, bw_icz_c;
     logic [1:0]         em_face;
     logic               em_fsign;
-    logic signed [31:0] rsu, rsv, rsdx, rsdy, rsdz, rslen2, rsinv_len, rsndx, rsndy, rsndz;
+
+    // Pre-registered negated/offset ro values for S_ROOT_SLAB stage 0 (avoids CARRY4 before DSP)
+    logic signed [31:0] ro_neg_x_r, ro_neg_y_r, ro_neg_z_r;
+    logic signed [31:0] ro_ws_x_r,  ro_ws_y_r,  ro_ws_z_r;
+
+    // Ray-setup pipeline registers.
+    // Primary mode uses stages 0-13 (14 cycles).  Shadow mode uses stages 0-4 (5 cycles).
+    // Each stage performs at most one dependent qmul chain, keeping every path < 10 ns.
+    // Naming convention: rs_<var>_r = registered output of a pipeline stage.
+    logic signed [31:0] rs_rsu_r,    rs_rsv_r;           // stage 0: pixel offsets
+    logic signed [31:0] rs_rsdx_r,   rs_rsdy_r,  rs_rsdz_r;  // stage 1: raw ray dir
+    logic signed [31:0] rs_rslen2_r;                     // stage 2: |raw dir|²
+    logic signed [31:0] rs_rilinv_r;                     // stage 3: first inv_len estimate
+    logic signed [31:0] rs_rilsq_r;                      // stage 4: rilinv²
+    logic signed [31:0] rs_riltmp_r;                     // stage 5: rslen2 · rilinv²
+    logic signed [31:0] rs_rilsub_r;                     // stage 6: 1.5 − 0.5·riltmp
+    logic signed [31:0] rs_rilinv2_r;                    // stage 7: refined inv_len
+    logic signed [31:0] rs_ndx_r,    rs_ndy_r,   rs_ndz_r;   // stage 8: normalised dir
+    logic signed [31:0] rs_ax_r,     rs_ay_r,    rs_az_r;    // stage 9: |nd|
+    logic signed [31:0] rs_r0x_r,    rs_r0y_r,   rs_r0z_r;   // stage 9: initial reciprocal
+    logic signed [31:0] rs_rma_x_r,  rs_rma_y_r, rs_rma_z_r; // stage 10: xabs·r0
+    logic signed [31:0] rs_r1x_r,    rs_r1y_r,   rs_r1z_r;   // stage 11: after N-R iter 1
+    logic signed [31:0] rs_rmb_x_r,  rs_rmb_y_r, rs_rmb_z_r; // stage 13 primary / stage 4 shadow: xabs·r1
+    logic signed [31:0] rs_sub1x_r, rs_sub1y_r, rs_sub1z_r;   // stage 11 primary / stage 2 shadow: 2 − rma
+    logic signed [31:0] rs_sub2x_r, rs_sub2y_r, rs_sub2z_r;   // stage 14 primary / stage 5 shadow: 2 − rmb
 
     // -------------------------------------------------------------------------
     // SVO node registers
@@ -212,14 +227,95 @@ module svo_traversal #(
 
     logic [23:0] pixel_color;
 
-    // Wait counter for S_RAY_SETUP: holds the state for 11 cycles so the
-    // 14-DSP48 combinational chain (~79 ns) settles before registers capture.
-    // Matches the set_multicycle_path -setup 16 constraint in the XDC.
-    logic [3:0] rs_wait;
+    // Pipeline stage counter for S_RAY_SETUP.
+    // Primary mode: stages 0-13 (14 cycles). Shadow mode: stages 0-4 (5 cycles).
+    // No multicycle path constraint required — every stage fits in one 10 ns cycle.
+    logic [4:0] rs_wait;
 
     // Set when S_POP_STACK redirects through S_ENTER_NODE to reload r_child[]/r_block[].
     // Suppresses the cx/cy/cz and t_next recomputation in S_BRAM_WAIT field=6.
     logic post_pop;
+
+    // -------------------------------------------------------------------------
+    // Combinational pre-computations — DSP runs unconditionally (CE='1').
+    // Each qmul result is captured only on the relevant FSM cycle.
+    // -------------------------------------------------------------------------
+
+    // Ray entry point: ro + t_min * rd  (used by both S_BRAM_WAIT and S_SOLID)
+    // Free-running pipeline registers for bw_qmul: breaks DSP→CARRY4 chain on bw_e*_c.
+    // Consumers and timing guarantees:
+    //   S_BRAM_WAIT field=6: t_min last written in S_ROOT_SLAB stage 3; field=6 is
+    //     10+ cycles later — bw_qmul_*_r has settled with correct t_min for 9+ cycles.
+    //   S_SOLID: t_min updated in S_EMPTY; S_CHECK_CHILD (1 cycle) provides the
+    //     required gap — bw_qmul_*_r holds qmul(new_t_min, rd_*) by the time S_SOLID fires.
+    //     WARNING: do not add a direct S_EMPTY→S_SOLID path; S_CHECK_CHILD gap is required.
+    logic signed [31:0] bw_ex_c, bw_ey_c, bw_ez_c;
+    logic signed [31:0] bw_qmul_x_r, bw_qmul_y_r, bw_qmul_z_r;
+    always_ff @(posedge clk) begin
+        bw_qmul_x_r <= qmul(t_min, rd_x);
+        bw_qmul_y_r <= qmul(t_min, rd_y);
+        bw_qmul_z_r <= qmul(t_min, rd_z);
+    end
+    assign bw_ex_c = ro_x + bw_qmul_x_r;
+    assign bw_ey_c = ro_y + bw_qmul_y_r;
+    assign bw_ez_c = ro_z + bw_qmul_z_r;
+
+    // |inv_dir| per axis (S_BRAM_WAIT and S_POP_STACK)
+    logic signed [31:0] bw_abs_ix_c, bw_abs_iy_c, bw_abs_iz_c;
+    assign bw_abs_ix_c = inv_x[31] ? -inv_x : inv_x;
+    assign bw_abs_iy_c = inv_y[31] ? -inv_y : inv_y;
+    assign bw_abs_iz_c = inv_z[31] ? -inv_z : inv_z;
+
+    // node_half in Q16.16 (S_BRAM_WAIT)
+    logic signed [31:0] bw_nh_c;
+    assign bw_nh_c = $signed(32'(node_half)) << 16;
+
+    // dt = node_half * |inv|  (S_BRAM_WAIT)
+    logic signed [31:0] dt_x_bw_c, dt_y_bw_c, dt_z_bw_c;
+    assign dt_x_bw_c = qmul(bw_nh_c, bw_abs_ix_c);
+    assign dt_y_bw_c = qmul(bw_nh_c, bw_abs_iy_c);
+    assign dt_z_bw_c = qmul(bw_nh_c, bw_abs_iz_c);
+
+    // Entry-point child index, relative position, and distance to next boundary
+    logic signed [31:0] bw_ex_rel_c, bw_ey_rel_c, bw_ez_rel_c;
+    logic signed [31:0] bw_dist_x_c, bw_dist_y_c, bw_dist_z_c;
+
+    always_comb begin
+        bw_icx_c = ($signed(bw_ex_c) < 0) ? 7'd0 : bw_ex_c[22:16];
+        bw_icy_c = ($signed(bw_ey_c) < 0) ? 7'd0 : bw_ey_c[22:16];
+        bw_icz_c = ($signed(bw_ez_c) < 0) ? 7'd0 : bw_ez_c[22:16];
+        // Clamp on underflow: rounding can land bw_ic* just below node origin
+        bw_icx_c = (bw_icx_c >= node_origin_x) ? bw_icx_c - node_origin_x : 7'd0;
+        bw_icy_c = (bw_icy_c >= node_origin_y) ? bw_icy_c - node_origin_y : 7'd0;
+        bw_icz_c = (bw_icz_c >= node_origin_z) ? bw_icz_c - node_origin_z : 7'd0;
+        bw_ex_rel_c = bw_ex_c - ($signed(32'(node_origin_x)) << 16);
+        bw_ey_rel_c = bw_ey_c - ($signed(32'(node_origin_y)) << 16);
+        bw_ez_rel_c = bw_ez_c - ($signed(32'(node_origin_z)) << 16);
+        if (!step_x[2])
+            bw_dist_x_c = (bw_icx_c >= node_half) ? ((bw_nh_c <<< 1) - bw_ex_rel_c) : (bw_nh_c - bw_ex_rel_c);
+        else
+            bw_dist_x_c = (bw_icx_c >= node_half) ? (bw_ex_rel_c - bw_nh_c) : bw_ex_rel_c;
+        if (!step_y[2])
+            bw_dist_y_c = (bw_icy_c >= node_half) ? ((bw_nh_c <<< 1) - bw_ey_rel_c) : (bw_nh_c - bw_ey_rel_c);
+        else
+            bw_dist_y_c = (bw_icy_c >= node_half) ? (bw_ey_rel_c - bw_nh_c) : bw_ey_rel_c;
+        if (!step_z[2])
+            bw_dist_z_c = (bw_icz_c >= node_half) ? ((bw_nh_c <<< 1) - bw_ez_rel_c) : (bw_nh_c - bw_ez_rel_c);
+        else
+            bw_dist_z_c = (bw_icz_c >= node_half) ? (bw_ez_rel_c - bw_nh_c) : bw_ez_rel_c;
+    end
+
+    // t_next = t_min + dist * |inv|  (S_BRAM_WAIT)
+    logic signed [31:0] t_next_x_bw_c, t_next_y_bw_c, t_next_z_bw_c;
+    assign t_next_x_bw_c = t_min + qmul(bw_dist_x_c, bw_abs_ix_c);
+    assign t_next_y_bw_c = t_min + qmul(bw_dist_y_c, bw_abs_iy_c);
+    assign t_next_z_bw_c = t_min + qmul(bw_dist_z_c, bw_abs_iz_c);
+
+    // dt recomputation after stack pop: node_half[sp-1] * |inv|
+    logic signed [31:0] dt_x_pop_c, dt_y_pop_c, dt_z_pop_c;
+    assign dt_x_pop_c = qmul($signed({10'd0, stk_node_half[sp-1], 16'd0}), bw_abs_ix_c);
+    assign dt_y_pop_c = qmul($signed({10'd0, stk_node_half[sp-1], 16'd0}), bw_abs_iy_c);
+    assign dt_z_pop_c = qmul($signed({10'd0, stk_node_half[sp-1], 16'd0}), bw_abs_iz_c);
 
     // -------------------------------------------------------------------------
     // FSM
@@ -251,89 +347,257 @@ module svo_traversal #(
             S_IDLE: begin
                 busy <= '0;
                 if (start) begin
-                    busy    <= 1'b1;
-                    px      <= '0;
-                    py      <= '0;
-                    sp      <= '0;
-                    rs_wait <= '0;
-                    state   <= S_RAY_SETUP;
+                    busy      <= 1'b1;
+                    px        <= '0;
+                    py        <= '0;
+                    sp        <= '0;
+                    rs_wait   <= '0;
+                    node_half <= 6'(WORLD_SIZE >> 1);
+                    state     <= S_RAY_SETUP;
                 end
             end
 
             // -----------------------------------------------------------------
-            // S_RAY_SETUP: compute normalised ray direction from pixel + camera.
+            // S_RAY_SETUP: pipelined ray-direction computation.
             //
-            // Primary mode has a 14-DSP48 combinational chain (~79 ns) that
-            // cannot close timing in a single 10 ns cycle.  rs_wait holds the
-            // FSM here for 16 cycles so the chain settles before the registers
-            // capture.  This matches set_multicycle_path -setup 16 in the XDC.
-            // Shadow mode has no deep chain and exits immediately.
+            // Every stage performs at most one pure subtract OR one pure multiply,
+            // so every combinational path fits well within the 10 ns clock period.
+            // No multicycle path constraint required.
+            //
+            // Primary mode (SHADOW_MODE=0): 16 stages, rs_wait 0→15.
+            //   0  rsu/rsv   = (px/py − centre) · scale            [1 qmul each]
+            //   1  rsdx/y/z  = fwd + rsu·right − rsv·up            [2 parallel qmuls + adds]
+            //   2  rslen2    = Σ rsd·rsd                            [3 parallel qmuls + adds]
+            //   3  rilinv    = 1.5 − 0.5·rslen2                    [1 qmul]
+            //   4  rilsq     = rilinv²                              [1 qmul]
+            //   5  riltmp    = rslen2 · rilsq                       [1 qmul]
+            //   6  rilsub    = 1.5 − 0.5·riltmp                    [1 qmul]
+            //   7  rilinv2   = rilinv · rilsub  (refined inv_len)   [1 qmul]
+            //   8  ndx/y/z   = rsd · rilinv2    (normalised dir)    [3 parallel qmuls]
+            //   9  ax/y/z    = |nd|, r0 = initial reciprocal est.   [mux + priority enc]
+            //  10  rma       = ax · r0                               [3 parallel qmuls]
+            //  11  sub1      = 2 − rma                              [pure subtract, ~3 ns]
+            //  12  r1        = r0 · sub1   (N-R iter 1)             [3 parallel qmuls]
+            //  13  rmb       = ax · r1                              [3 parallel qmuls]
+            //  14  sub2      = 2 − rmb                              [pure subtract, ~3 ns]
+            //  15  inv       = sign · r1·sub2, capture → ROOT       [3 parallel qmuls + mux]
+            //
+            // Shadow mode (SHADOW_MODE=1): 7 stages, rs_wait 0→6.
+            //   0  ax/y/z = |cam_fwd|, r0 = initial est.
+            //   1  rma    = ax · r0
+            //   2  sub1   = 2 − rma
+            //   3  r1     = r0 · sub1
+            //   4  rmb    = ax · r1
+            //   5  sub2   = 2 − rmb
+            //   6  inv    = sign · r1·sub2, capture → ROOT
             S_RAY_SETUP: begin
+                rs_wait <= rs_wait + 1'b1;   // advance each cycle; cleared by S_NEXT_PIXEL / S_IDLE
                 if (SHADOW_MODE) begin
-                    // Shadow mode: ray fully specified by cam_pos / cam_fwd
-                    ro_x <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
-                    rd_x <= cam_fwd_x; rd_y <= cam_fwd_y; rd_z <= cam_fwd_z;
-                    inv_x <= qrecip(cam_fwd_x);
-                    inv_y <= qrecip(cam_fwd_y);
-                    inv_z <= qrecip(cam_fwd_z);
-                    step_x <= (cam_fwd_x >= 0) ? 3'sd1 : -3'sd1;
-                    step_y <= (cam_fwd_y >= 0) ? 3'sd1 : -3'sd1;
-                    step_z <= (cam_fwd_z >= 0) ? 3'sd1 : -3'sd1;
-                    sp    <= '0;
-                    state <= S_ROOT_SLAB;
-                end else begin
-                    // Primary mode: wait for combinational chain to settle
-                    if (rs_wait < 4'd15) begin
-                        rs_wait <= rs_wait + 1'b1;
-                    end else begin
-                        rs_wait <= '0;
-                        rsu  = qmul(($signed({1'b0, px, 16'd0}) - 32'sh00A0_0000), cam_scale);
-                        rsv  = qmul(($signed({1'b0, py, 16'd0}) - 32'sh0078_0000), cam_scale);
-                        rsdx = cam_fwd_x + qmul(rsu, cam_right_x) - qmul(rsv, cam_up_x);
-                        rsdy = cam_fwd_y + qmul(rsu, cam_right_y) - qmul(rsv, cam_up_y);
-                        rsdz = cam_fwd_z + qmul(rsu, cam_right_z) - qmul(rsv, cam_up_z);
-                        rslen2    = qmul(rsdx, rsdx) + qmul(rsdy, rsdy) + qmul(rsdz, rsdz);
-                        rsinv_len = 32'sh0001_8000 - qmul(32'sh0000_8000, rslen2);
-                        rsinv_len = qmul(rsinv_len, 32'sh0001_8000 - qmul(32'sh0000_8000, qmul(rslen2, qmul(rsinv_len, rsinv_len))));
-                        rsndx = qmul(rsdx, rsinv_len);
-                        rsndy = qmul(rsdy, rsinv_len);
-                        rsndz = qmul(rsdz, rsinv_len);
-                        rd_x <= rsndx;
-                        rd_y <= rsndy;
-                        rd_z <= rsndz;
+                    unique case (rs_wait)
+                    5'd0: begin
+                        rs_ax_r  <= cam_fwd_x[31] ? -cam_fwd_x : cam_fwd_x;
+                        rs_ay_r  <= cam_fwd_y[31] ? -cam_fwd_y : cam_fwd_y;
+                        rs_az_r  <= cam_fwd_z[31] ? -cam_fwd_z : cam_fwd_z;
+                        rs_r0x_r <= qrecip_r0(cam_fwd_x[31] ? -cam_fwd_x : cam_fwd_x);
+                        rs_r0y_r <= qrecip_r0(cam_fwd_y[31] ? -cam_fwd_y : cam_fwd_y);
+                        rs_r0z_r <= qrecip_r0(cam_fwd_z[31] ? -cam_fwd_z : cam_fwd_z);
+                    end
+                    5'd1: begin   // rma = ax · r0  (pure multiply)
+                        rs_rma_x_r <= qmul(rs_ax_r, rs_r0x_r);
+                        rs_rma_y_r <= qmul(rs_ay_r, rs_r0y_r);
+                        rs_rma_z_r <= qmul(rs_az_r, rs_r0z_r);
+                    end
+                    5'd2: begin   // sub1 = 2 − rma  (pure subtraction, ~3 ns)
+                        rs_sub1x_r <= 32'sh0002_0000 - rs_rma_x_r;
+                        rs_sub1y_r <= 32'sh0002_0000 - rs_rma_y_r;
+                        rs_sub1z_r <= 32'sh0002_0000 - rs_rma_z_r;
+                    end
+                    5'd3: begin   // r1 = r0 · sub1  (pure multiply)
+                        rs_r1x_r <= qmul(rs_r0x_r, rs_sub1x_r);
+                        rs_r1y_r <= qmul(rs_r0y_r, rs_sub1y_r);
+                        rs_r1z_r <= qmul(rs_r0z_r, rs_sub1z_r);
+                    end
+                    5'd4: begin   // rmb = ax · r1  (pure multiply)
+                        rs_rmb_x_r <= qmul(rs_ax_r, rs_r1x_r);
+                        rs_rmb_y_r <= qmul(rs_ay_r, rs_r1y_r);
+                        rs_rmb_z_r <= qmul(rs_az_r, rs_r1z_r);
+                    end
+                    5'd5: begin   // sub2 = 2 − rmb  (pure subtraction, ~3 ns)
+                        rs_sub2x_r <= 32'sh0002_0000 - rs_rmb_x_r;
+                        rs_sub2y_r <= 32'sh0002_0000 - rs_rmb_y_r;
+                        rs_sub2z_r <= 32'sh0002_0000 - rs_rmb_z_r;
+                    end
+                    5'd6: begin   // inv = sign · r1·sub2, capture
                         ro_x <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
-                        inv_x <= qrecip(rsndx);
-                        inv_y <= qrecip(rsndy);
-                        inv_z <= qrecip(rsndz);
-                        step_x <= (rsndx >= 0) ? 3'sd1 : -3'sd1;
-                        step_y <= (rsndy >= 0) ? 3'sd1 : -3'sd1;
-                        step_z <= (rsndz >= 0) ? 3'sd1 : -3'sd1;
-                        sp    <= '0;
-                        state <= S_ROOT_SLAB;
+                        rd_x <= cam_fwd_x; rd_y <= cam_fwd_y; rd_z <= cam_fwd_z;
+                        inv_x <= cam_fwd_x[31] ? -qmul(rs_r1x_r, rs_sub2x_r)
+                                               :  qmul(rs_r1x_r, rs_sub2x_r);
+                        inv_y <= cam_fwd_y[31] ? -qmul(rs_r1y_r, rs_sub2y_r)
+                                               :  qmul(rs_r1y_r, rs_sub2y_r);
+                        inv_z <= cam_fwd_z[31] ? -qmul(rs_r1z_r, rs_sub2z_r)
+                                               :  qmul(rs_r1z_r, rs_sub2z_r);
+                        step_x <= (cam_fwd_x >= 0) ? 3'sd1 : -3'sd1;
+                        step_y <= (cam_fwd_y >= 0) ? 3'sd1 : -3'sd1;
+                        step_z <= (cam_fwd_z >= 0) ? 3'sd1 : -3'sd1;
+                        ro_neg_x_r <= -cam_pos_x;
+                        ro_neg_y_r <= -cam_pos_y;
+                        ro_neg_z_r <= -cam_pos_z;
+                        ro_ws_x_r  <= $signed(32'(WORLD_SIZE) << 16) - cam_pos_x;
+                        ro_ws_y_r  <= $signed(32'(WORLD_SIZE) << 16) - cam_pos_y;
+                        ro_ws_z_r  <= $signed(32'(WORLD_SIZE) << 16) - cam_pos_z;
+                        sp      <= '0;
+                        rs_wait <= '0;
+                        state   <= S_ROOT_SLAB;
+                    end
+                    default: ;
+                    endcase
+                end else begin
+                    // ---- Primary mode pipeline ----
+                    unique case (rs_wait)
+                    5'd0: begin   // pixel offset × scale
+                        rs_rsu_r <= qmul($signed({1'b0, px, 16'd0}) - 32'sh00A0_0000, cam_scale);
+                        rs_rsv_r <= qmul($signed({1'b0, py, 16'd0}) - 32'sh0078_0000, cam_scale);
+                    end
+                    5'd1: begin   // raw ray direction (two parallel qmuls per component)
+                        rs_rsdx_r <= cam_fwd_x + qmul(rs_rsu_r, cam_right_x) - qmul(rs_rsv_r, cam_up_x);
+                        rs_rsdy_r <= cam_fwd_y + qmul(rs_rsu_r, cam_right_y) - qmul(rs_rsv_r, cam_up_y);
+                        rs_rsdz_r <= cam_fwd_z + qmul(rs_rsu_r, cam_right_z) - qmul(rs_rsv_r, cam_up_z);
+                    end
+                    5'd2: begin   // squared length of raw direction
+                        rs_rslen2_r <= qmul(rs_rsdx_r, rs_rsdx_r)
+                                     + qmul(rs_rsdy_r, rs_rsdy_r)
+                                     + qmul(rs_rsdz_r, rs_rsdz_r);
+                    end
+                    5'd3: begin   // first inverse-length estimate: 1.5 − 0.5·|d|²
+                        rs_rilinv_r <= 32'sh0001_8000 - qmul(32'sh0000_8000, rs_rslen2_r);
+                    end
+                    5'd4: begin   // rilinv²
+                        rs_rilsq_r <= qmul(rs_rilinv_r, rs_rilinv_r);
+                    end
+                    5'd5: begin   // |d|² · rilinv²
+                        rs_riltmp_r <= qmul(rs_rslen2_r, rs_rilsq_r);
+                    end
+                    5'd6: begin   // 1.5 − 0.5·tmp  (N-R correction factor)
+                        rs_rilsub_r <= 32'sh0001_8000 - qmul(32'sh0000_8000, rs_riltmp_r);
+                    end
+                    5'd7: begin   // refined inverse length
+                        rs_rilinv2_r <= qmul(rs_rilinv_r, rs_rilsub_r);
+                    end
+                    5'd8: begin   // normalised direction
+                        rs_ndx_r <= qmul(rs_rsdx_r, rs_rilinv2_r);
+                        rs_ndy_r <= qmul(rs_rsdy_r, rs_rilinv2_r);
+                        rs_ndz_r <= qmul(rs_rsdz_r, rs_rilinv2_r);
+                    end
+                    5'd9: begin   // |nd| and initial reciprocal estimate (no qmul)
+                        rs_ax_r  <= rs_ndx_r[31] ? -rs_ndx_r : rs_ndx_r;
+                        rs_ay_r  <= rs_ndy_r[31] ? -rs_ndy_r : rs_ndy_r;
+                        rs_az_r  <= rs_ndz_r[31] ? -rs_ndz_r : rs_ndz_r;
+                        rs_r0x_r <= qrecip_r0(rs_ndx_r[31] ? -rs_ndx_r : rs_ndx_r);
+                        rs_r0y_r <= qrecip_r0(rs_ndy_r[31] ? -rs_ndy_r : rs_ndy_r);
+                        rs_r0z_r <= qrecip_r0(rs_ndz_r[31] ? -rs_ndz_r : rs_ndz_r);
+                    end
+                    5'd10: begin  // xabs · r0
+                        rs_rma_x_r <= qmul(rs_ax_r, rs_r0x_r);
+                        rs_rma_y_r <= qmul(rs_ay_r, rs_r0y_r);
+                        rs_rma_z_r <= qmul(rs_az_r, rs_r0z_r);
+                    end
+                    5'd11: begin  // sub1 = 2 − rma  (pure subtraction, ~3 ns)
+                        rs_sub1x_r <= 32'sh0002_0000 - rs_rma_x_r;
+                        rs_sub1y_r <= 32'sh0002_0000 - rs_rma_y_r;
+                        rs_sub1z_r <= 32'sh0002_0000 - rs_rma_z_r;
+                    end
+                    5'd12: begin  // r1 = r0 · sub1  N-R iter 1  (pure multiply)
+                        rs_r1x_r <= qmul(rs_r0x_r, rs_sub1x_r);
+                        rs_r1y_r <= qmul(rs_r0y_r, rs_sub1y_r);
+                        rs_r1z_r <= qmul(rs_r0z_r, rs_sub1z_r);
+                    end
+                    5'd13: begin  // rmb = ax · r1  (pure multiply)
+                        rs_rmb_x_r <= qmul(rs_ax_r, rs_r1x_r);
+                        rs_rmb_y_r <= qmul(rs_ay_r, rs_r1y_r);
+                        rs_rmb_z_r <= qmul(rs_az_r, rs_r1z_r);
+                    end
+                    5'd14: begin  // sub2 = 2 − rmb  (pure subtraction, ~3 ns)
+                        rs_sub2x_r <= 32'sh0002_0000 - rs_rmb_x_r;
+                        rs_sub2y_r <= 32'sh0002_0000 - rs_rmb_y_r;
+                        rs_sub2z_r <= 32'sh0002_0000 - rs_rmb_z_r;
+                    end
+                    5'd15: begin  // inv = sign · r1·sub2, capture  (pure multiply)
+                        rd_x <= rs_ndx_r; rd_y <= rs_ndy_r; rd_z <= rs_ndz_r;
+                        ro_x <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
+                        inv_x <= rs_ndx_r[31] ? -qmul(rs_r1x_r, rs_sub2x_r)
+                                              :  qmul(rs_r1x_r, rs_sub2x_r);
+                        inv_y <= rs_ndy_r[31] ? -qmul(rs_r1y_r, rs_sub2y_r)
+                                              :  qmul(rs_r1y_r, rs_sub2y_r);
+                        inv_z <= rs_ndz_r[31] ? -qmul(rs_r1z_r, rs_sub2z_r)
+                                              :  qmul(rs_r1z_r, rs_sub2z_r);
+                        step_x <= (rs_ndx_r >= 0) ? 3'sd1 : -3'sd1;
+                        step_y <= (rs_ndy_r >= 0) ? 3'sd1 : -3'sd1;
+                        step_z <= (rs_ndz_r >= 0) ? 3'sd1 : -3'sd1;
+                        ro_neg_x_r <= -cam_pos_x;
+                        ro_neg_y_r <= -cam_pos_y;
+                        ro_neg_z_r <= -cam_pos_z;
+                        ro_ws_x_r  <= $signed(32'(WORLD_SIZE) << 16) - cam_pos_x;
+                        ro_ws_y_r  <= $signed(32'(WORLD_SIZE) << 16) - cam_pos_y;
+                        ro_ws_z_r  <= $signed(32'(WORLD_SIZE) << 16) - cam_pos_z;
+                        sp      <= '0;
+                        rs_wait <= '0;
+                        state   <= S_ROOT_SLAB;
+                    end
+                    default: ;
+                    endcase
+                end
+            end
+
+            // -----------------------------------------------------------------
+            // S_ROOT_SLAB: 5-stage pipelined AABB slab intersection.
+            // rs_wait is 0 on entry (set by S_RAY_SETUP stage 15/6).
+            // Stage 0: register 6 qmul results         (~13 ns each, parallel)
+            // Stage 1: sort each axis pair              (32-bit compare+mux, ~4 ns)
+            // Stage 2: partial XY max/min               (~4 ns)
+            // Stage 3: final t_min/t_max into registers (~4 ns)
+            // Stage 4: miss check → state transition    (~5 ns)
+            S_ROOT_SLAB: begin
+                unique case (rs_wait)
+                5'd0: begin
+                    rs_tx0  <= qmul(ro_neg_x_r, inv_x);
+                    rs_tx1  <= qmul(ro_ws_x_r,  inv_x);
+                    rs_ty0  <= qmul(ro_neg_y_r, inv_y);
+                    rs_ty1  <= qmul(ro_ws_y_r,  inv_y);
+                    rs_tz0  <= qmul(ro_neg_z_r, inv_z);
+                    rs_tz1  <= qmul(ro_ws_z_r,  inv_z);
+                    rs_wait <= 5'd1;
+                end
+                5'd1: begin
+                    rs_min_x <= (rs_tx0 < rs_tx1) ? rs_tx0 : rs_tx1;
+                    rs_max_x <= (rs_tx0 < rs_tx1) ? rs_tx1 : rs_tx0;
+                    rs_min_y <= (rs_ty0 < rs_ty1) ? rs_ty0 : rs_ty1;
+                    rs_max_y <= (rs_ty0 < rs_ty1) ? rs_ty1 : rs_ty0;
+                    rs_min_z <= (rs_tz0 < rs_tz1) ? rs_tz0 : rs_tz1;
+                    rs_max_z <= (rs_tz0 < rs_tz1) ? rs_tz1 : rs_tz0;
+                    rs_wait  <= 5'd2;
+                end
+                5'd2: begin
+                    rs_tmin_xy <= (rs_min_x > rs_min_y) ? rs_min_x : rs_min_y;
+                    rs_tmax_xy <= (rs_max_x < rs_max_y) ? rs_max_x : rs_max_y;
+                    rs_wait    <= 5'd3;
+                end
+                5'd3: begin
+                    t_min   <= (rs_tmin_xy > rs_min_z) ? rs_tmin_xy : rs_min_z;
+                    t_max   <= (rs_tmax_xy < rs_max_z) ? rs_tmax_xy : rs_max_z;
+                    rs_wait <= 5'd4;
+                end
+                5'd4: begin
+                    rs_wait <= 5'd0;
+                    if (t_min > t_max)
+                        state <= S_MISS;
+                    else begin
+                        node_idx      <= '0;
+                        node_origin_x <= '0; node_origin_y <= '0; node_origin_z <= '0;
+                        state         <= S_ENTER_NODE;
                     end
                 end
-            end
-
-            // -----------------------------------------------------------------
-            S_ROOT_SLAB: begin
-                rs_world_q = WORLD_SIZE << 16;
-                rs_tx0 = qmul(-ro_x,              inv_x); rs_tx1 = qmul(rs_world_q - ro_x, inv_x);
-                rs_ty0 = qmul(-ro_y,              inv_y); rs_ty1 = qmul(rs_world_q - ro_y, inv_y);
-                rs_tz0 = qmul(-ro_z,              inv_z); rs_tz1 = qmul(rs_world_q - ro_z, inv_z);
-                if (rs_tx0 > rs_tx1) begin rs_tmp=rs_tx0; rs_tx0=rs_tx1; rs_tx1=rs_tmp; end
-                if (rs_ty0 > rs_ty1) begin rs_tmp=rs_ty0; rs_ty0=rs_ty1; rs_ty1=rs_tmp; end
-                if (rs_tz0 > rs_tz1) begin rs_tmp=rs_tz0; rs_tz0=rs_tz1; rs_tz1=rs_tmp; end
-                t_min <= (rs_tx0>rs_ty0)?((rs_tx0>rs_tz0)?rs_tx0:rs_tz0):((rs_ty0>rs_tz0)?rs_ty0:rs_tz0);
-                t_max <= (rs_tx1<rs_ty1)?((rs_tx1<rs_tz1)?rs_tx1:rs_tz1):((rs_ty1<rs_tz1)?rs_ty1:rs_tz1);
-                if ((rs_tx0>rs_ty0 ? (rs_tx0>rs_tz0 ? rs_tx0:rs_tz0):(rs_ty0>rs_tz0 ? rs_ty0:rs_tz0)) >
-                    (rs_tx1<rs_ty1 ? (rs_tx1<rs_tz1 ? rs_tx1:rs_tz1):(rs_ty1<rs_tz1 ? rs_ty1:rs_tz1)))
-                    state <= S_MISS;
-                else begin
-                    node_idx      <= '0;
-                    node_half     <= 6'(WORLD_SIZE >> 1);
-                    node_origin_x <= '0; node_origin_y <= '0; node_origin_z <= '0;
-                    state <= S_ENTER_NODE;
-                end
+                default: ;
+                endcase
             end
 
             // -----------------------------------------------------------------
@@ -401,59 +665,16 @@ module svo_traversal #(
                         post_pop <= 1'b0;
                         state    <= S_EMPTY;
                     end else begin
-                    bw_ex  = ro_x + qmul(t_min, rd_x);
-                    bw_ey  = ro_y + qmul(t_min, rd_y);
-                    bw_ez  = ro_z + qmul(t_min, rd_z);
-                    bw_icx = ($signed(bw_ex) < 0) ? 7'd0 : bw_ex[22:16];
-                    bw_icy = ($signed(bw_ey) < 0) ? 7'd0 : bw_ey[22:16];
-                    bw_icz = ($signed(bw_ez) < 0) ? 7'd0 : bw_ez[22:16];
-                    // Clamp to 0 on underflow: rounding can put bw_ic* just below
-                    // the child's origin when t_min is a boundary-crossing time.
-                    bw_icx = (bw_icx >= node_origin_x) ? bw_icx - node_origin_x : 7'd0;
-                    bw_icy = (bw_icy >= node_origin_y) ? bw_icy - node_origin_y : 7'd0;
-                    bw_icz = (bw_icz >= node_origin_z) ? bw_icz - node_origin_z : 7'd0;
-                    cx  <= (bw_icx >= node_half) ? 6'd1 : 6'd0;
-                    cy  <= (bw_icy >= node_half) ? 6'd1 : 6'd0;
-                    cz  <= (bw_icz >= node_half) ? 6'd1 : 6'd0;
-                    bw_abs_ix = (inv_x >= 0) ? inv_x : -inv_x;
-                    bw_abs_iy = (inv_y >= 0) ? inv_y : -inv_y;
-                    bw_abs_iz = (inv_z >= 0) ? inv_z : -inv_z;
-                    bw_nh = $signed(32'(node_half)) << 16;   // node_half as Q16.16
-                    dt_x     <= qmul(bw_nh, bw_abs_ix);
-                    dt_y     <= qmul(bw_nh, bw_abs_iy);
-                    dt_z     <= qmul(bw_nh, bw_abs_iz);
-                    // Correct t_next: distance from entry point to next boundary (not from node edge)
-                    bw_ex_rel = bw_ex - ($signed(32'(node_origin_x)) << 16);
-                    bw_ey_rel = bw_ey - ($signed(32'(node_origin_y)) << 16);
-                    bw_ez_rel = bw_ez - ($signed(32'(node_origin_z)) << 16);
-                    if (!step_x[2])  // positive direction: MSB=0
-                        bw_dist_x = (bw_icx >= node_half) ?
-                            ((bw_nh <<< 1) - bw_ex_rel) :   // cx=1: 2*nh - pos
-                            (bw_nh - bw_ex_rel);             // cx=0: nh - pos
-                    else
-                        bw_dist_x = (bw_icx >= node_half) ?
-                            (bw_ex_rel - bw_nh) :            // cx=1: pos - nh
-                            bw_ex_rel;                       // cx=0: pos - 0
-                    if (!step_y[2])  // positive direction: MSB=0
-                        bw_dist_y = (bw_icy >= node_half) ?
-                            ((bw_nh <<< 1) - bw_ey_rel) :
-                            (bw_nh - bw_ey_rel);
-                    else
-                        bw_dist_y = (bw_icy >= node_half) ?
-                            (bw_ey_rel - bw_nh) :
-                            bw_ey_rel;
-                    if (!step_z[2])  // positive direction: MSB=0
-                        bw_dist_z = (bw_icz >= node_half) ?
-                            ((bw_nh <<< 1) - bw_ez_rel) :
-                            (bw_nh - bw_ez_rel);
-                    else
-                        bw_dist_z = (bw_icz >= node_half) ?
-                            (bw_ez_rel - bw_nh) :
-                            bw_ez_rel;
-                    t_next_x <= t_min + qmul(bw_dist_x, bw_abs_ix);
-                    t_next_y <= t_min + qmul(bw_dist_y, bw_abs_iy);
-                    t_next_z <= t_min + qmul(bw_dist_z, bw_abs_iz);
-                    state <= S_CHECK_CHILD;
+                    cx       <= (bw_icx_c >= node_half) ? 6'd1 : 6'd0;
+                    cy       <= (bw_icy_c >= node_half) ? 6'd1 : 6'd0;
+                    cz       <= (bw_icz_c >= node_half) ? 6'd1 : 6'd0;
+                    dt_x     <= dt_x_bw_c;
+                    dt_y     <= dt_y_bw_c;
+                    dt_z     <= dt_z_bw_c;
+                    t_next_x <= t_next_x_bw_c;
+                    t_next_y <= t_next_y_bw_c;
+                    t_next_z <= t_next_z_bw_c;
+                    state    <= S_CHECK_CHILD;
                     end  // end else (not post_pop)
                 end
             end
@@ -495,9 +716,9 @@ module svo_traversal #(
             S_SOLID: begin
                 t_hit        <= t_min;
                 block_id_hit <= r_block[cidx];
-                hit_px_r     <= ro_x + qmul(t_min, rd_x);
-                hit_py_r     <= ro_y + qmul(t_min, rd_y);
-                hit_pz_r     <= ro_z + qmul(t_min, rd_z);
+                hit_px_r     <= bw_ex_c;
+                hit_py_r     <= bw_ey_c;
+                hit_pz_r     <= bw_ez_c;
                 if (SHADOW_MODE) begin
                     // Shadow mode: immediately signal hit and stop
                     any_hit    <= 1'b1;
@@ -513,9 +734,9 @@ module svo_traversal #(
                     shade_ray_dx        <= rd_x;
                     shade_ray_dy        <= rd_y;
                     shade_ray_dz        <= rd_z;
-                    shade_hit_px        <= ro_x + qmul(t_min, rd_x);
-                    shade_hit_py        <= ro_y + qmul(t_min, rd_y);
-                    shade_hit_pz        <= ro_z + qmul(t_min, rd_z);
+                    shade_hit_px        <= bw_ex_c;
+                    shade_hit_py        <= bw_ey_c;
+                    shade_hit_pz        <= bw_ez_c;
                     shade_start         <= 1'b1;
                     state               <= S_WAIT_SHADE;
                 end else begin
@@ -558,9 +779,9 @@ module svo_traversal #(
                     t_next_y      <= stk_t_next_y [sp-1];
                     t_next_z      <= stk_t_next_z [sp-1];
                     // Recompute dt from restored node_half and per-ray inv (no stack needed)
-                    dt_x          <= qmul($signed({10'd0, stk_node_half[sp-1], 16'd0}), inv_x[31] ? -inv_x : inv_x);
-                    dt_y          <= qmul($signed({10'd0, stk_node_half[sp-1], 16'd0}), inv_y[31] ? -inv_y : inv_y);
-                    dt_z          <= qmul($signed({10'd0, stk_node_half[sp-1], 16'd0}), inv_z[31] ? -inv_z : inv_z);
+                    dt_x          <= dt_x_pop_c;
+                    dt_y          <= dt_y_pop_c;
+                    dt_z          <= dt_z_pop_c;
                     cx            <= stk_cx       [sp-1];
                     cy            <= stk_cy       [sp-1];
                     cz            <= stk_cz       [sp-1];
@@ -616,6 +837,7 @@ module svo_traversal #(
                 axis_tvalid <= 1'b0;
                 sp          <= '0;
                 post_pop    <= 1'b0;
+                node_half   <= 6'(WORLD_SIZE >> 1);
                 if (px == 9'(IMG_W - 1)) begin
                     px <= '0;
                     if (py == 8'(IMG_H - 1)) begin

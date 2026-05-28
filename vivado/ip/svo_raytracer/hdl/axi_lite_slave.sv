@@ -55,7 +55,7 @@ module axi_lite_slave #(
 
     // Debug inputs from traversal FSM (read-only)
     input  logic [3:0]  dbg_state,
-    input  logic [3:0]  dbg_rs_wait,  // rs_wait counter value (0-15)
+    input  logic [4:0]  dbg_rs_wait,  // rs_wait counter value (0-19)
     input  logic [8:0]  dbg_px,
     input  logic [7:0]  dbg_py,
     input  logic        dbg_tvalid,   // 1 = IP outputting pixel to VDMA
@@ -169,10 +169,10 @@ module axi_lite_slave #(
                 S_AXI_RRESP   <= 2'b00;
                 unique case (S_AXI_ARADDR[7:2])
                     6'h01:   S_AXI_RDATA <= {30'd0, status_frame_done, status_busy};
-                    // 0x78: bits[3:0]=FSM state, bit[4]=tvalid, bit[5]=tready, bits[9:6]=rs_wait
+                    // 0x78: bits[3:0]=FSM state, bit[4]=tvalid, bit[5]=tready, bits[10:6]=rs_wait (5-bit)
                     // state=12 + tvalid=1 + tready=0 means VDMA is applying backpressure
                     // state=1 + rs_wait stuck means S_RAY_SETUP hang
-                    6'h1E:   S_AXI_RDATA <= {22'd0, dbg_rs_wait, dbg_tready, dbg_tvalid, dbg_state};
+                    6'h1E:   S_AXI_RDATA <= {21'd0, dbg_rs_wait, dbg_tready, dbg_tvalid, dbg_state};
                     // 0x7C: pixel position — bits[16:8]=px, bits[7:0]=py
                     6'h1F:   S_AXI_RDATA <= {15'd0, dbg_px, dbg_py};
                     default: S_AXI_RDATA <= 32'hDEAD_BEEF;

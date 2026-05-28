@@ -34,6 +34,10 @@ class alignas(VL_CACHE_LINE_BYTES) Vtop VL_NOT_FINAL : public VerilatedModel {
     VL_IN8(&start,0,0);
     VL_OUT8(&svo_rd_en,0,0);
     VL_OUT8(&fb_wr_en,0,0);
+    VL_OUT8(&axis_tvalid,0,0);
+    VL_OUT8(&axis_tlast,0,0);
+    VL_OUT8(&axis_tuser,0,0);
+    VL_IN8(&axis_tready,0,0);
     VL_OUT8(&shade_start,0,0);
     VL_OUT8(&shade_is_miss,0,0);
     VL_OUT8(&shade_hit_face,1,0);
@@ -43,7 +47,13 @@ class alignas(VL_CACHE_LINE_BYTES) Vtop VL_NOT_FINAL : public VerilatedModel {
     VL_OUT8(&busy,0,0);
     VL_OUT8(&frame_done,0,0);
     VL_OUT8(&any_hit,0,0);
+    VL_OUT8(&dbg_state,3,0);
+    VL_OUT8(&dbg_rs_wait,4,0);
+    VL_OUT8(&dbg_py,7,0);
+    VL_OUT8(&dbg_tvalid,0,0);
+    VL_OUT8(&dbg_tready,0,0);
     VL_OUT16(&svo_rd_addr,14,0);
+    VL_OUT16(&dbg_px,8,0);
     VL_IN(&cam_pos_x,31,0);
     VL_IN(&cam_pos_y,31,0);
     VL_IN(&cam_pos_z,31,0);
@@ -61,6 +71,7 @@ class alignas(VL_CACHE_LINE_BYTES) Vtop VL_NOT_FINAL : public VerilatedModel {
     VL_IN(&svo_rd_data,31,0);
     VL_OUT(&fb_wr_addr,16,0);
     VL_OUT(&fb_wr_data,23,0);
+    VL_OUT(&axis_tdata,31,0);
     VL_OUT(&shade_t_hit,31,0);
     VL_OUT(&shade_ray_dx,31,0);
     VL_OUT(&shade_ray_dy,31,0);
