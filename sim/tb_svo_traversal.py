@@ -355,6 +355,7 @@ async def test_render_frame(dut):
     await RisingEdge(dut.clk)
 
     # Camera — matches main_phase1.py
+    #pos   = [32.0, 40.0, -20.0]
     pos   = [40.0, 60.0, 10.0]
     fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
     right = normalise(cross(fwd, [0, 1, 0]))
