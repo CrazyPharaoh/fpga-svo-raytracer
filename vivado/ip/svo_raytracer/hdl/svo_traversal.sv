@@ -474,17 +474,17 @@ module svo_traversal #(
                 if (t_next_x <= t_next_y && t_next_x <= t_next_z) begin
                     cx       <= cx + {{3{step_x[2]}}, step_x};  // sign-extend 3-bit step
                     t_min    <= t_next_x; t_next_x <= t_next_x + dt_x;
-                    em_face  = 2'd0; em_fsign = step_x[2];      // MSB is sign
+                    em_face  = 2'd0; em_fsign = ~step_x[2];     // outward normal = opposite of ray dir
                     state    <= (step_x[2] ^ cx[0]) ? S_POP_STACK : S_CHECK_CHILD;
                 end else if (t_next_y <= t_next_z) begin
                     cy       <= cy + {{3{step_y[2]}}, step_y};
                     t_min    <= t_next_y; t_next_y <= t_next_y + dt_y;
-                    em_face  = 2'd1; em_fsign = step_y[2];
+                    em_face  = 2'd1; em_fsign = ~step_y[2];
                     state    <= (step_y[2] ^ cy[0]) ? S_POP_STACK : S_CHECK_CHILD;
                 end else begin
                     cz       <= cz + {{3{step_z[2]}}, step_z};
                     t_min    <= t_next_z; t_next_z <= t_next_z + dt_z;
-                    em_face  = 2'd2; em_fsign = step_z[2];
+                    em_face  = 2'd2; em_fsign = ~step_z[2];
                     state    <= (step_z[2] ^ cz[0]) ? S_POP_STACK : S_CHECK_CHILD;
                 end
                 hit_face        <= em_face;

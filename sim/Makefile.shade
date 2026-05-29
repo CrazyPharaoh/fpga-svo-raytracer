@@ -17,6 +17,8 @@ EXTRA_ARGS += -Wno-WIDTHTRUNC -Wno-WIDTHEXPAND -Wno-CASEINCOMPLETE
 EXTRA_ARGS += -Wno-UNOPTFLAT
 EXTRA_ARGS += --public-flat-rw
 
+SIM_BUILD  = shade_build
+
 OUTPUT_DIR = output
 $(shell mkdir -p $(OUTPUT_DIR))
 

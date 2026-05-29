@@ -96,7 +96,7 @@ module svo_full_tb (
     // -------------------------------------------------------------------------
     // LUT: individual ports → unpacked array for shading_pipeline
     // -------------------------------------------------------------------------
-    logic [23:0] lut_arr [0:5];
+    logic [31:0] lut_arr [0:5];
     assign lut_arr[0] = lut_0;
     assign lut_arr[1] = lut_1;
     assign lut_arr[2] = lut_2;
