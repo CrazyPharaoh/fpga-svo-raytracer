@@ -323,9 +323,16 @@ module svo_traversal #(
                 if (rs_tx0 > rs_tx1) begin rs_tmp=rs_tx0; rs_tx0=rs_tx1; rs_tx1=rs_tmp; end
                 if (rs_ty0 > rs_ty1) begin rs_tmp=rs_ty0; rs_ty0=rs_ty1; rs_ty1=rs_tmp; end
                 if (rs_tz0 > rs_tz1) begin rs_tmp=rs_tz0; rs_tz0=rs_tz1; rs_tz1=rs_tmp; end
-                t_min <= (rs_tx0>rs_ty0)?((rs_tx0>rs_tz0)?rs_tx0:rs_tz0):((rs_ty0>rs_tz0)?rs_ty0:rs_tz0);
+                // rs_tmp = unclamped t_enter = max(tx0, ty0, tz0); used for miss check
+                rs_tmp = (rs_tx0>rs_ty0)?((rs_tx0>rs_tz0)?rs_tx0:rs_tz0):((rs_ty0>rs_tz0)?rs_ty0:rs_tz0);
+                // Clamp t_min to 0: when ray origin is inside the world box t_enter < 0,
+                // and the backward-projected boundary point would select the wrong child
+                // octant. Starting from t=0 (the actual origin) gives correct cx/cy/cz.
+                // t_next values are unaffected: t_next = t_min + dist/|rd| algebraically
+                // equals the true midplane crossing time regardless of t_min.
+                t_min <= ($signed(rs_tmp) < 0) ? 32'sh0 : rs_tmp;
                 t_max <= (rs_tx1<rs_ty1)?((rs_tx1<rs_tz1)?rs_tx1:rs_tz1):((rs_ty1<rs_tz1)?rs_ty1:rs_tz1);
-                if ((rs_tx0>rs_ty0 ? (rs_tx0>rs_tz0 ? rs_tx0:rs_tz0):(rs_ty0>rs_tz0 ? rs_ty0:rs_tz0)) >
+                if (rs_tmp >    // use unclamped t_enter for miss check
                     (rs_tx1<rs_ty1 ? (rs_tx1<rs_tz1 ? rs_tx1:rs_tz1):(rs_ty1<rs_tz1 ? rs_ty1:rs_tz1)))
                     state <= S_MISS;
                 else begin
