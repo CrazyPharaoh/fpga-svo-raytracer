@@ -7,7 +7,7 @@
 module top #(
     parameter int  C_S_AXI_DATA_WIDTH = 32,
     parameter int  C_S_AXI_ADDR_WIDTH = 8,
-    parameter bit  SHADE_MODE         = 0   // set to 1 for Phase 2
+    parameter bit  SHADE_MODE         = 1   // Phase 2: full shading + shadow rays
 )(
     // AXI4-Lite slave
     input  logic        s_axi_aclk,

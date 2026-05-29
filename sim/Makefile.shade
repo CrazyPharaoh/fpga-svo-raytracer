@@ -1,0 +1,23 @@
+# sim/Makefile.shade
+# Phase 2 cocotb testbench: svo_full_tb.sv (primary trav + shading + shadow trav)
+
+SIM           = verilator
+TOPLEVEL_LANG = verilog
+
+RTL_DIR = $(abspath ../vivado/ip/svo_raytracer/hdl)
+
+VERILOG_SOURCES  = $(RTL_DIR)/svo_traversal.sv
+VERILOG_SOURCES += $(RTL_DIR)/shading_pipeline.sv
+VERILOG_SOURCES += $(abspath svo_full_tb.sv)
+TOPLEVEL         = svo_full_tb
+MODULE           = tb_svo_full
+
+EXTRA_ARGS  = --language 1800-2012
+EXTRA_ARGS += -Wno-WIDTHTRUNC -Wno-WIDTHEXPAND -Wno-CASEINCOMPLETE
+EXTRA_ARGS += -Wno-UNOPTFLAT
+EXTRA_ARGS += --public-flat-rw
+
+OUTPUT_DIR = output
+$(shell mkdir -p $(OUTPUT_DIR))
+
+include $(shell cocotb-config --makefiles)/Makefile.sim

@@ -180,9 +180,9 @@ module shading_pipeline (
                     logic signed [31:0] direct, r_ch, g_ch, b_ch, spec_add;
                     // direct = (shadowed ? 0 : diffuse) + ambient
                     direct = shadowed ? AMBIENT : qclamp01(diffuse + AMBIENT);
-                    r_ch = qmul({16'd0, base_color[23:16]}, direct) >> 8;
-                    g_ch = qmul({16'd0, base_color[15:8]},  direct) >> 8;
-                    b_ch = qmul({16'd0, base_color[7:0]},   direct) >> 8;
+                    r_ch = qmul({16'd0, base_color[23:16]}, direct);
+                    g_ch = qmul({16'd0, base_color[15:8]},  direct);
+                    b_ch = qmul({16'd0, base_color[7:0]},   direct);
                     // White specular highlight
                     spec_add = spec >> 8;
                     r_ch += spec_add; if (r_ch > 8'hFF) r_ch = 8'hFF;
