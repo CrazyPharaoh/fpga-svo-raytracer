@@ -13,7 +13,7 @@ MAX_DEPTH   = 6
 
 # Set to 1 to generate a simple test world (single block at world centre)
 # instead of the full terrain. All callers use build_world() unchanged.
-TESTING = 1
+TESTING = 0
 
 STATE_EMPTY = 0b00
 STATE_SOLID = 0b11

@@ -144,10 +144,14 @@ module shading_pipeline (
                 // Specular: r = ld - 2*dot(ld,n)*n;  spec = clamp(-dot(r,rd),0,1)^4
                 begin
                     logic signed [31:0] dot_ln, rx, ry, rz, dot_rv, s;
+                    // dot of ray light and normal
                     dot_ln = qmul(light_dir_x, nx) + qmul(light_dir_y, ny) + qmul(light_dir_z, nz);
+                    // reflect = light_dir − 2·dot(light_dir, normal)·normal
+                    // where the light would bounce if normal was a mirror
                     rx = light_dir_x - qmul(32'sh0002_0000, qmul(dot_ln, nx));
                     ry = light_dir_y - qmul(32'sh0002_0000, qmul(dot_ln, ny));
                     rz = light_dir_z - qmul(32'sh0002_0000, qmul(dot_ln, nz));
+                    // dot of reflect and ray dir (camera to hit)
                     dot_rv = qmul(rx, ray_dx) + qmul(ry, ray_dy) + qmul(rz, ray_dz);
                     s = qclamp01(-dot_rv);    // negate: ray goes toward eye
                     s = qmul(s, s);           // ^2

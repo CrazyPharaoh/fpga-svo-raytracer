@@ -307,7 +307,8 @@ async def test_render_frame_shaded(dut):
     await RisingEdge(dut.clk)
 
     # Camera (identical to tb_svo_traversal.py)
-    pos   = [40.0, 60.0, 10.0]
+    #pos   = [40.0, 60.0, 10.0]
+    pos = [30, 15, 0]
     fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
     right = normalise(cross(fwd, [0, 1, 0]))
     up    = cross(right, fwd)

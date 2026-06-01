@@ -129,7 +129,8 @@ def main():
     print(f"  {len(nodes)} nodes")
 
     # Camera — identical to tb_svo_full.py
-    pos   = [40.0, 60.0, 10.0]
+    #pos   = [40.0, 60.0, 10.0]
+    pos = [30, 15, 0]
     fwd   = normalise_list([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
     right = normalise_list(cross(fwd, [0, 1, 0]))
     up    = cross(right, fwd)

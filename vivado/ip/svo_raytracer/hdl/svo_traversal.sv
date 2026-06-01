@@ -239,6 +239,7 @@ module svo_traversal #(
             axis_tuser  <= '0;
             px <= '0; py <= '0; sp <= '0; rs_wait <= '0; post_pop <= '0;
         end else begin
+            // Force pulse signals low every cycle before state case
             fb_wr_en    <= '0;
             frame_done  <= '0;
             any_hit     <= '0;
@@ -316,10 +317,13 @@ module svo_traversal #(
 
             // -----------------------------------------------------------------
             S_ROOT_SLAB: begin
+                // Convert World Size to Q16.16
                 rs_world_q = WORLD_SIZE << 16;
+                // Find t at each slab boundary (0 & 64 for each component)
                 rs_tx0 = qmul(-ro_x,              inv_x); rs_tx1 = qmul(rs_world_q - ro_x, inv_x);
                 rs_ty0 = qmul(-ro_y,              inv_y); rs_ty1 = qmul(rs_world_q - ro_y, inv_y);
                 rs_tz0 = qmul(-ro_z,              inv_z); rs_tz1 = qmul(rs_world_q - ro_z, inv_z);
+                // sort so tx0 is always the smaller value
                 if (rs_tx0 > rs_tx1) begin rs_tmp=rs_tx0; rs_tx0=rs_tx1; rs_tx1=rs_tmp; end
                 if (rs_ty0 > rs_ty1) begin rs_tmp=rs_ty0; rs_ty0=rs_ty1; rs_ty1=rs_tmp; end
                 if (rs_tz0 > rs_tz1) begin rs_tmp=rs_tz0; rs_tz0=rs_tz1; rs_tz1=rs_tmp; end
@@ -330,7 +334,7 @@ module svo_traversal #(
                 // octant. Starting from t=0 (the actual origin) gives correct cx/cy/cz.
                 // t_next values are unaffected: t_next = t_min + dist/|rd| algebraically
                 // equals the true midplane crossing time regardless of t_min.
-                t_min <= ($signed(rs_tmp) < 0) ? 32'sh0 : rs_tmp;
+                t_min <= ($signed(rs_tmp) < 0) ? 32'sh0 : rs_tmp; //non-blocking for use later
                 t_max <= (rs_tx1<rs_ty1)?((rs_tx1<rs_tz1)?rs_tx1:rs_tz1):((rs_ty1<rs_tz1)?rs_ty1:rs_tz1);
                 if (rs_tmp >    // use unclamped t_enter for miss check
                     (rs_tx1<rs_ty1 ? (rs_tx1<rs_tz1 ? rs_tx1:rs_tz1):(rs_ty1<rs_tz1 ? rs_ty1:rs_tz1)))
@@ -502,6 +506,7 @@ module svo_traversal #(
             S_SOLID: begin
                 t_hit        <= t_min;
                 block_id_hit <= r_block[cidx];
+                // hit point calc using t and ray direction
                 hit_px_r     <= ro_x + qmul(t_min, rd_x);
                 hit_py_r     <= ro_y + qmul(t_min, rd_y);
                 hit_pz_r     <= ro_z + qmul(t_min, rd_z);
@@ -526,6 +531,7 @@ module svo_traversal #(
                     shade_start         <= 1'b1;
                     state               <= S_WAIT_SHADE;
                 end else begin
+                    // non shading for traversal test
                     pixel_color <= 24'hFF_FF_FF;
                     state       <= S_WRITE_PIXEL;
                 end
@@ -585,14 +591,17 @@ module svo_traversal #(
 
             // -----------------------------------------------------------------
             S_MISS: begin
+                // any_hit not asserted, just says its done
                 if (SHADOW_MODE) begin
                     frame_done <= 1'b1;
                     state      <= S_IDLE;
+                    // Go into shading pipeline as miss
                 end else if (SHADE_MODE) begin
                     shade_is_miss  <= 1'b1;
                     shade_start    <= 1'b1;
                     state          <= S_WAIT_SHADE;
                 end else begin
+                    // Non shading mode for testing traversal
                     pixel_color <= sky_color;
                     state       <= S_WRITE_PIXEL;
                 end
@@ -604,13 +613,15 @@ module svo_traversal #(
                 if (shade_done) begin
                     pixel_color <= shade_pixel_color;
                     state       <= S_WRITE_PIXEL;
-                end
+                end //Stalls here until shade_done
             end
 
             // -----------------------------------------------------------------
             S_WRITE_PIXEL: begin
                 axis_tvalid <= 1'b1;
                 axis_tdata  <= {8'h00, pixel_color};
+                // tlast high for last pixel of each line
+                //tuser high on first pixel
                 axis_tlast  <= (px == 9'(IMG_W - 1));
                 axis_tuser  <= (px == '0 && py == '0) ? 1'b1 : 1'b0;
                 if (axis_tready)
@@ -623,8 +634,10 @@ module svo_traversal #(
                 axis_tvalid <= 1'b0;
                 sp          <= '0;
                 post_pop    <= 1'b0;
+                // reach end of line, reset x and increment y
                 if (px == 9'(IMG_W - 1)) begin
                     px <= '0;
+                    // end of frame
                     if (py == 8'(IMG_H - 1)) begin
                         py         <= '0;
                         frame_done <= 1'b1;
