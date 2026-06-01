@@ -150,6 +150,8 @@ module svo_traversal #(
     } state_t;
 
     (* fsm_encoding = "sequential" *) state_t state;
+    // World box upper boundary in Q16.16 (WORLD_SIZE.0). Used by S_ROOT_SLAB.
+    localparam logic signed [31:0] WORLD_Q = WORLD_SIZE << 16;
     logic [3:0] state_raw; assign state_raw = state;
     assign dbg_state   = state_raw;
     assign dbg_rs_wait = rs_wait;
@@ -182,7 +184,7 @@ module svo_traversal #(
     logic [5:0] node_half;
     logic [5:0] node_origin_x, node_origin_y, node_origin_z;
 
-    logic signed [31:0] rs_tx0, rs_tx1, rs_ty0, rs_ty1, rs_tz0, rs_tz1, rs_world_q, rs_tmp;
+    logic signed [31:0] rs_tx0, rs_tx1, rs_ty0, rs_ty1, rs_tz0, rs_tz1, rs_tmp;
     logic signed [31:0] bw_ex, bw_ey, bw_ez, bw_abs_ix, bw_abs_iy, bw_abs_iz;
     logic signed [31:0] bw_ex_rel, bw_ey_rel, bw_ez_rel;   // position within node (Q16.16)
     logic signed [31:0] bw_dist_x, bw_dist_y, bw_dist_z;   // distance to next boundary
@@ -209,6 +211,28 @@ module svo_traversal #(
     logic signed [31:0] rs_r1_x,   rs_r1_y,   rs_r1_z;    // N-R iteration 1 result
     logic signed [31:0] rs_t2_x,   rs_t2_y,   rs_t2_z;    // N-R iteration 2 multiply
     logic               rs_sign_x, rs_sign_y, rs_sign_z;   // sign of final rd_* component
+
+    // Combinational outputs of every qmul in S_RAY_SETUP.
+    // Keeping qmul in always_comb forces DSP CE='1' (always enabled), which
+    // eliminates unconstrained DSP ACOUT paths.  The always_ff stages below
+    // capture these signals into the pipeline registers at the correct rs_wait
+    // stage; the DSPs themselves run every cycle but cause no timing hazard.
+    logic signed [31:0] rs_c_rsu,    rs_c_rsv;
+    logic signed [31:0] rs_c_s1_a,   rs_c_s1_b;
+    logic signed [31:0] rs_c_s1_c,   rs_c_s1_d;
+    logic signed [31:0] rs_c_s1_e,   rs_c_s1_f;
+    logic signed [31:0] rs_c_dx2,    rs_c_dy2,    rs_c_dz2;
+    logic signed [31:0] rs_c_y0sq;
+    logic signed [31:0] rs_c_r2y0sq;
+    logic signed [31:0] rs_c_inv_len;
+    logic signed [31:0] rs_c_ndx,    rs_c_ndy,    rs_c_ndz;
+    // Shared N-R: primary stages 10-13; shadow stages 1-4
+    logic signed [31:0] rs_c_t1_x,   rs_c_t1_y,   rs_c_t1_z;
+    logic signed [31:0] rs_c_r1_x,   rs_c_r1_y,   rs_c_r1_z;
+    logic signed [31:0] rs_c_t2_x,   rs_c_t2_y,   rs_c_t2_z;
+    logic signed [31:0] rs_c_inv_x,  rs_c_inv_y,  rs_c_inv_z;
+    // S_ROOT_SLAB: ray-vs-world-box slab intersection times (CE='1' on all DSPs)
+    logic signed [31:0] rs_c_tx0, rs_c_tx1, rs_c_ty0, rs_c_ty1, rs_c_tz0, rs_c_tz1;
 
     // -------------------------------------------------------------------------
     // SVO node registers
@@ -257,6 +281,69 @@ module svo_traversal #(
     logic post_pop;
 
     // -------------------------------------------------------------------------
+    // S_RAY_SETUP combinational stage computations (CE='1' on all DSPs)
+    // -------------------------------------------------------------------------
+    always_comb begin
+        rs_c_rsu  = qmul($signed({1'b0, px, 16'd0}) - 32'sh00A0_0000, cam_scale);
+        rs_c_rsv  = qmul($signed({1'b0, py, 16'd0}) - 32'sh0078_0000, cam_scale);
+    end
+    always_comb begin
+        rs_c_s1_a = qmul(rsu, cam_right_x); rs_c_s1_b = qmul(rsv, cam_up_x);
+        rs_c_s1_c = qmul(rsu, cam_right_y); rs_c_s1_d = qmul(rsv, cam_up_y);
+        rs_c_s1_e = qmul(rsu, cam_right_z); rs_c_s1_f = qmul(rsv, cam_up_z);
+    end
+    always_comb begin
+        rs_c_dx2 = qmul(rsdx, rsdx);
+        rs_c_dy2 = qmul(rsdy, rsdy);
+        rs_c_dz2 = qmul(rsdz, rsdz);
+    end
+    always_comb rs_c_y0sq   = qmul(rs_s4_y0, rs_s4_y0);
+    always_comb rs_c_r2y0sq = qmul(rslen2, rs_s5_y0sq);
+    always_comb rs_c_inv_len = qmul(rs_s4_y0, 32'sh0001_8000 - (rs_s6_r2y0sq >>> 1));
+    always_comb begin
+        rs_c_ndx = qmul(rsdx, rsinv_len);
+        rs_c_ndy = qmul(rsdy, rsinv_len);
+        rs_c_ndz = qmul(rsdz, rsinv_len);
+    end
+    // Shared N-R iterations (primary stages 10-13; shadow stages 1-4)
+    always_comb begin
+        rs_c_t1_x = qmul(rs_xabs_x, rs_r0_x);
+        rs_c_t1_y = qmul(rs_xabs_y, rs_r0_y);
+        rs_c_t1_z = qmul(rs_xabs_z, rs_r0_z);
+    end
+    always_comb begin
+        rs_c_r1_x = qmul(rs_r0_x, 32'sh0002_0000 - rs_t1_x);
+        rs_c_r1_y = qmul(rs_r0_y, 32'sh0002_0000 - rs_t1_y);
+        rs_c_r1_z = qmul(rs_r0_z, 32'sh0002_0000 - rs_t1_z);
+    end
+    always_comb begin
+        rs_c_t2_x = qmul(rs_xabs_x, rs_r1_x);
+        rs_c_t2_y = qmul(rs_xabs_y, rs_r1_y);
+        rs_c_t2_z = qmul(rs_xabs_z, rs_r1_z);
+    end
+    always_comb begin
+        rs_c_inv_x = rs_sign_x ? -qmul(rs_r1_x, 32'sh0002_0000 - rs_t2_x)
+                                :  qmul(rs_r1_x, 32'sh0002_0000 - rs_t2_x);
+        rs_c_inv_y = rs_sign_y ? -qmul(rs_r1_y, 32'sh0002_0000 - rs_t2_y)
+                                :  qmul(rs_r1_y, 32'sh0002_0000 - rs_t2_y);
+        rs_c_inv_z = rs_sign_z ? -qmul(rs_r1_z, 32'sh0002_0000 - rs_t2_z)
+                                :  qmul(rs_r1_z, 32'sh0002_0000 - rs_t2_z);
+    end
+
+    // -------------------------------------------------------------------------
+    // S_ROOT_SLAB combinational slab-intersection (CE='1' on all DSPs)
+    // ro_* and inv_* are stable from end of S_RAY_SETUP through S_ROOT_SLAB.
+    // -------------------------------------------------------------------------
+    always_comb begin
+        rs_c_tx0 = qmul(-ro_x,          inv_x);
+        rs_c_tx1 = qmul(WORLD_Q - ro_x, inv_x);
+        rs_c_ty0 = qmul(-ro_y,          inv_y);
+        rs_c_ty1 = qmul(WORLD_Q - ro_y, inv_y);
+        rs_c_tz0 = qmul(-ro_z,          inv_z);
+        rs_c_tz1 = qmul(WORLD_Q - ro_z, inv_z);
+    end
+
+    // -------------------------------------------------------------------------
     // FSM
     // -------------------------------------------------------------------------
     always_ff @(posedge clk) begin
@@ -299,14 +386,14 @@ module svo_traversal #(
             // -----------------------------------------------------------------
             // S_RAY_SETUP: compute normalised ray direction from pixel + camera.
             //
-            // Primary mode: 14-stage registered pipeline (rs_wait 0->13).
-            // Each stage has at most one qmul on its critical path (<=5 ns),
-            // keeping every combinational path within the 10 ns budget.
-            // No multicycle path constraint is required.
+            // Primary mode: 15-stage registered pipeline (rs_wait 0->14).
+            // Stages 0-13: computation (at most one qmul per stage, <=5 ns path).
+            // Stage 14 (default): pure state transition — no computation, no DSPs.
+            // Separating the state write gives it a minimal path (4-bit decode only),
+            // avoiding marginal timing when qmul DSPs share the same case arm.
             //
-            // Shadow mode: 5-stage pipeline (rs_wait 0->4). Stage 0 sets up
-            // ro/rd/step and computes the qrecip initial estimate; stages 1-4
-            // execute two N-R iterations (4 sequential qmuls, 3 parallel axes).
+            // Shadow mode: 6-stage pipeline (rs_wait 0->5). Stages 0-4 compute;
+            // stage 5 (default) is the pure state transition.
             //
             // Both modes share rs_xabs/r0/t1/r1/t2/sign registers for qrecip.
             S_RAY_SETUP: begin
@@ -326,31 +413,31 @@ module svo_traversal #(
                             rs_wait   <= rs_wait + 1'b1;
                         end
                         4'd1: begin
-                            rs_t1_x <= qmul(rs_xabs_x, rs_r0_x);
-                            rs_t1_y <= qmul(rs_xabs_y, rs_r0_y);
-                            rs_t1_z <= qmul(rs_xabs_z, rs_r0_z);
+                            rs_t1_x <= rs_c_t1_x;
+                            rs_t1_y <= rs_c_t1_y;
+                            rs_t1_z <= rs_c_t1_z;
                             rs_wait <= rs_wait + 1'b1;
                         end
                         4'd2: begin
-                            rs_r1_x <= qmul(rs_r0_x, 32'sh0002_0000 - rs_t1_x);
-                            rs_r1_y <= qmul(rs_r0_y, 32'sh0002_0000 - rs_t1_y);
-                            rs_r1_z <= qmul(rs_r0_z, 32'sh0002_0000 - rs_t1_z);
+                            rs_r1_x <= rs_c_r1_x;
+                            rs_r1_y <= rs_c_r1_y;
+                            rs_r1_z <= rs_c_r1_z;
                             rs_wait <= rs_wait + 1'b1;
                         end
                         4'd3: begin
-                            rs_t2_x <= qmul(rs_xabs_x, rs_r1_x);
-                            rs_t2_y <= qmul(rs_xabs_y, rs_r1_y);
-                            rs_t2_z <= qmul(rs_xabs_z, rs_r1_z);
+                            rs_t2_x <= rs_c_t2_x;
+                            rs_t2_y <= rs_c_t2_y;
+                            rs_t2_z <= rs_c_t2_z;
                             rs_wait <= rs_wait + 1'b1;
                         end
-                        default: begin  // 4'd4 -- final shadow stage
-                            inv_x   <= rs_sign_x ? -qmul(rs_r1_x, 32'sh0002_0000 - rs_t2_x)
-                                                 :  qmul(rs_r1_x, 32'sh0002_0000 - rs_t2_x);
-                            inv_y   <= rs_sign_y ? -qmul(rs_r1_y, 32'sh0002_0000 - rs_t2_y)
-                                                 :  qmul(rs_r1_y, 32'sh0002_0000 - rs_t2_y);
-                            inv_z   <= rs_sign_z ? -qmul(rs_r1_z, 32'sh0002_0000 - rs_t2_z)
-                                                 :  qmul(rs_r1_z, 32'sh0002_0000 - rs_t2_z);
+                        4'd4: begin  // capture inv_*, reset sp; advance to transition stage
+                            inv_x   <= rs_c_inv_x;
+                            inv_y   <= rs_c_inv_y;
+                            inv_z   <= rs_c_inv_z;
                             sp      <= '0;
+                            rs_wait <= rs_wait + 1'b1;  // -> 5
+                        end
+                        default: begin  // 4'd5 -- pure state transition, no computation
                             rs_wait <= '0;
                             state   <= S_ROOT_SLAB;
                         end
@@ -360,14 +447,14 @@ module svo_traversal #(
                     case (rs_wait)
                         4'd0: begin
                             ro_x    <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
-                            rsu     <= qmul($signed({1'b0, px, 16'd0}) - 32'sh00A0_0000, cam_scale);
-                            rsv     <= qmul($signed({1'b0, py, 16'd0}) - 32'sh0078_0000, cam_scale);
+                            rsu     <= rs_c_rsu;
+                            rsv     <= rs_c_rsv;
                             rs_wait <= rs_wait + 1'b1;
                         end
                         4'd1: begin
-                            rs_s1_a <= qmul(rsu, cam_right_x); rs_s1_b <= qmul(rsv, cam_up_x);
-                            rs_s1_c <= qmul(rsu, cam_right_y); rs_s1_d <= qmul(rsv, cam_up_y);
-                            rs_s1_e <= qmul(rsu, cam_right_z); rs_s1_f <= qmul(rsv, cam_up_z);
+                            rs_s1_a <= rs_c_s1_a; rs_s1_b <= rs_c_s1_b;
+                            rs_s1_c <= rs_c_s1_c; rs_s1_d <= rs_c_s1_d;
+                            rs_s1_e <= rs_c_s1_e; rs_s1_f <= rs_c_s1_f;
                             rs_wait <= rs_wait + 1'b1;
                         end
                         4'd2: begin
@@ -377,9 +464,9 @@ module svo_traversal #(
                             rs_wait <= rs_wait + 1'b1;
                         end
                         4'd3: begin
-                            rs_s3_dx2 <= qmul(rsdx, rsdx);
-                            rs_s3_dy2 <= qmul(rsdy, rsdy);
-                            rs_s3_dz2 <= qmul(rsdz, rsdz);
+                            rs_s3_dx2 <= rs_c_dx2;
+                            rs_s3_dy2 <= rs_c_dy2;
+                            rs_s3_dz2 <= rs_c_dz2;
                             rs_wait   <= rs_wait + 1'b1;
                         end
                         4'd4: begin
@@ -388,21 +475,21 @@ module svo_traversal #(
                             rs_wait  <= rs_wait + 1'b1;
                         end
                         4'd5: begin
-                            rs_s5_y0sq <= qmul(rs_s4_y0, rs_s4_y0);
+                            rs_s5_y0sq <= rs_c_y0sq;
                             rs_wait    <= rs_wait + 1'b1;
                         end
                         4'd6: begin
-                            rs_s6_r2y0sq <= qmul(rslen2, rs_s5_y0sq);
+                            rs_s6_r2y0sq <= rs_c_r2y0sq;
                             rs_wait      <= rs_wait + 1'b1;
                         end
                         4'd7: begin
-                            rsinv_len <= qmul(rs_s4_y0, 32'sh0001_8000 - (rs_s6_r2y0sq >>> 1));
+                            rsinv_len <= rs_c_inv_len;
                             rs_wait   <= rs_wait + 1'b1;
                         end
                         4'd8: begin
-                            rsndx   <= qmul(rsdx, rsinv_len);
-                            rsndy   <= qmul(rsdy, rsinv_len);
-                            rsndz   <= qmul(rsdz, rsinv_len);
+                            rsndx   <= rs_c_ndx;
+                            rsndy   <= rs_c_ndy;
+                            rsndz   <= rs_c_ndz;
                             rs_wait <= rs_wait + 1'b1;
                         end
                         4'd9: begin
@@ -417,32 +504,32 @@ module svo_traversal #(
                             rs_wait   <= rs_wait + 1'b1;
                         end
                         4'd10: begin
-                            rs_t1_x <= qmul(rs_xabs_x, rs_r0_x);
-                            rs_t1_y <= qmul(rs_xabs_y, rs_r0_y);
-                            rs_t1_z <= qmul(rs_xabs_z, rs_r0_z);
+                            rs_t1_x <= rs_c_t1_x;
+                            rs_t1_y <= rs_c_t1_y;
+                            rs_t1_z <= rs_c_t1_z;
                             rs_wait <= rs_wait + 1'b1;
                         end
                         4'd11: begin
-                            rs_r1_x <= qmul(rs_r0_x, 32'sh0002_0000 - rs_t1_x);
-                            rs_r1_y <= qmul(rs_r0_y, 32'sh0002_0000 - rs_t1_y);
-                            rs_r1_z <= qmul(rs_r0_z, 32'sh0002_0000 - rs_t1_z);
+                            rs_r1_x <= rs_c_r1_x;
+                            rs_r1_y <= rs_c_r1_y;
+                            rs_r1_z <= rs_c_r1_z;
                             rs_wait <= rs_wait + 1'b1;
                         end
                         4'd12: begin
-                            rs_t2_x <= qmul(rs_xabs_x, rs_r1_x);
-                            rs_t2_y <= qmul(rs_xabs_y, rs_r1_y);
-                            rs_t2_z <= qmul(rs_xabs_z, rs_r1_z);
+                            rs_t2_x <= rs_c_t2_x;
+                            rs_t2_y <= rs_c_t2_y;
+                            rs_t2_z <= rs_c_t2_z;
                             rs_wait <= rs_wait + 1'b1;
                         end
-                        default: begin  // 4'd13 -- final primary stage
-                            inv_x   <= rs_sign_x ? -qmul(rs_r1_x, 32'sh0002_0000 - rs_t2_x)
-                                                 :  qmul(rs_r1_x, 32'sh0002_0000 - rs_t2_x);
-                            inv_y   <= rs_sign_y ? -qmul(rs_r1_y, 32'sh0002_0000 - rs_t2_y)
-                                                 :  qmul(rs_r1_y, 32'sh0002_0000 - rs_t2_y);
-                            inv_z   <= rs_sign_z ? -qmul(rs_r1_z, 32'sh0002_0000 - rs_t2_z)
-                                                 :  qmul(rs_r1_z, 32'sh0002_0000 - rs_t2_z);
+                        4'd13: begin  // capture inv_* and rd_*, reset sp; advance to transition stage
+                            inv_x   <= rs_c_inv_x;
+                            inv_y   <= rs_c_inv_y;
+                            inv_z   <= rs_c_inv_z;
                             rd_x    <= rsndx;  rd_y <= rsndy;  rd_z <= rsndz;
                             sp      <= '0;
+                            rs_wait <= rs_wait + 1'b1;  // -> 14
+                        end
+                        default: begin  // 4'd14 -- pure state transition, no computation
                             rs_wait <= '0;
                             state   <= S_ROOT_SLAB;
                         end
@@ -452,12 +539,10 @@ module svo_traversal #(
 
             // -----------------------------------------------------------------
             S_ROOT_SLAB: begin
-                // Convert World Size to Q16.16
-                rs_world_q = WORLD_SIZE << 16;
-                // Find t at each slab boundary (0 & 64 for each component)
-                rs_tx0 = qmul(-ro_x,              inv_x); rs_tx1 = qmul(rs_world_q - ro_x, inv_x);
-                rs_ty0 = qmul(-ro_y,              inv_y); rs_ty1 = qmul(rs_world_q - ro_y, inv_y);
-                rs_tz0 = qmul(-ro_z,              inv_z); rs_tz1 = qmul(rs_world_q - ro_z, inv_z);
+                // Slab boundary times come from the always_comb DSPs (no inline qmul)
+                rs_tx0 = rs_c_tx0; rs_tx1 = rs_c_tx1;
+                rs_ty0 = rs_c_ty0; rs_ty1 = rs_c_ty1;
+                rs_tz0 = rs_c_tz0; rs_tz1 = rs_c_tz1;
                 // sort so tx0 is always the smaller value
                 if (rs_tx0 > rs_tx1) begin rs_tmp=rs_tx0; rs_tx0=rs_tx1; rs_tx1=rs_tmp; end
                 if (rs_ty0 > rs_ty1) begin rs_tmp=rs_ty0; rs_ty0=rs_ty1; rs_ty1=rs_tmp; end
