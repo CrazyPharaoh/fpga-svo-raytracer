@@ -238,6 +238,14 @@ module svo_traversal #(
     // registered copy that breaks the S_BRAM_WAIT t_next two-qmul chain.
     logic signed [31:0] bw_c_ex, bw_c_ey, bw_c_ez;
     logic signed [31:0] bw_ex_r, bw_ey_r, bw_ez_r;
+    // S_BRAM_WAIT field=6 combinational geometry (all from registered bw_ex_r).
+    logic [6:0]         bw_c_icx, bw_c_icy, bw_c_icz;
+    logic [5:0]         bw_c_cx,  bw_c_cy,  bw_c_cz;
+    logic signed [31:0] bw_c_nhq;
+    logic signed [31:0] bw_c_exrel, bw_c_eyrel, bw_c_ezrel;
+    logic signed [31:0] bw_c_distx, bw_c_disty, bw_c_distz;
+    logic signed [31:0] bw_c_dtx,   bw_c_dty,   bw_c_dtz;
+    logic signed [31:0] bw_c_tnx,   bw_c_tny,   bw_c_tnz;
 
     // -------------------------------------------------------------------------
     // SVO node registers
@@ -357,6 +365,46 @@ module svo_traversal #(
         bw_c_ex = ro_x + qmul(t_min, rd_x);
         bw_c_ey = ro_y + qmul(t_min, rd_y);
         bw_c_ez = ro_z + qmul(t_min, rd_z);
+    end
+
+    // -------------------------------------------------------------------------
+    // S_BRAM_WAIT field=6 combinational geometry (CE='1' on all DSPs).
+    // Reads *registered* bw_ex_r so each qmul is a single DSP stage.
+    // node_half / node_origin_* / step_* / inv_* are stable across the BRAM read.
+    // -------------------------------------------------------------------------
+    always_comb begin
+        bw_c_nhq = $signed(32'(node_half)) << 16;
+        // child cell index within this node, clamped on underflow/negative
+        bw_c_icx = ($signed(bw_ex_r) < 0) ? 7'd0 : bw_ex_r[22:16];
+        bw_c_icy = ($signed(bw_ey_r) < 0) ? 7'd0 : bw_ey_r[22:16];
+        bw_c_icz = ($signed(bw_ez_r) < 0) ? 7'd0 : bw_ez_r[22:16];
+        bw_c_icx = (bw_c_icx >= node_origin_x) ? bw_c_icx - node_origin_x : 7'd0;
+        bw_c_icy = (bw_c_icy >= node_origin_y) ? bw_c_icy - node_origin_y : 7'd0;
+        bw_c_icz = (bw_c_icz >= node_origin_z) ? bw_c_icz - node_origin_z : 7'd0;
+        bw_c_cx  = (bw_c_icx >= node_half) ? 6'd1 : 6'd0;
+        bw_c_cy  = (bw_c_icy >= node_half) ? 6'd1 : 6'd0;
+        bw_c_cz  = (bw_c_icz >= node_half) ? 6'd1 : 6'd0;
+        bw_c_exrel = bw_ex_r - ($signed(32'(node_origin_x)) << 16);
+        bw_c_eyrel = bw_ey_r - ($signed(32'(node_origin_y)) << 16);
+        bw_c_ezrel = bw_ez_r - ($signed(32'(node_origin_z)) << 16);
+        if (!step_x[2])
+            bw_c_distx = bw_c_cx[0] ? ((bw_c_nhq <<< 1) - bw_c_exrel) : (bw_c_nhq - bw_c_exrel);
+        else
+            bw_c_distx = bw_c_cx[0] ? (bw_c_exrel - bw_c_nhq) : bw_c_exrel;
+        if (!step_y[2])
+            bw_c_disty = bw_c_cy[0] ? ((bw_c_nhq <<< 1) - bw_c_eyrel) : (bw_c_nhq - bw_c_eyrel);
+        else
+            bw_c_disty = bw_c_cy[0] ? (bw_c_eyrel - bw_c_nhq) : bw_c_eyrel;
+        if (!step_z[2])
+            bw_c_distz = bw_c_cz[0] ? ((bw_c_nhq <<< 1) - bw_c_ezrel) : (bw_c_nhq - bw_c_ezrel);
+        else
+            bw_c_distz = bw_c_cz[0] ? (bw_c_ezrel - bw_c_nhq) : bw_c_ezrel;
+        bw_c_dtx = qmul(bw_c_nhq, qabs(inv_x));
+        bw_c_dty = qmul(bw_c_nhq, qabs(inv_y));
+        bw_c_dtz = qmul(bw_c_nhq, qabs(inv_z));
+        bw_c_tnx = t_min + qmul(bw_c_distx, qabs(inv_x));
+        bw_c_tny = t_min + qmul(bw_c_disty, qabs(inv_y));
+        bw_c_tnz = t_min + qmul(bw_c_distz, qabs(inv_z));
     end
 
     // -------------------------------------------------------------------------
@@ -646,66 +694,21 @@ module svo_traversal #(
                 if (bram_field == 3'd6) begin
                     svo_rd_en <= '0;
                     bitmask   <= r_bitmask;
+                    // dt depends only on the (already-restored or freshly-halved)
+                    // node_half + |inv|, stable across the BRAM read, so it is
+                    // correct in BOTH the fresh-descend and post-pop cases.
+                    dt_x <= bw_c_dtx; dt_y <= bw_c_dty; dt_z <= bw_c_dtz;
                     if (post_pop) begin
                         // r_child[]/r_block[] now hold the parent node's data.
-                        // cx/cy/cz, t_next, and dt were already restored by S_POP_STACK.
+                        // cx/cy/cz and t_next were already restored by S_POP_STACK;
+                        // dt is recomputed above from the restored node_half.
                         post_pop <= 1'b0;
                         state    <= S_EMPTY;
                     end else begin
-                    bw_ex  = ro_x + qmul(t_min, rd_x);
-                    bw_ey  = ro_y + qmul(t_min, rd_y);
-                    bw_ez  = ro_z + qmul(t_min, rd_z);
-                    bw_icx = ($signed(bw_ex) < 0) ? 7'd0 : bw_ex[22:16];
-                    bw_icy = ($signed(bw_ey) < 0) ? 7'd0 : bw_ey[22:16];
-                    bw_icz = ($signed(bw_ez) < 0) ? 7'd0 : bw_ez[22:16];
-                    // Clamp to 0 on underflow: rounding can put bw_ic* just below
-                    // the child's origin when t_min is a boundary-crossing time.
-                    bw_icx = (bw_icx >= node_origin_x) ? bw_icx - node_origin_x : 7'd0;
-                    bw_icy = (bw_icy >= node_origin_y) ? bw_icy - node_origin_y : 7'd0;
-                    bw_icz = (bw_icz >= node_origin_z) ? bw_icz - node_origin_z : 7'd0;
-                    cx  <= (bw_icx >= node_half) ? 6'd1 : 6'd0;
-                    cy  <= (bw_icy >= node_half) ? 6'd1 : 6'd0;
-                    cz  <= (bw_icz >= node_half) ? 6'd1 : 6'd0;
-                    bw_abs_ix = (inv_x >= 0) ? inv_x : -inv_x;
-                    bw_abs_iy = (inv_y >= 0) ? inv_y : -inv_y;
-                    bw_abs_iz = (inv_z >= 0) ? inv_z : -inv_z;
-                    bw_nh = $signed(32'(node_half)) << 16;   // node_half as Q16.16
-                    dt_x     <= qmul(bw_nh, bw_abs_ix);
-                    dt_y     <= qmul(bw_nh, bw_abs_iy);
-                    dt_z     <= qmul(bw_nh, bw_abs_iz);
-                    // Correct t_next: distance from entry point to next boundary (not from node edge)
-                    bw_ex_rel = bw_ex - ($signed(32'(node_origin_x)) << 16);
-                    bw_ey_rel = bw_ey - ($signed(32'(node_origin_y)) << 16);
-                    bw_ez_rel = bw_ez - ($signed(32'(node_origin_z)) << 16);
-                    if (!step_x[2])  // positive direction: MSB=0
-                        bw_dist_x = (bw_icx >= node_half) ?
-                            ((bw_nh <<< 1) - bw_ex_rel) :   // cx=1: 2*nh - pos
-                            (bw_nh - bw_ex_rel);             // cx=0: nh - pos
-                    else
-                        bw_dist_x = (bw_icx >= node_half) ?
-                            (bw_ex_rel - bw_nh) :            // cx=1: pos - nh
-                            bw_ex_rel;                       // cx=0: pos - 0
-                    if (!step_y[2])  // positive direction: MSB=0
-                        bw_dist_y = (bw_icy >= node_half) ?
-                            ((bw_nh <<< 1) - bw_ey_rel) :
-                            (bw_nh - bw_ey_rel);
-                    else
-                        bw_dist_y = (bw_icy >= node_half) ?
-                            (bw_ey_rel - bw_nh) :
-                            bw_ey_rel;
-                    if (!step_z[2])  // positive direction: MSB=0
-                        bw_dist_z = (bw_icz >= node_half) ?
-                            ((bw_nh <<< 1) - bw_ez_rel) :
-                            (bw_nh - bw_ez_rel);
-                    else
-                        bw_dist_z = (bw_icz >= node_half) ?
-                            (bw_ez_rel - bw_nh) :
-                            bw_ez_rel;
-                    t_next_x <= t_min + qmul(bw_dist_x, bw_abs_ix);
-                    t_next_y <= t_min + qmul(bw_dist_y, bw_abs_iy);
-                    t_next_z <= t_min + qmul(bw_dist_z, bw_abs_iz);
-                    state <= S_CHECK_CHILD;
-                    end  // end else (not post_pop)
+                        cx       <= bw_c_cx; cy <= bw_c_cy; cz <= bw_c_cz;
+                        t_next_x <= bw_c_tnx; t_next_y <= bw_c_tny; t_next_z <= bw_c_tnz;
+                        state    <= S_CHECK_CHILD;
+                    end
                 end
             end
 
@@ -810,10 +813,8 @@ module svo_traversal #(
                     t_next_x      <= stk_t_next_x [sp-1];
                     t_next_y      <= stk_t_next_y [sp-1];
                     t_next_z      <= stk_t_next_z [sp-1];
-                    // Recompute dt from restored node_half and per-ray inv (no stack needed)
-                    dt_x          <= qmul($signed({10'd0, stk_node_half[sp-1], 16'd0}), inv_x[31] ? -inv_x : inv_x);
-                    dt_y          <= qmul($signed({10'd0, stk_node_half[sp-1], 16'd0}), inv_y[31] ? -inv_y : inv_y);
-                    dt_z          <= qmul($signed({10'd0, stk_node_half[sp-1], 16'd0}), inv_z[31] ? -inv_z : inv_z);
+                    // dt is recomputed in S_BRAM_WAIT field=6 from the restored
+                    // node_half (post_pop path), so no qmul is needed here.
                     cx            <= stk_cx       [sp-1];
                     cy            <= stk_cy       [sp-1];
                     cz            <= stk_cz       [sp-1];
