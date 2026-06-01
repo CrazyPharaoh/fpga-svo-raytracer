@@ -185,11 +185,7 @@ module svo_traversal #(
     logic [5:0] node_origin_x, node_origin_y, node_origin_z;
 
     logic signed [31:0] rs_tx0, rs_tx1, rs_ty0, rs_ty1, rs_tz0, rs_tz1, rs_tmp;
-    logic signed [31:0] bw_ex, bw_ey, bw_ez, bw_abs_ix, bw_abs_iy, bw_abs_iz;
-    logic signed [31:0] bw_ex_rel, bw_ey_rel, bw_ez_rel;   // position within node (Q16.16)
-    logic signed [31:0] bw_dist_x, bw_dist_y, bw_dist_z;   // distance to next boundary
-    logic signed [31:0] bw_nh;                               // node_half in Q16.16
-    logic [6:0]         bw_icx, bw_icy, bw_icz;
+
     logic [1:0]         em_face;
     logic               em_fsign;
     logic signed [31:0] rsu, rsv, rsdx, rsdy, rsdz, rslen2, rsinv_len, rsndx, rsndy, rsndz;
