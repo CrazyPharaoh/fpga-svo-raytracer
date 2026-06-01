@@ -233,6 +233,11 @@ module svo_traversal #(
     logic signed [31:0] rs_c_inv_x,  rs_c_inv_y,  rs_c_inv_z;
     // S_ROOT_SLAB: ray-vs-world-box slab intersection times (CE='1' on all DSPs)
     logic signed [31:0] rs_c_tx0, rs_c_tx1, rs_c_ty0, rs_c_ty1, rs_c_tz0, rs_c_tz1;
+    // Entry point P = ro + t_min*rd (Q16.16). Single combinational qmul per axis.
+    // bw_c_* feed S_SOLID's hit point directly; bw_ex_r/ey_r/ez_r are the
+    // registered copy that breaks the S_BRAM_WAIT t_next two-qmul chain.
+    logic signed [31:0] bw_c_ex, bw_c_ey, bw_c_ez;
+    logic signed [31:0] bw_ex_r, bw_ey_r, bw_ez_r;
 
     // -------------------------------------------------------------------------
     // SVO node registers
@@ -344,6 +349,17 @@ module svo_traversal #(
     end
 
     // -------------------------------------------------------------------------
+    // Entry-point combinational (CE='1'): P = ro + t_min*rd.
+    // t_min, ro_*, rd_* are stable across the whole 8-cycle BRAM read and at the
+    // moment of a solid hit, so a single registered copy (bw_ex_r) is always valid.
+    // -------------------------------------------------------------------------
+    always_comb begin
+        bw_c_ex = ro_x + qmul(t_min, rd_x);
+        bw_c_ey = ro_y + qmul(t_min, rd_y);
+        bw_c_ez = ro_z + qmul(t_min, rd_z);
+    end
+
+    // -------------------------------------------------------------------------
     // FSM
     // -------------------------------------------------------------------------
     always_ff @(posedge clk) begin
@@ -367,6 +383,10 @@ module svo_traversal #(
             any_hit     <= '0;
             shade_start <= '0;
             axis_tvalid <= '0;
+            // Capture the combinational entry point every cycle.
+            bw_ex_r <= bw_c_ex;
+            bw_ey_r <= bw_c_ey;
+            bw_ez_r <= bw_c_ez;
 
             unique case (state)
 
@@ -727,9 +747,9 @@ module svo_traversal #(
                 t_hit        <= t_min;
                 block_id_hit <= r_block[cidx];
                 // hit point calc using t and ray direction
-                hit_px_r     <= ro_x + qmul(t_min, rd_x);
-                hit_py_r     <= ro_y + qmul(t_min, rd_y);
-                hit_pz_r     <= ro_z + qmul(t_min, rd_z);
+                hit_px_r     <= bw_c_ex;
+                hit_py_r     <= bw_c_ey;
+                hit_pz_r     <= bw_c_ez;
                 if (SHADOW_MODE) begin
                     // Shadow mode: immediately signal hit and stop
                     any_hit    <= 1'b1;
@@ -745,9 +765,9 @@ module svo_traversal #(
                     shade_ray_dx        <= rd_x;
                     shade_ray_dy        <= rd_y;
                     shade_ray_dz        <= rd_z;
-                    shade_hit_px        <= ro_x + qmul(t_min, rd_x);
-                    shade_hit_py        <= ro_y + qmul(t_min, rd_y);
-                    shade_hit_pz        <= ro_z + qmul(t_min, rd_z);
+                    shade_hit_px        <= bw_c_ex;
+                    shade_hit_py        <= bw_c_ey;
+                    shade_hit_pz        <= bw_c_ez;
                     shade_start         <= 1'b1;
                     state               <= S_WAIT_SHADE;
                 end else begin
