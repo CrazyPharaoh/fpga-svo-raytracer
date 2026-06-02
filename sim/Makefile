@@ -26,6 +26,8 @@ include $(shell cocotb-config --makefiles)/Makefile.sim
 # ─── Phase 2: full shading + shadows ─────────────────────────────────────────
 shade:
 	$(MAKE) -f Makefile.shade
+	@mkdir -p $(OUTPUT_DIR)/shaded
+	@cp $(OUTPUT_DIR)/hardware_render_shaded.png $(OUTPUT_DIR)/shaded/hardware_render_shaded_$$(date +%Y%m%d_%H%M%S).png && echo "Archived dated render -> $(OUTPUT_DIR)/shaded/"
 
 compare:
 	python3 gen_reference.py
@@ -38,4 +40,5 @@ compare-shade:
 .PHONY: compare compare-shade shade clean
 
 clean::
-	rm -rf sim_build __pycache__ results.xml $(OUTPUT_DIR)
+	rm -rf sim_build __pycache__ results.xml shade_build
+	find $(OUTPUT_DIR) -mindepth 1 -maxdepth 1 ! -name shaded -exec rm -rf {} +
