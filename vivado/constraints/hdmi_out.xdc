@@ -16,5 +16,7 @@ set_property -dict {PACKAGE_PIN K19 IOSTANDARD TMDS_33} [get_ports {hdmi_out_dat
 set_property -dict {PACKAGE_PIN H18 IOSTANDARD TMDS_33} [get_ports {hdmi_out_data_n[2]}]
 set_property -dict {PACKAGE_PIN J18 IOSTANDARD TMDS_33} [get_ports {hdmi_out_data_p[2]}]
 
-# Hot-plug detect (optional for Phase 1; tie to axi_gpio or leave as input)
-set_property -dict {PACKAGE_PIN R19 IOSTANDARD LVCMOS33} [get_ports {hdmi_out_hpd[0]}]
+# Hot-plug detect — NOT used in Phase 1 (no hdmi_out_hpd port in the block design).
+# Leave commented unless you add an hdmi_out_hpd external port (e.g. via axi_gpio).
+# set_property -dict {PACKAGE_PIN R19 IOSTANDARD LVCMOS33} [get_ports {hdmi_out_hpd[0]}]
+

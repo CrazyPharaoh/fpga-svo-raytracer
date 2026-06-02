@@ -1,4 +1,4 @@
-VERILOG_SOURCES += $(RTL_DIR)/axis_upscale_2x.sv
+VERILOG_SOURCES += $(RTL_DIR)/../../axis_upscale_2x/hdl/axis_upscale_2x.sv
 TOPLEVEL         = axis_upscale_2x
 MODULE           = test_axis_upscale_2x
 TOPLEVEL_LANG    = verilog
