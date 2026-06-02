@@ -74,15 +74,20 @@ module shading_pipeline (
     // -------------------------------------------------------------------------
     // FSM
     // -------------------------------------------------------------------------
-    typedef enum logic [2:0] {
-        S_IDLE     = 3'd0,
-        S_NORMAL   = 3'd1,
-        S_DIFFSPEC = 3'd2,
-        S_SHADOW   = 3'd3,
-        S_WAIT_SH  = 3'd4,
-        S_COMBINE  = 3'd5,
-        S_FOG      = 3'd6,
-        S_DONE     = 3'd7
+    typedef enum logic [3:0] {
+        S_IDLE      = 4'd0,
+        S_NORMAL    = 4'd1,
+        S_DS_A      = 4'd2,   // dot(n,light) -> diffuse + dnl; shadow ray origin
+        S_DS_B      = 4'd3,   // reflect numerator m = dnl * n
+        S_DS_C      = 4'd4,   // reflect r = light - 2m; dot_rv = dot(r, ray)
+        S_DS_D      = 4'd5,   // s = clamp(-dot_rv); s2 = s*s
+        S_DS_E      = 4'd6,   // spec = s2*s2
+        S_SHADOW    = 4'd7,
+        S_WAIT_SH   = 4'd8,
+        S_COMBINE   = 4'd9,
+        S_FOG       = 4'd10,  // blend = clamp((t_hit-fog_start)*INV_RANGE)
+        S_FOG_LERP  = 4'd11,  // lerp combined->fog by blend
+        S_DONE      = 4'd12
     } state_t;
 
     state_t state;
@@ -96,6 +101,13 @@ module shading_pipeline (
     logic [23:0] base_color;
     logic [23:0] combined;
     logic        shadowed;
+
+    // Pipelined S_DIFFSPEC / S_FOG intermediates (registered between stages)
+    logic signed [31:0] dnl;                 // dot(normal, light) — reused for diffuse + reflect
+    logic signed [31:0] m_nx, m_ny, m_nz;    // reflect numerator  = dnl * normal
+    logic signed [31:0] dot_rv;              // dot(reflect, ray_dir)
+    logic signed [31:0] s2;                  // specular base squared
+    logic signed [31:0] blend;               // fog blend factor [0,1]
 
     // 1/185 in Q16.16 (reciprocal of MAX_T - FOG_START = 200-15)
     localparam logic signed [31:0] FOG_INV_RANGE = 32'h0000_0394;
@@ -130,40 +142,72 @@ module shading_pipeline (
                 endcase
                 // Look up base colour; clamp block_id to LUT range [0,5]
                 base_color <= lut[(block_id > 5) ? 5 : block_id][23:0];
-                state <= S_DIFFSPEC;
+                state <= S_DS_A;
             end
 
             // -----------------------------------------------------------------
-            S_DIFFSPEC: begin
-                // Diffuse = clamp(dot(normal, light_dir), 0, 1)
+            // Pipelined diffuse + specular. Each stage is <= 1 qmul deep so
+            // every combinational path stays under the 10 ns clock period.
+            // Algebra is identical to the old single-cycle S_DIFFSPEC.
+            S_DS_A: begin
+                // dot(normal, light) is computed ONCE and reused: the diffuse
+                // term and the specular dot_ln are the same dot product
+                // (qmul is commutative).
                 begin
-                    logic signed [31:0] d;
-                    d = qmul(nx, light_dir_x) + qmul(ny, light_dir_y) + qmul(nz, light_dir_z);
-                    diffuse <= qclamp01(d);
+                    logic signed [31:0] dnl_c;
+                    dnl_c   = qmul(nx, light_dir_x)
+                            + qmul(ny, light_dir_y)
+                            + qmul(nz, light_dir_z);
+                    dnl     <= dnl_c;
+                    diffuse <= qclamp01(dnl_c);
                 end
-                // Specular: r = ld - 2*dot(ld,n)*n;  spec = clamp(-dot(r,rd),0,1)^4
-                begin
-                    logic signed [31:0] dot_ln, rx, ry, rz, dot_rv, s;
-                    // dot of ray light and normal
-                    dot_ln = qmul(light_dir_x, nx) + qmul(light_dir_y, ny) + qmul(light_dir_z, nz);
-                    // reflect = light_dir − 2·dot(light_dir, normal)·normal
-                    // where the light would bounce if normal was a mirror
-                    rx = light_dir_x - qmul(32'sh0002_0000, qmul(dot_ln, nx));
-                    ry = light_dir_y - qmul(32'sh0002_0000, qmul(dot_ln, ny));
-                    rz = light_dir_z - qmul(32'sh0002_0000, qmul(dot_ln, nz));
-                    // dot of reflect and ray dir (camera to hit)
-                    dot_rv = qmul(rx, ray_dx) + qmul(ry, ray_dy) + qmul(rz, ray_dz);
-                    s = qclamp01(-dot_rv);    // negate: ray goes toward eye
-                    s = qmul(s, s);           // ^2
-                    spec <= qmul(s, s);       // ^4
-                end
-                // Shadow ray: origin = hit_pos + normal * shadow_bias
+                // Shadow ray: origin = hit_pos + normal * shadow_bias (depth 1,
+                // independent of the specular chain).
                 shadow_ro_x <= hit_px + qmul(nx, shadow_bias);
                 shadow_ro_y <= hit_py + qmul(ny, shadow_bias);
                 shadow_ro_z <= hit_pz + qmul(nz, shadow_bias);
                 shadow_rd_x <= light_dir_x;
                 shadow_rd_y <= light_dir_y;
                 shadow_rd_z <= light_dir_z;
+                state <= S_DS_B;
+            end
+
+            S_DS_B: begin
+                // Reflect numerator: m = dot(light,normal) * normal
+                m_nx <= qmul(dnl, nx);
+                m_ny <= qmul(dnl, ny);
+                m_nz <= qmul(dnl, nz);
+                state <= S_DS_C;
+            end
+
+            S_DS_C: begin
+                // reflect r = light_dir - 2*m. The *2 is an exact arithmetic
+                // left shift, NOT a multiply (saves 3 DSPs vs old qmul(2.0,.)).
+                // dot_rv = dot(reflect, ray_dir).
+                begin
+                    logic signed [31:0] rx, ry, rz;
+                    rx = light_dir_x - (m_nx <<< 1);
+                    ry = light_dir_y - (m_ny <<< 1);
+                    rz = light_dir_z - (m_nz <<< 1);
+                    dot_rv <= qmul(rx, ray_dx)
+                            + qmul(ry, ray_dy)
+                            + qmul(rz, ray_dz);
+                end
+                state <= S_DS_D;
+            end
+
+            S_DS_D: begin
+                // s = clamp(-dot_rv, 0, 1) (negate: ray goes toward eye); s2 = s^2
+                begin
+                    logic signed [31:0] s;
+                    s  = qclamp01(-dot_rv);
+                    s2 <= qmul(s, s);
+                end
+                state <= S_DS_E;
+            end
+
+            S_DS_E: begin
+                spec  <= qmul(s2, s2);   // s^4
                 state <= S_SHADOW;
             end
 
@@ -201,11 +245,22 @@ module shading_pipeline (
             S_FOG: begin
                 if (is_miss) begin
                     pixel_color <= sky_color;
+                    state       <= S_DONE;
                 end else if (t_hit > fog_start) begin
-                    logic signed [31:0] blend;
+                    // blend = clamp((t_hit - fog_start) * (1/range))  — 1 qmul
+                    blend <= qclamp01(qmul(t_hit - fog_start, FOG_INV_RANGE));
+                    state <= S_FOG_LERP;
+                end else begin
+                    pixel_color <= combined;
+                    state       <= S_DONE;
+                end
+            end
+
+            S_FOG_LERP: begin
+                // pixel = lerp(combined, fog_color, blend)  — 3 parallel qmul
+                begin
                     logic signed [31:0] cr, cg, cb, fr, fg, fb;
                     logic signed [31:0] pr, pg, pb;
-                    blend = qclamp01(qmul(t_hit - fog_start, FOG_INV_RANGE));
                     cr = {16'd0, combined[23:16]};
                     cg = {16'd0, combined[15:8]};
                     cb = {16'd0, combined[7:0]};
@@ -216,8 +271,6 @@ module shading_pipeline (
                     pg = cg + qmul(blend, fg - cg);
                     pb = cb + qmul(blend, fb - cb);
                     pixel_color <= {pr[7:0], pg[7:0], pb[7:0]};
-                end else begin
-                    pixel_color <= combined;
                 end
                 state <= S_DONE;
             end
