@@ -195,6 +195,13 @@ module top #(
         .dbg_tvalid(dbg_tvalid_w), .dbg_tready(dbg_tready_w)
     );
 
+    // -------------------------------------------------------------------------
+    // OPTION A (2026-06-02): hard shadows temporarily disabled to free ~68 DSP
+    // (the shadow_trav instance) and close Phase 2 timing. Set to 1'b1 to
+    // restore full shadows. See plan 2026-06-02-option-a-shadows-off.md.
+    // -------------------------------------------------------------------------
+    localparam bit SHADOW_EN = 1'b0;
+
     // Phase 2 only: shading pipeline + shadow traversal
     generate if (SHADE_MODE) begin : g_shading
 
@@ -218,6 +225,7 @@ module top #(
             .pixel_color(shade_pixel_color), .done(shade_done)
         );
 
+        if (SHADOW_EN) begin : g_shadow
         svo_traversal #(.SHADOW_MODE(1), .SHADE_MODE(0)) shadow_trav (
             .clk(clk), .rst(rst), .start(shadow_start),
             .cam_pos_x(shadow_ro_x), .cam_pos_y(shadow_ro_y), .cam_pos_z(shadow_ro_z),
@@ -241,6 +249,16 @@ module top #(
             .dbg_px(), .dbg_py(),
             .dbg_tvalid(), .dbg_tready()
         );
+        end else begin : g_no_shadow
+            // OPTION A: shadows off. Tie shadow_done high so the shading FSM's
+            // S_WAIT_SH proceeds immediately with shadowed = shadow_hit = 0
+            // (every surface treated as fully lit). The shadow_trav instance
+            // (and its ~68 DSP) is not synthesised.
+            assign shadow_done      = 1'b1;
+            assign shadow_any_hit   = 1'b0;
+            assign svo_rd_en_shad   = 1'b0;
+            assign svo_rd_addr_shad = '0;
+        end
 
     end else begin : g_no_shading
         // tie off shading outputs

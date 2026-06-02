@@ -36,6 +36,9 @@ LUT = [
 ]
 
 SHADOW_BIAS = 0.5    # matches tb_svo_full.py
+# OPTION A: must match SHADOW_EN in svo_full_tb.sv / top.sv.
+# False = shadows off (every lit surface fully lit).
+SHADOWS_ENABLED = False
 
 
 def clamp01(x):
@@ -91,12 +94,15 @@ def shade_pixel(t_hit, hit_pos, face_axis, face_sign, block_id,
     spec = s * s       # ^4  (spec ∈ [0,1])
 
     # Shadow ray: hit_pos + normal * SHADOW_BIAS → LIGHT_DIR
-    sx = hit_pos[0] + normal[0] * SHADOW_BIAS
-    sy = hit_pos[1] + normal[1] * SHADOW_BIAS
-    sz = hit_pos[2] + normal[2] * SHADOW_BIAS
-    shadow_hit = ref.svo_traverse(sx, sy, sz,
-                                  LIGHT_DIR[0], LIGHT_DIR[1], LIGHT_DIR[2],
-                                  svo_nodes, shadow_mode=True)
+    if SHADOWS_ENABLED:
+        sx = hit_pos[0] + normal[0] * SHADOW_BIAS
+        sy = hit_pos[1] + normal[1] * SHADOW_BIAS
+        sz = hit_pos[2] + normal[2] * SHADOW_BIAS
+        shadow_hit = ref.svo_traverse(sx, sy, sz,
+                                      LIGHT_DIR[0], LIGHT_DIR[1], LIGHT_DIR[2],
+                                      svo_nodes, shadow_mode=True)
+    else:
+        shadow_hit = False
 
     # ── S_COMBINE ─────────────────────────────────────────────────────────────
     # direct = shadowed ? AMBIENT : clamp(diffuse + AMBIENT)

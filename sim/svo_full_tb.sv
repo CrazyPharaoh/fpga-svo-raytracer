@@ -155,8 +155,12 @@ module svo_full_tb (
     );
 
     // -------------------------------------------------------------------------
-    // Shadow traversal — SHADOW_MODE=1, SHADE_MODE=0
+    // Shadow traversal — SHADOW_MODE=1, SHADE_MODE=0.
+    // OPTION A: set SHADOW_EN=1'b0 to mirror the shadows-off synth build
+    // (top.sv). Must match SHADOWS_ENABLED in gen_reference_shaded.py.
     // -------------------------------------------------------------------------
+    localparam bit SHADOW_EN = 1'b0;
+    generate if (SHADOW_EN) begin : g_shadow
     svo_traversal #(.SHADOW_MODE(1), .SHADE_MODE(0)) shadow_trav (
         .clk(clk), .rst(rst), .start(shadow_start),
         .cam_pos_x(shadow_ro_x), .cam_pos_y(shadow_ro_y), .cam_pos_z(shadow_ro_z),
@@ -177,5 +181,12 @@ module svo_full_tb (
         .dbg_state(), .dbg_rs_wait(), .dbg_px(), .dbg_py(),
         .dbg_tvalid(), .dbg_tready()
     );
+    end else begin : g_no_shadow
+        // shadows off: shading FSM proceeds immediately, shadowed = 0
+        assign shadow_done    = 1'b1;
+        assign shadow_any_hit = 1'b0;
+        assign svo_rd_en_shad   = 1'b0;
+        assign svo_rd_addr_shad = '0;
+    end endgenerate
 
 endmodule
