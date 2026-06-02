@@ -215,9 +215,9 @@ module top #(
             .light_dir_x(light_dir_x), .light_dir_y(light_dir_y), .light_dir_z(light_dir_z),
             .sky_color(sky_color_reg[23:0]), .fog_color(fog_color_reg[23:0]),
             .fog_start(fog_start_reg), .shadow_bias(shadow_bias_reg),
-            .lut('{sky_color_reg[23:0], // reuse lut slots
-                   lut[0][23:0], lut[1][23:0], lut[2][23:0],
-                   lut[3][23:0], lut[4][23:0]}),
+            .lut(lut),   // block_id N -> lut[N], matching svo_full_tb.sv / svo_builder
+                         // (was a shifted '{sky_color, lut[0]..lut[4]} remap that
+                         //  caused off-by-one colours on HW the sim couldn't catch)
             .shadow_start(shadow_start),
             .shadow_ro_x(shadow_ro_x), .shadow_ro_y(shadow_ro_y), .shadow_ro_z(shadow_ro_z),
             .shadow_rd_x(shadow_rd_x), .shadow_rd_y(shadow_rd_y), .shadow_rd_z(shadow_rd_z),
