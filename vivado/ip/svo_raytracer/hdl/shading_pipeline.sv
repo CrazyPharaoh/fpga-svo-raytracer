@@ -74,20 +74,28 @@ module shading_pipeline (
     // -------------------------------------------------------------------------
     // FSM
     // -------------------------------------------------------------------------
-    typedef enum logic [3:0] {
-        S_IDLE      = 4'd0,
-        S_NORMAL    = 4'd1,
-        S_DS_A      = 4'd2,   // dot(n,light) -> diffuse + dnl; shadow ray origin
-        S_DS_B      = 4'd3,   // reflect numerator m = dnl * n
-        S_DS_C      = 4'd4,   // reflect r = light - 2m; dot_rv = dot(r, ray)
-        S_DS_D      = 4'd5,   // s = clamp(-dot_rv); s2 = s*s
-        S_DS_E      = 4'd6,   // spec = s2*s2
-        S_SHADOW    = 4'd7,
-        S_WAIT_SH   = 4'd8,
-        S_COMBINE   = 4'd9,
-        S_FOG       = 4'd10,  // blend = clamp((t_hit-fog_start)*INV_RANGE)
-        S_FOG_LERP  = 4'd11,  // lerp combined->fog by blend
-        S_DONE      = 4'd12
+    typedef enum logic [4:0] {
+        S_IDLE      = 5'd0,
+        S_NORMAL    = 5'd1,
+        S_DS_A      = 5'd2,   // dot(n,light) products + shadow ray origin
+        S_DS_B      = 5'd3,   // dnl = sum(products); diffuse = clamp(dnl)
+        S_DS_C      = 5'd4,   // reflect numerator m = dnl * n
+        S_DS_D      = 5'd5,   // reflect vector rf = light - 2m
+        S_DS_E      = 5'd6,   // reflect.ray products
+        S_DS_F      = 5'd7,   // dot_rv = sum(products)
+        S_DS_G      = 5'd8,   // s_cl = clamp(-dot_rv)
+        S_DS_H      = 5'd9,   // s2 = s_cl^2
+        S_DS_I      = 5'd10,  // spec = s2^2
+        S_SHADOW    = 5'd11,
+        S_WAIT_SH   = 5'd12,
+        S_COMBINE   = 5'd13,  // direct = (shadowed?0:diffuse)+ambient
+        S_COMB2     = 5'd14,  // base_color * direct
+        S_COMB3     = 5'd15,  // + specular, clamp, pack -> combined
+        S_FOG       = 5'd16,  // blend_raw = (t_hit-fog_start)*INV_RANGE
+        S_FOG_CLAMP = 5'd17,  // blend = clamp(blend_raw)
+        S_FOG_LERP  = 5'd18,  // fog deltas = blend*(fog-combined)
+        S_FOG_LERP2 = 5'd19,  // pixel = combined + delta
+        S_DONE      = 5'd20
     } state_t;
 
     state_t state;
@@ -108,6 +116,16 @@ module shading_pipeline (
     logic signed [31:0] dot_rv;              // dot(reflect, ray_dir)
     logic signed [31:0] s2;                  // specular base squared
     logic signed [31:0] blend;               // fog blend factor [0,1]
+    logic signed [31:0] pn_x, pn_y, pn_z;    // dot(normal,light) partial products
+    logic signed [31:0] rf_x, rf_y, rf_z;    // reflect vector = light - 2m
+    logic signed [31:0] pr_x, pr_y, pr_z;    // reflect·ray partial products
+    logic signed [31:0] s_cl;                // clamp(-dot_rv)
+    logic signed [31:0] direct;              // (shadowed?0:diffuse)+ambient
+    logic signed [31:0] cmb_r, cmb_g, cmb_b; // base_color * direct
+    logic signed [31:0] blend_raw;           // unclamped fog blend
+    logic signed [31:0] fog_dr, fog_dg, fog_db; // fog lerp deltas
+    logic signed [31:0] fog_dist;            // t_hit - fog_start (pre-subtracted)
+    logic signed [31:0] fdiff_r, fdiff_g, fdiff_b; // fog_color - combined (pre-subtracted)
 
     // 1/185 in Q16.16 (reciprocal of MAX_T - FOG_START = 200-15)
     localparam logic signed [31:0] FOG_INV_RANGE = 32'h0000_0394;
@@ -146,23 +164,17 @@ module shading_pipeline (
             end
 
             // -----------------------------------------------------------------
-            // Pipelined diffuse + specular. Each stage is <= 1 qmul deep so
-            // every combinational path stays under the 10 ns clock period.
-            // Algebra is identical to the old single-cycle S_DIFFSPEC.
+            // Pipelined diffuse + specular: ONE arithmetic op per stage so every
+            // combinational path is <= one qmul (~6 ns) and fits the 10 ns clock.
+            // Algebra is identical to the original single-cycle S_DIFFSPEC.
             S_DS_A: begin
-                // dot(normal, light) is computed ONCE and reused: the diffuse
-                // term and the specular dot_ln are the same dot product
-                // (qmul is commutative).
-                begin
-                    logic signed [31:0] dnl_c;
-                    dnl_c   = qmul(nx, light_dir_x)
-                            + qmul(ny, light_dir_y)
-                            + qmul(nz, light_dir_z);
-                    dnl     <= dnl_c;
-                    diffuse <= qclamp01(dnl_c);
-                end
-                // Shadow ray: origin = hit_pos + normal * shadow_bias (depth 1,
-                // independent of the specular chain).
+                // dot(normal, light) partial products — summed in S_DS_B and
+                // reused for both diffuse and the specular reflect.
+                pn_x <= qmul(nx, light_dir_x);
+                pn_y <= qmul(ny, light_dir_y);
+                pn_z <= qmul(nz, light_dir_z);
+                // Shadow ray origin = hit_pos + normal*bias (independent; the
+                // outputs are pruned when the shadow traversal is not built).
                 shadow_ro_x <= hit_px + qmul(nx, shadow_bias);
                 shadow_ro_y <= hit_py + qmul(ny, shadow_bias);
                 shadow_ro_z <= hit_pz + qmul(nz, shadow_bias);
@@ -173,41 +185,55 @@ module shading_pipeline (
             end
 
             S_DS_B: begin
-                // Reflect numerator: m = dot(light,normal) * normal
-                m_nx <= qmul(dnl, nx);
-                m_ny <= qmul(dnl, ny);
-                m_nz <= qmul(dnl, nz);
+                begin
+                    logic signed [31:0] dnl_c;
+                    dnl_c   = pn_x + pn_y + pn_z;
+                    dnl     <= dnl_c;
+                    diffuse <= qclamp01(dnl_c);
+                end
                 state <= S_DS_C;
             end
 
             S_DS_C: begin
-                // reflect r = light_dir - 2*m. The *2 is an exact arithmetic
-                // left shift, NOT a multiply (saves 3 DSPs vs old qmul(2.0,.)).
-                // dot_rv = dot(reflect, ray_dir).
-                begin
-                    logic signed [31:0] rx, ry, rz;
-                    rx = light_dir_x - (m_nx <<< 1);
-                    ry = light_dir_y - (m_ny <<< 1);
-                    rz = light_dir_z - (m_nz <<< 1);
-                    dot_rv <= qmul(rx, ray_dx)
-                            + qmul(ry, ray_dy)
-                            + qmul(rz, ray_dz);
-                end
+                // reflect numerator m = dot(light,normal) * normal
+                m_nx <= qmul(dnl, nx);
+                m_ny <= qmul(dnl, ny);
+                m_nz <= qmul(dnl, nz);
                 state <= S_DS_D;
             end
 
             S_DS_D: begin
-                // s = clamp(-dot_rv, 0, 1) (negate: ray goes toward eye); s2 = s^2
-                begin
-                    logic signed [31:0] s;
-                    s  = qclamp01(-dot_rv);
-                    s2 <= qmul(s, s);
-                end
+                // reflect vector rf = light - 2*m  (×2 = arithmetic shift, no mul)
+                rf_x <= light_dir_x - (m_nx <<< 1);
+                rf_y <= light_dir_y - (m_ny <<< 1);
+                rf_z <= light_dir_z - (m_nz <<< 1);
                 state <= S_DS_E;
             end
 
             S_DS_E: begin
-                spec  <= qmul(s2, s2);   // s^4
+                pr_x <= qmul(rf_x, ray_dx);
+                pr_y <= qmul(rf_y, ray_dy);
+                pr_z <= qmul(rf_z, ray_dz);
+                state <= S_DS_F;
+            end
+
+            S_DS_F: begin
+                dot_rv <= pr_x + pr_y + pr_z;
+                state  <= S_DS_G;
+            end
+
+            S_DS_G: begin
+                s_cl  <= qclamp01(-dot_rv);   // negate: ray goes toward eye
+                state <= S_DS_H;
+            end
+
+            S_DS_H: begin
+                s2    <= qmul(s_cl, s_cl);    // ^2
+                state <= S_DS_I;
+            end
+
+            S_DS_I: begin
+                spec  <= qmul(s2, s2);        // ^4
                 state <= S_SHADOW;
             end
 
@@ -223,19 +249,34 @@ module shading_pipeline (
             end
 
             // -----------------------------------------------------------------
+            // Combine: pipelined one-op-per-stage (qmul isolated from the
+            // pre-clamp and the post add+saturate). Algebra identical to the
+            // old single-cycle S_COMBINE.
             S_COMBINE: begin
+                // direct = (shadowed ? 0 : diffuse) + ambient
+                direct   <= shadowed ? AMBIENT : qclamp01(diffuse + AMBIENT);
+                // Pre-subtract the fog distance here (parallel, independent) so
+                // S_FOG's qmul has no subtract in front of it.
+                fog_dist <= t_hit - fog_start;
+                state    <= S_COMB2;
+            end
+
+            S_COMB2: begin
+                // base_color * direct  (one qmul per channel)
+                cmb_r <= qmul({16'd0, base_color[23:16]}, direct);
+                cmb_g <= qmul({16'd0, base_color[15:8]},  direct);
+                cmb_b <= qmul({16'd0, base_color[7:0]},   direct);
+                state <= S_COMB3;
+            end
+
+            S_COMB3: begin
+                // add white specular highlight, saturate to 8-bit, pack
                 begin
-                    logic signed [31:0] direct, r_ch, g_ch, b_ch, spec_add;
-                    // direct = (shadowed ? 0 : diffuse) + ambient
-                    direct = shadowed ? AMBIENT : qclamp01(diffuse + AMBIENT);
-                    r_ch = qmul({16'd0, base_color[23:16]}, direct);
-                    g_ch = qmul({16'd0, base_color[15:8]},  direct);
-                    b_ch = qmul({16'd0, base_color[7:0]},   direct);
-                    // White specular highlight
+                    logic signed [31:0] spec_add, r_ch, g_ch, b_ch;
                     spec_add = spec >> 8;
-                    r_ch += spec_add; if (r_ch > 8'hFF) r_ch = 8'hFF;
-                    g_ch += spec_add; if (g_ch > 8'hFF) g_ch = 8'hFF;
-                    b_ch += spec_add; if (b_ch > 8'hFF) b_ch = 8'hFF;
+                    r_ch = cmb_r + spec_add; if (r_ch > 8'hFF) r_ch = 8'hFF;
+                    g_ch = cmb_g + spec_add; if (g_ch > 8'hFF) g_ch = 8'hFF;
+                    b_ch = cmb_b + spec_add; if (b_ch > 8'hFF) b_ch = 8'hFF;
                     combined <= {r_ch[7:0], g_ch[7:0], b_ch[7:0]};
                 end
                 state <= S_FOG;
@@ -247,29 +288,40 @@ module shading_pipeline (
                     pixel_color <= sky_color;
                     state       <= S_DONE;
                 end else if (t_hit > fog_start) begin
-                    // blend = clamp((t_hit - fog_start) * (1/range))  — 1 qmul
-                    blend <= qclamp01(qmul(t_hit - fog_start, FOG_INV_RANGE));
-                    state <= S_FOG_LERP;
+                    // blend_raw = fog_dist * (1/range)  — pure qmul (subtract done in S_COMBINE)
+                    blend_raw <= qmul(fog_dist, FOG_INV_RANGE);
+                    state     <= S_FOG_CLAMP;
                 end else begin
                     pixel_color <= combined;
                     state       <= S_DONE;
                 end
             end
 
+            S_FOG_CLAMP: begin
+                // clamp blend AND pre-subtract (fog_color - combined) in parallel,
+                // so S_FOG_LERP's qmul has no subtract in front of it.
+                blend   <= qclamp01(blend_raw);
+                fdiff_r <= {16'd0, fog_color[23:16]} - {16'd0, combined[23:16]};
+                fdiff_g <= {16'd0, fog_color[15:8]}  - {16'd0, combined[15:8]};
+                fdiff_b <= {16'd0, fog_color[7:0]}   - {16'd0, combined[7:0]};
+                state   <= S_FOG_LERP;
+            end
+
             S_FOG_LERP: begin
-                // pixel = lerp(combined, fog_color, blend)  — 3 parallel qmul
+                // fog deltas = blend * (fog_color - combined)  (pure qmul/channel)
+                fog_dr <= qmul(blend, fdiff_r);
+                fog_dg <= qmul(blend, fdiff_g);
+                fog_db <= qmul(blend, fdiff_b);
+                state  <= S_FOG_LERP2;
+            end
+
+            S_FOG_LERP2: begin
+                // pixel = combined + delta  (add + pack)
                 begin
-                    logic signed [31:0] cr, cg, cb, fr, fg, fb;
                     logic signed [31:0] pr, pg, pb;
-                    cr = {16'd0, combined[23:16]};
-                    cg = {16'd0, combined[15:8]};
-                    cb = {16'd0, combined[7:0]};
-                    fr = {16'd0, fog_color[23:16]};
-                    fg = {16'd0, fog_color[15:8]};
-                    fb = {16'd0, fog_color[7:0]};
-                    pr = cr + qmul(blend, fr - cr);
-                    pg = cg + qmul(blend, fg - cg);
-                    pb = cb + qmul(blend, fb - cb);
+                    pr = {16'd0, combined[23:16]} + fog_dr;
+                    pg = {16'd0, combined[15:8]}  + fog_dg;
+                    pb = {16'd0, combined[7:0]}   + fog_db;
                     pixel_color <= {pr[7:0], pg[7:0], pb[7:0]};
                 end
                 state <= S_DONE;
