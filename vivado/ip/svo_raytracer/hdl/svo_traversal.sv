@@ -225,11 +225,8 @@ module svo_traversal #(
     logic signed [31:0] rs_c_r2y0sq;
     logic signed [31:0] rs_c_inv_len;
     logic signed [31:0] rs_c_ndx,    rs_c_ndy,    rs_c_ndz;
-    // Shared N-R: primary stages 10-13; shadow stages 1-4
-    logic signed [31:0] rs_c_t1_x,   rs_c_t1_y,   rs_c_t1_z;
-    logic signed [31:0] rs_c_r1_x,   rs_c_r1_y,   rs_c_r1_z;
-    logic signed [31:0] rs_c_t2_x,   rs_c_t2_y,   rs_c_t2_z;
-    logic signed [31:0] rs_c_inv_x,  rs_c_inv_y,  rs_c_inv_z;
+    // Shared N-R (primary stages 10-13; shadow stages 1-4) is issued onto the shared
+    // bank from the FSM, so rs_c_t1/r1/t2/inv are no longer needed as dedicated qmuls.
     // S_ROOT_SLAB: ray-vs-world-box slab intersection times (CE='1' on all DSPs)
     // Shared 3-lane multiplier bank (DSP reduction). The FSM registers operands
     // into q_a*/q_b* in the issue stage; products are valid QCOL = 4 cycles later
@@ -297,6 +294,11 @@ module svo_traversal #(
 
     // Stage counter for S_RAY_SETUP pipeline: advances 0->13 (primary mode) or 0->4 (shadow mode).
     logic [3:0] rs_wait;
+    // Sub-counter for multiply stages routed through the shared bank: on entry to such
+    // a stage (q_phase==0) the operands are issued, q_phase is set to QCOL, then it counts
+    // down; at q_phase==1 (QCOL cycles after issue) the product is collected and rs_wait
+    // advances. Non-multiply stages leave q_phase at 0 and advance in a single cycle.
+    logic [2:0] q_phase;
 
     // Set when S_POP_STACK redirects through S_ENTER_NODE to reload r_child[]/r_block[].
     // Suppresses the cx/cy/cz and t_next recomputation in S_BRAM_WAIT field=6.
@@ -327,30 +329,10 @@ module svo_traversal #(
         rs_c_ndy = qmul(rsdy, rsinv_len);
         rs_c_ndz = qmul(rsdz, rsinv_len);
     end
-    // Shared N-R iterations (primary stages 10-13; shadow stages 1-4)
-    always_comb begin
-        rs_c_t1_x = qmul(rs_xabs_x, rs_r0_x);
-        rs_c_t1_y = qmul(rs_xabs_y, rs_r0_y);
-        rs_c_t1_z = qmul(rs_xabs_z, rs_r0_z);
-    end
-    always_comb begin
-        rs_c_r1_x = qmul(rs_r0_x, 32'sh0002_0000 - rs_t1_x);
-        rs_c_r1_y = qmul(rs_r0_y, 32'sh0002_0000 - rs_t1_y);
-        rs_c_r1_z = qmul(rs_r0_z, 32'sh0002_0000 - rs_t1_z);
-    end
-    always_comb begin
-        rs_c_t2_x = qmul(rs_xabs_x, rs_r1_x);
-        rs_c_t2_y = qmul(rs_xabs_y, rs_r1_y);
-        rs_c_t2_z = qmul(rs_xabs_z, rs_r1_z);
-    end
-    always_comb begin
-        rs_c_inv_x = rs_sign_x ? -qmul(rs_r1_x, 32'sh0002_0000 - rs_t2_x)
-                                :  qmul(rs_r1_x, 32'sh0002_0000 - rs_t2_x);
-        rs_c_inv_y = rs_sign_y ? -qmul(rs_r1_y, 32'sh0002_0000 - rs_t2_y)
-                                :  qmul(rs_r1_y, 32'sh0002_0000 - rs_t2_y);
-        rs_c_inv_z = rs_sign_z ? -qmul(rs_r1_z, 32'sh0002_0000 - rs_t2_z)
-                                :  qmul(rs_r1_z, 32'sh0002_0000 - rs_t2_z);
-    end
+    // Shared N-R iterations (primary stages 10-13; shadow stages 1-4) are now issued
+    // onto the shared multiplier bank directly from the FSM (q_a*/q_b* -> q_p*), so the
+    // dedicated rs_c_t1/r1/t2/inv combinational qmuls have been removed. The 2-x/(2-y)
+    // subtracts and the inv sign-negation are applied combinationally at issue/collect.
 
     // -------------------------------------------------------------------------
     // Shared multiplier bank. The slab times (and, as later clusters migrate,
@@ -413,7 +395,7 @@ module svo_traversal #(
             axis_tdata  <= '0;
             axis_tlast  <= '0;
             axis_tuser  <= '0;
-            px <= '0; py <= '0; sp <= '0; rs_wait <= '0; post_pop <= '0;
+            px <= '0; py <= '0; sp <= '0; rs_wait <= '0; post_pop <= '0; q_phase <= '0;
         end else begin
             // Force pulse signals low every cycle before state case
             fb_wr_en    <= '0;
@@ -470,30 +452,56 @@ module svo_traversal #(
                             rs_r0_z   <= recip_init(cam_fwd_z);
                             rs_wait   <= rs_wait + 1'b1;
                         end
-                        4'd1: begin
-                            rs_t1_x <= rs_c_t1_x;
-                            rs_t1_y <= rs_c_t1_y;
-                            rs_t1_z <= rs_c_t1_z;
-                            rs_wait <= rs_wait + 1'b1;
+                        // Newton-Raphson reciprocal inv = 1/dir (same algorithm as the
+                        // primary-mode stages 10-13 below; see the block comment there).
+                        // Shadow rays skip normalization, so the N-R runs directly on the
+                        // (already-unit) forward vector loaded in stage 0.
+                        4'd1: begin  // N-R pass 1: t1 = |x| * r0   (residual)
+                            if (q_phase == 0) begin
+                                q_a0 <= rs_xabs_x; q_b0 <= rs_r0_x;
+                                q_a1 <= rs_xabs_y; q_b1 <= rs_r0_y;
+                                q_a2 <= rs_xabs_z; q_b2 <= rs_r0_z;
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                rs_t1_x <= q_p0; rs_t1_y <= q_p1; rs_t1_z <= q_p2;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;
+                            end else q_phase <= q_phase - 1'b1;
                         end
-                        4'd2: begin
-                            rs_r1_x <= rs_c_r1_x;
-                            rs_r1_y <= rs_c_r1_y;
-                            rs_r1_z <= rs_c_r1_z;
-                            rs_wait <= rs_wait + 1'b1;
+                        4'd2: begin  // N-R pass 1: r1 = r0 * (2 - t1)   (refined estimate)
+                            if (q_phase == 0) begin
+                                q_a0 <= rs_r0_x; q_b0 <= 32'sh0002_0000 - rs_t1_x;
+                                q_a1 <= rs_r0_y; q_b1 <= 32'sh0002_0000 - rs_t1_y;
+                                q_a2 <= rs_r0_z; q_b2 <= 32'sh0002_0000 - rs_t1_z;
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                rs_r1_x <= q_p0; rs_r1_y <= q_p1; rs_r1_z <= q_p2;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;
+                            end else q_phase <= q_phase - 1'b1;
                         end
-                        4'd3: begin
-                            rs_t2_x <= rs_c_t2_x;
-                            rs_t2_y <= rs_c_t2_y;
-                            rs_t2_z <= rs_c_t2_z;
-                            rs_wait <= rs_wait + 1'b1;
+                        4'd3: begin  // N-R pass 2: t2 = |x| * r1   (residual)
+                            if (q_phase == 0) begin
+                                q_a0 <= rs_xabs_x; q_b0 <= rs_r1_x;
+                                q_a1 <= rs_xabs_y; q_b1 <= rs_r1_y;
+                                q_a2 <= rs_xabs_z; q_b2 <= rs_r1_z;
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                rs_t2_x <= q_p0; rs_t2_y <= q_p1; rs_t2_z <= q_p2;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;
+                            end else q_phase <= q_phase - 1'b1;
                         end
-                        4'd4: begin  // capture inv_*, reset sp; advance to transition stage
-                            inv_x   <= rs_c_inv_x;
-                            inv_y   <= rs_c_inv_y;
-                            inv_z   <= rs_c_inv_z;
-                            sp      <= '0;
-                            rs_wait <= rs_wait + 1'b1;  // -> 5
+                        4'd4: begin  // N-R pass 2: inv = sign(x) * r1 * (2 - t2); reset sp
+                            if (q_phase == 0) begin
+                                q_a0 <= rs_r1_x; q_b0 <= 32'sh0002_0000 - rs_t2_x;
+                                q_a1 <= rs_r1_y; q_b1 <= 32'sh0002_0000 - rs_t2_y;
+                                q_a2 <= rs_r1_z; q_b2 <= 32'sh0002_0000 - rs_t2_z;
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                inv_x   <= rs_sign_x ? -q_p0 : q_p0;
+                                inv_y   <= rs_sign_y ? -q_p1 : q_p1;
+                                inv_z   <= rs_sign_z ? -q_p2 : q_p2;
+                                sp      <= '0;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;  // -> 5
+                            end else q_phase <= q_phase - 1'b1;
                         end
                         default: begin  // 4'd5 -- pure state transition, no computation
                             rs_wait <= '0;
@@ -561,31 +569,62 @@ module svo_traversal #(
                             step_z    <= rsndz[31] ? -3'sd1 : 3'sd1;
                             rs_wait   <= rs_wait + 1'b1;
                         end
-                        4'd10: begin
-                            rs_t1_x <= rs_c_t1_x;
-                            rs_t1_y <= rs_c_t1_y;
-                            rs_t1_z <= rs_c_t1_z;
-                            rs_wait <= rs_wait + 1'b1;
+                        // ---- Newton-Raphson reciprocal: inv = 1 / normalized_dir ----
+                        // Stages 10-13 refine an initial estimate r0 (~1/|x|, from
+                        // recip_init) into the true reciprocal via two N-R passes:
+                        //     t  = |x| * r        (residual; -> 1.0 at convergence)
+                        //     r' = r * (2 - t)    (next estimate; ~doubles correct bits)
+                        // r0 --t1--> r1 --t2--> final; then the sign of x is applied.
+                        // Each multiply is time-multiplexed on the shared bank: q_phase==0
+                        // issues the 3 lanes (x/y/z); QCOL cycles later (q_phase==1) the
+                        // product is collected and rs_wait advances. 2.0_Q16.16 = 0002_0000.
+                        4'd10: begin  // N-R pass 1: t1 = |x| * r0   (residual)
+                            if (q_phase == 0) begin
+                                q_a0 <= rs_xabs_x; q_b0 <= rs_r0_x;
+                                q_a1 <= rs_xabs_y; q_b1 <= rs_r0_y;
+                                q_a2 <= rs_xabs_z; q_b2 <= rs_r0_z;
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                rs_t1_x <= q_p0; rs_t1_y <= q_p1; rs_t1_z <= q_p2;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;
+                            end else q_phase <= q_phase - 1'b1;
                         end
-                        4'd11: begin
-                            rs_r1_x <= rs_c_r1_x;
-                            rs_r1_y <= rs_c_r1_y;
-                            rs_r1_z <= rs_c_r1_z;
-                            rs_wait <= rs_wait + 1'b1;
+                        4'd11: begin  // N-R pass 1: r1 = r0 * (2 - t1)   (refined estimate)
+                            if (q_phase == 0) begin
+                                q_a0 <= rs_r0_x; q_b0 <= 32'sh0002_0000 - rs_t1_x;
+                                q_a1 <= rs_r0_y; q_b1 <= 32'sh0002_0000 - rs_t1_y;
+                                q_a2 <= rs_r0_z; q_b2 <= 32'sh0002_0000 - rs_t1_z;
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                rs_r1_x <= q_p0; rs_r1_y <= q_p1; rs_r1_z <= q_p2;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;
+                            end else q_phase <= q_phase - 1'b1;
                         end
-                        4'd12: begin
-                            rs_t2_x <= rs_c_t2_x;
-                            rs_t2_y <= rs_c_t2_y;
-                            rs_t2_z <= rs_c_t2_z;
-                            rs_wait <= rs_wait + 1'b1;
+                        4'd12: begin  // N-R pass 2: t2 = |x| * r1   (residual)
+                            if (q_phase == 0) begin
+                                q_a0 <= rs_xabs_x; q_b0 <= rs_r1_x;
+                                q_a1 <= rs_xabs_y; q_b1 <= rs_r1_y;
+                                q_a2 <= rs_xabs_z; q_b2 <= rs_r1_z;
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                rs_t2_x <= q_p0; rs_t2_y <= q_p1; rs_t2_z <= q_p2;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;
+                            end else q_phase <= q_phase - 1'b1;
                         end
-                        4'd13: begin  // capture inv_* and rd_*, reset sp; advance to transition stage
-                            inv_x   <= rs_c_inv_x;
-                            inv_y   <= rs_c_inv_y;
-                            inv_z   <= rs_c_inv_z;
-                            rd_x    <= rsndx;  rd_y <= rsndy;  rd_z <= rsndz;
-                            sp      <= '0;
-                            rs_wait <= rs_wait + 1'b1;  // -> 14
+                        4'd13: begin  // N-R pass 2: inv = sign(x) * r1 * (2 - t2); latch rd_*, reset sp
+                            if (q_phase == 0) begin
+                                q_a0 <= rs_r1_x; q_b0 <= 32'sh0002_0000 - rs_t2_x;
+                                q_a1 <= rs_r1_y; q_b1 <= 32'sh0002_0000 - rs_t2_y;
+                                q_a2 <= rs_r1_z; q_b2 <= 32'sh0002_0000 - rs_t2_z;
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                inv_x   <= rs_sign_x ? -q_p0 : q_p0;
+                                inv_y   <= rs_sign_y ? -q_p1 : q_p1;
+                                inv_z   <= rs_sign_z ? -q_p2 : q_p2;
+                                rd_x    <= rsndx;  rd_y <= rsndy;  rd_z <= rsndz;
+                                sp      <= '0;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;  // -> 14
+                            end else q_phase <= q_phase - 1'b1;
                         end
                         default: begin  // 4'd14 -- pure state transition, no computation
                             rs_wait <= '0;
