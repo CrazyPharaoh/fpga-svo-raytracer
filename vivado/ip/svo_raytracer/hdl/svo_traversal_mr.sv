@@ -298,6 +298,32 @@ module svo_traversal_mr #(
     // advances. Non-multiply stages leave q_phase at 0 and advance in a single cycle.
     logic [2:0] q_phase [0:RAY_POOL_N-1];
 
+    // ------------------------------------------------------------------------
+    // Slot-tagged issue + block + collector for S_RAY_SETUP multiplies.
+    // Replaces the q_phase spin so multiplies can be in flight for one slot
+    // while another slot is scheduled (latency hiding). At RAY_POOL_N=1 this
+    // is bit-identical to the spin: the single slot issues, blocks QCOL cycles,
+    // the collector writes the SAME products into the SAME dest regs, unblocks.
+    // ------------------------------------------------------------------------
+    // A slot is "blocked" while waiting for a tagged multiply it issued.
+    logic blocked [0:RAY_POOL_N-1];
+
+    // Inline tag pipe: when a stage registers q_a* at cycle T, q_p* is valid at
+    // T+4. q_iss_v (registered at T) is valid T+1; shift it 3 more times so
+    // q_res_v/q_res_t line up with q_p* at T+4. (Keeps shared_qmul3 untouched.)
+    localparam int DST_W = 4;
+    localparam int TAGW  = SLOT_W + DST_W;
+    logic            q_iss_v;
+    logic [TAGW-1:0] q_iss_t;
+    logic            q_tv [0:2];
+    logic [TAGW-1:0] q_tt [0:2];
+    wire             q_res_v = q_tv[2];
+    wire [TAGW-1:0]  q_res_t = q_tt[2];
+    // ray-setup multiply destinations
+    localparam logic [DST_W-1:0]
+        DST_RS0=0, DST_RS1A=1, DST_RS1B=2, DST_RS3=3, DST_RS5=4, DST_RS6=5,
+        DST_RS7=6, DST_RS8=7, DST_RS10=8, DST_RS11=9, DST_RS12=10, DST_RS13=11;
+
     // Set when S_POP_STACK redirects through S_ENTER_NODE to reload r_child[]/r_block[].
     // Suppresses the cx/cy/cz and t_next recomputation in S_BRAM_WAIT field=6.
     logic post_pop [0:RAY_POOL_N-1];
@@ -352,6 +378,13 @@ module svo_traversal_mr #(
     // module). The FSM no longer drives it; tie it low continuously.
     assign any_hit = 1'b0;
 
+    // Icarus X-avoid: deterministic init of the block/tag machinery.
+    initial begin
+        for (int s = 0; s < RAY_POOL_N; s++) blocked[s] = 1'b0;
+        q_iss_v = 1'b0;
+        q_tv[0] = 1'b0; q_tv[1] = 1'b0; q_tv[2] = 1'b0;
+    end
+
     // -------------------------------------------------------------------------
     // Entry-point add (CE='1'): P = ro + (t_min*rd).  te_* is the registered product,
     // so this is only an add — the multiply already happened the previous cycle. t_min,
@@ -400,7 +433,10 @@ module svo_traversal_mr #(
             for (int s = 0; s < RAY_POOL_N; s++) begin
                 state[s] <= S_IDLE; px[s] <= '0; py[s] <= '0; sp[s] <= '0;
                 rs_wait[s] <= '0; post_pop[s] <= '0; q_phase[s] <= '0;
+                blocked[s] <= 1'b0;
             end
+            q_iss_v <= 1'b0;
+            q_tv[0] <= 1'b0; q_tv[1] <= 1'b0; q_tv[2] <= 1'b0;
         end else begin
             // Force pulse signals low every cycle before state case
             fb_wr_en    <= '0;
@@ -413,6 +449,47 @@ module svo_traversal_mr #(
             te_y[cur_slot] <= qmul(t_min[cur_slot], rd_y[cur_slot]);
             te_z[cur_slot] <= qmul(t_min[cur_slot], rd_z[cur_slot]);
 
+            // Tag pipe: default no issue this cycle (an issuing stage overrides
+            // q_iss_v<=1'b1 below — both non-blocking, the case body wins). Shift
+            // the issue tag 3 stages so q_res_v/q_res_t align with q_p* at T+4.
+            q_iss_v <= 1'b0;
+            q_tv[0] <= q_iss_v;   q_tt[0] <= q_iss_t;
+            q_tv[1] <= q_tv[0];   q_tt[1] <= q_tt[0];
+            q_tv[2] <= q_tv[1];   q_tt[2] <= q_tt[1];
+
+            // Collector: runs EVERY cycle (regardless of scheduled slot) and
+            // writes the tagged multiply's products into the destination regs,
+            // then unblocks the slot (except RS1A, the first of a 2-issue pair).
+            if (q_res_v) begin : collector
+                automatic logic [SLOT_W-1:0] cs = q_res_t[TAGW-1:DST_W];
+                automatic logic [DST_W-1:0]  cd = q_res_t[DST_W-1:0];
+                unique case (cd)
+                    DST_RS0:  begin rsu[cs]<=q_p0; rsv[cs]<=q_p1; end
+                    DST_RS1A: begin rs_s1_a[cs]<=q_p0; rs_s1_c[cs]<=q_p1; rs_s1_e[cs]<=q_p2; end
+                    DST_RS1B: begin rs_s1_b[cs]<=q_p0; rs_s1_d[cs]<=q_p1; rs_s1_f[cs]<=q_p2; end
+                    DST_RS3:  begin rs_s3_dx2[cs]<=q_p0; rs_s3_dy2[cs]<=q_p1; rs_s3_dz2[cs]<=q_p2; end
+                    DST_RS5:  rs_s5_y0sq[cs]   <= q_p0;
+                    DST_RS6:  rs_s6_r2y0sq[cs] <= q_p0;
+                    DST_RS7:  rsinv_len[cs]    <= q_p0;
+                    DST_RS8:  begin rsndx[cs]<=q_p0; rsndy[cs]<=q_p1; rsndz[cs]<=q_p2; end
+                    DST_RS10: begin rs_t1_x[cs]<=q_p0; rs_t1_y[cs]<=q_p1; rs_t1_z[cs]<=q_p2; end
+                    DST_RS11: begin rs_r1_x[cs]<=q_p0; rs_r1_y[cs]<=q_p1; rs_r1_z[cs]<=q_p2; end
+                    DST_RS12: begin rs_t2_x[cs]<=q_p0; rs_t2_y[cs]<=q_p1; rs_t2_z[cs]<=q_p2; end
+                    DST_RS13: begin
+                        inv_x[cs] <= rs_sign_x[cs] ? -q_p0 : q_p0;
+                        inv_y[cs] <= rs_sign_y[cs] ? -q_p1 : q_p1;
+                        inv_z[cs] <= rs_sign_z[cs] ? -q_p2 : q_p2;
+                        rd_x[cs] <= rsndx[cs]; rd_y[cs] <= rsndy[cs]; rd_z[cs] <= rsndz[cs];
+                        sp[cs] <= '0;
+                    end
+                    default: ;
+                endcase
+                // unblock the slot, EXCEPT DST_RS1A which is the first of a 2-issue
+                // pair (slot stays "running" to issue RS1B; it blocks on RS1B).
+                if (cd != DST_RS1A) blocked[cs] <= 1'b0;
+            end
+
+            if (!blocked[cur_slot]) begin
             unique case (state[cur_slot])
 
             // -----------------------------------------------------------------
@@ -455,34 +532,30 @@ module svo_traversal_mr #(
                         // stage 2 sums them into raw_dir; stage 3 squares raw_dir for len2.
                         // All multiplies use the shared bank.
                         4'd0: begin  // u = (px - IMG_W/2)*scale ; v = (py - IMG_H/2)*scale
-                            if (q_phase[cur_slot] == 0) begin
-                                ro_x[cur_slot] <= cam_pos_x; ro_y[cur_slot] <= cam_pos_y; ro_z[cur_slot] <= cam_pos_z;
-                                q_a0 <= $signed({1'b0, px[cur_slot], 16'd0}) - CENTER_X_Q; q_b0 <= cam_scale;
-                                q_a1 <= $signed({1'b0, py[cur_slot], 16'd0}) - CENTER_Y_Q; q_b1 <= cam_scale;
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                rsu[cur_slot] <= q_p0; rsv[cur_slot] <= q_p1;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
+                            ro_x[cur_slot] <= cam_pos_x; ro_y[cur_slot] <= cam_pos_y; ro_z[cur_slot] <= cam_pos_z;
+                            q_a0 <= $signed({1'b0, px[cur_slot], 16'd0}) - CENTER_X_Q; q_b0 <= cam_scale;
+                            q_a1 <= $signed({1'b0, py[cur_slot], 16'd0}) - CENTER_Y_Q; q_b1 <= cam_scale;
+                            q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_RS0};
+                            blocked[cur_slot] <= 1'b1;
+                            rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
                         end
                         4'd1: begin  // six products over 2 issue cycles (6 muls > 3 lanes)
-                            if (q_phase[cur_slot] == 0) begin           // issue A: a/c/e = u * cam_right_{x,y,z}
+                            // q_phase reused only as a 0/1 issue-substep flag here.
+                            if (q_phase[cur_slot] == 0) begin       // issue A: a/c/e = u * cam_right_{x,y,z}
                                 q_a0 <= rsu[cur_slot]; q_b0 <= cam_right_x;
                                 q_a1 <= rsu[cur_slot]; q_b1 <= cam_right_y;
                                 q_a2 <= rsu[cur_slot]; q_b2 <= cam_right_z;
-                                q_phase[cur_slot] <= 3'd5;
-                            end else if (q_phase[cur_slot] == 5) begin  // issue B: b/d/f = v * cam_up_{x,y,z}
+                                q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_RS1A};
+                                q_phase[cur_slot] <= 3'd1;          // next run: issue B (slot NOT blocked)
+                            end else begin                           // issue B: b/d/f = v * cam_up_{x,y,z}
                                 q_a0 <= rsv[cur_slot]; q_b0 <= cam_up_x;
                                 q_a1 <= rsv[cur_slot]; q_b1 <= cam_up_y;
                                 q_a2 <= rsv[cur_slot]; q_b2 <= cam_up_z;
-                                q_phase[cur_slot] <= 3'd4;
-                            end else if (q_phase[cur_slot] == 2) begin  // collect A (4 cycles after issue A)
-                                rs_s1_a[cur_slot] <= q_p0; rs_s1_c[cur_slot] <= q_p1; rs_s1_e[cur_slot] <= q_p2;
-                                q_phase[cur_slot] <= 3'd1;
-                            end else if (q_phase[cur_slot] == 1) begin  // collect B (4 cycles after issue B)
-                                rs_s1_b[cur_slot] <= q_p0; rs_s1_d[cur_slot] <= q_p1; rs_s1_f[cur_slot] <= q_p2;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;  // 4->3, 3->2
+                                q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_RS1B};
+                                q_phase[cur_slot] <= '0;
+                                blocked[cur_slot] <= 1'b1;           // block until RS1B collected
+                                rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
+                            end
                         end
                         4'd2: begin  // raw_dir = fwd + u*right - v*up  (adds only)
                             rsdx[cur_slot]    <= cam_fwd_x + rs_s1_a[cur_slot] - rs_s1_b[cur_slot];
@@ -491,15 +564,12 @@ module svo_traversal_mr #(
                             rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
                         end
                         4'd3: begin  // dx2/dy2/dz2 = raw_dir^2  (-> len2)
-                            if (q_phase[cur_slot] == 0) begin
-                                q_a0 <= rsdx[cur_slot]; q_b0 <= rsdx[cur_slot];
-                                q_a1 <= rsdy[cur_slot]; q_b1 <= rsdy[cur_slot];
-                                q_a2 <= rsdz[cur_slot]; q_b2 <= rsdz[cur_slot];
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                rs_s3_dx2[cur_slot] <= q_p0; rs_s3_dy2[cur_slot] <= q_p1; rs_s3_dz2[cur_slot] <= q_p2;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
+                            q_a0 <= rsdx[cur_slot]; q_b0 <= rsdx[cur_slot];
+                            q_a1 <= rsdy[cur_slot]; q_b1 <= rsdy[cur_slot];
+                            q_a2 <= rsdz[cur_slot]; q_b2 <= rsdz[cur_slot];
+                            q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_RS3};
+                            blocked[cur_slot] <= 1'b1;
+                            rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
                         end
                         4'd4: begin
                             rslen2[cur_slot]   <= rs_s3_dx2[cur_slot] + rs_s3_dy2[cur_slot] + rs_s3_dz2[cur_slot];
@@ -516,42 +586,30 @@ module svo_traversal_mr #(
                         // issued on the shared bank (q_phase==0) and collected QCOL cycles
                         // later (q_phase==1). 1.5_Q16.16 = 0001_8000.
                         4'd5: begin  // rsqrt: y0sq = y0^2
-                            if (q_phase[cur_slot] == 0) begin
-                                q_a0 <= rs_s4_y0[cur_slot]; q_b0 <= rs_s4_y0[cur_slot];
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                rs_s5_y0sq[cur_slot] <= q_p0;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
+                            q_a0 <= rs_s4_y0[cur_slot]; q_b0 <= rs_s4_y0[cur_slot];
+                            q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_RS5};
+                            blocked[cur_slot] <= 1'b1;
+                            rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
                         end
                         4'd6: begin  // rsqrt: r2y0sq = len2 * y0^2
-                            if (q_phase[cur_slot] == 0) begin
-                                q_a0 <= rslen2[cur_slot]; q_b0 <= rs_s5_y0sq[cur_slot];
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                rs_s6_r2y0sq[cur_slot] <= q_p0;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
+                            q_a0 <= rslen2[cur_slot]; q_b0 <= rs_s5_y0sq[cur_slot];
+                            q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_RS6};
+                            blocked[cur_slot] <= 1'b1;
+                            rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
                         end
                         4'd7: begin  // rsqrt: inv_len = y0 * (1.5 - r2y0sq/2)
-                            if (q_phase[cur_slot] == 0) begin
-                                q_a0 <= rs_s4_y0[cur_slot]; q_b0 <= 32'sh0001_8000 - (rs_s6_r2y0sq[cur_slot] >>> 1);
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                rsinv_len[cur_slot] <= q_p0;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
+                            q_a0 <= rs_s4_y0[cur_slot]; q_b0 <= 32'sh0001_8000 - (rs_s6_r2y0sq[cur_slot] >>> 1);
+                            q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_RS7};
+                            blocked[cur_slot] <= 1'b1;
+                            rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
                         end
                         4'd8: begin  // normalize: nd = raw_dir * inv_len   (3 lanes)
-                            if (q_phase[cur_slot] == 0) begin
-                                q_a0 <= rsdx[cur_slot]; q_b0 <= rsinv_len[cur_slot];
-                                q_a1 <= rsdy[cur_slot]; q_b1 <= rsinv_len[cur_slot];
-                                q_a2 <= rsdz[cur_slot]; q_b2 <= rsinv_len[cur_slot];
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                rsndx[cur_slot] <= q_p0; rsndy[cur_slot] <= q_p1; rsndz[cur_slot] <= q_p2;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
+                            q_a0 <= rsdx[cur_slot]; q_b0 <= rsinv_len[cur_slot];
+                            q_a1 <= rsdy[cur_slot]; q_b1 <= rsinv_len[cur_slot];
+                            q_a2 <= rsdz[cur_slot]; q_b2 <= rsinv_len[cur_slot];
+                            q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_RS8};
+                            blocked[cur_slot] <= 1'b1;
+                            rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
                         end
                         4'd9: begin
                             rs_sign_x[cur_slot] <= rsndx[cur_slot][31]; rs_sign_y[cur_slot] <= rsndy[cur_slot][31]; rs_sign_z[cur_slot] <= rsndz[cur_slot][31];
@@ -574,52 +632,37 @@ module svo_traversal_mr #(
                         // issues the 3 lanes (x/y/z); QCOL cycles later (q_phase==1) the
                         // product is collected and rs_wait advances. 2.0_Q16.16 = 0002_0000.
                         4'd10: begin  // N-R pass 1: t1 = |x| * r0   (residual)
-                            if (q_phase[cur_slot] == 0) begin
-                                q_a0 <= rs_xabs_x[cur_slot]; q_b0 <= rs_r0_x[cur_slot];
-                                q_a1 <= rs_xabs_y[cur_slot]; q_b1 <= rs_r0_y[cur_slot];
-                                q_a2 <= rs_xabs_z[cur_slot]; q_b2 <= rs_r0_z[cur_slot];
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                rs_t1_x[cur_slot] <= q_p0; rs_t1_y[cur_slot] <= q_p1; rs_t1_z[cur_slot] <= q_p2;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
+                            q_a0 <= rs_xabs_x[cur_slot]; q_b0 <= rs_r0_x[cur_slot];
+                            q_a1 <= rs_xabs_y[cur_slot]; q_b1 <= rs_r0_y[cur_slot];
+                            q_a2 <= rs_xabs_z[cur_slot]; q_b2 <= rs_r0_z[cur_slot];
+                            q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_RS10};
+                            blocked[cur_slot] <= 1'b1;
+                            rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
                         end
                         4'd11: begin  // N-R pass 1: r1 = r0 * (2 - t1)   (refined estimate)
-                            if (q_phase[cur_slot] == 0) begin
-                                q_a0 <= rs_r0_x[cur_slot]; q_b0 <= 32'sh0002_0000 - rs_t1_x[cur_slot];
-                                q_a1 <= rs_r0_y[cur_slot]; q_b1 <= 32'sh0002_0000 - rs_t1_y[cur_slot];
-                                q_a2 <= rs_r0_z[cur_slot]; q_b2 <= 32'sh0002_0000 - rs_t1_z[cur_slot];
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                rs_r1_x[cur_slot] <= q_p0; rs_r1_y[cur_slot] <= q_p1; rs_r1_z[cur_slot] <= q_p2;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
+                            q_a0 <= rs_r0_x[cur_slot]; q_b0 <= 32'sh0002_0000 - rs_t1_x[cur_slot];
+                            q_a1 <= rs_r0_y[cur_slot]; q_b1 <= 32'sh0002_0000 - rs_t1_y[cur_slot];
+                            q_a2 <= rs_r0_z[cur_slot]; q_b2 <= 32'sh0002_0000 - rs_t1_z[cur_slot];
+                            q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_RS11};
+                            blocked[cur_slot] <= 1'b1;
+                            rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
                         end
                         4'd12: begin  // N-R pass 2: t2 = |x| * r1   (residual)
-                            if (q_phase[cur_slot] == 0) begin
-                                q_a0 <= rs_xabs_x[cur_slot]; q_b0 <= rs_r1_x[cur_slot];
-                                q_a1 <= rs_xabs_y[cur_slot]; q_b1 <= rs_r1_y[cur_slot];
-                                q_a2 <= rs_xabs_z[cur_slot]; q_b2 <= rs_r1_z[cur_slot];
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                rs_t2_x[cur_slot] <= q_p0; rs_t2_y[cur_slot] <= q_p1; rs_t2_z[cur_slot] <= q_p2;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
+                            q_a0 <= rs_xabs_x[cur_slot]; q_b0 <= rs_r1_x[cur_slot];
+                            q_a1 <= rs_xabs_y[cur_slot]; q_b1 <= rs_r1_y[cur_slot];
+                            q_a2 <= rs_xabs_z[cur_slot]; q_b2 <= rs_r1_z[cur_slot];
+                            q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_RS12};
+                            blocked[cur_slot] <= 1'b1;
+                            rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
                         end
-                        4'd13: begin  // N-R pass 2: inv = sign(x) * r1 * (2 - t2); latch rd_*, reset sp
-                            if (q_phase[cur_slot] == 0) begin
-                                q_a0 <= rs_r1_x[cur_slot]; q_b0 <= 32'sh0002_0000 - rs_t2_x[cur_slot];
-                                q_a1 <= rs_r1_y[cur_slot]; q_b1 <= 32'sh0002_0000 - rs_t2_y[cur_slot];
-                                q_a2 <= rs_r1_z[cur_slot]; q_b2 <= 32'sh0002_0000 - rs_t2_z[cur_slot];
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                inv_x[cur_slot]   <= rs_sign_x[cur_slot] ? -q_p0 : q_p0;
-                                inv_y[cur_slot]   <= rs_sign_y[cur_slot] ? -q_p1 : q_p1;
-                                inv_z[cur_slot]   <= rs_sign_z[cur_slot] ? -q_p2 : q_p2;
-                                rd_x[cur_slot]    <= rsndx[cur_slot];  rd_y[cur_slot] <= rsndy[cur_slot];  rd_z[cur_slot] <= rsndz[cur_slot];
-                                sp[cur_slot]      <= '0;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;  // -> 14
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
+                        4'd13: begin  // N-R pass 2: inv = sign(x) * r1 * (2 - t2)
+                            // issue only; the collector does the inv/rd/sp writeback (DST_RS13).
+                            q_a0 <= rs_r1_x[cur_slot]; q_b0 <= 32'sh0002_0000 - rs_t2_x[cur_slot];
+                            q_a1 <= rs_r1_y[cur_slot]; q_b1 <= 32'sh0002_0000 - rs_t2_y[cur_slot];
+                            q_a2 <= rs_r1_z[cur_slot]; q_b2 <= 32'sh0002_0000 - rs_t2_z[cur_slot];
+                            q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_RS13};
+                            blocked[cur_slot] <= 1'b1;
+                            rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;  // -> 14
                         end
                         default: begin  // 4'd14 -- pure state transition, no computation
                             rs_wait[cur_slot] <= '0;
@@ -968,6 +1011,7 @@ module svo_traversal_mr #(
             S_NEXT_PIXEL: ;
 
             endcase
+            end  // if (!blocked[cur_slot])
         end
     end
 
