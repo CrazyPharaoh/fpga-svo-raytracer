@@ -322,7 +322,8 @@ module svo_traversal_mr #(
     // ray-setup multiply destinations
     localparam logic [DST_W-1:0]
         DST_RS0=0, DST_RS1A=1, DST_RS1B=2, DST_RS3=3, DST_RS5=4, DST_RS6=5,
-        DST_RS7=6, DST_RS8=7, DST_RS10=8, DST_RS11=9, DST_RS12=10, DST_RS13=11;
+        DST_RS7=6, DST_RS8=7, DST_RS10=8, DST_RS11=9, DST_RS12=10, DST_RS13=11,
+        DST_SLAB0=12, DST_SLAB1=13;
 
     // Set when S_POP_STACK redirects through S_ENTER_NODE to reload r_child[]/r_block[].
     // Suppresses the cx/cy/cz and t_next recomputation in S_BRAM_WAIT field=6.
@@ -482,11 +483,14 @@ module svo_traversal_mr #(
                         rd_x[cs] <= rsndx[cs]; rd_y[cs] <= rsndy[cs]; rd_z[cs] <= rsndz[cs];
                         sp[cs] <= '0;
                     end
+                    DST_SLAB0: begin rs_tx0_r[cs]<=q_p0; rs_ty0_r[cs]<=q_p1; rs_tz0_r[cs]<=q_p2; end
+                    DST_SLAB1: begin rs_tx1_r[cs]<=q_p0; rs_ty1_r[cs]<=q_p1; rs_tz1_r[cs]<=q_p2; end
                     default: ;
                 endcase
-                // unblock the slot, EXCEPT DST_RS1A which is the first of a 2-issue
-                // pair (slot stays "running" to issue RS1B; it blocks on RS1B).
-                if (cd != DST_RS1A) blocked[cs] <= 1'b0;
+                // unblock the slot, EXCEPT DST_RS1A and DST_SLAB0 which are the first
+                // of a 2-issue pair (slot stays "running" to issue the second; it
+                // blocks on the second).
+                if (cd != DST_RS1A && cd != DST_SLAB0) blocked[cs] <= 1'b0;
             end
 
             if (!blocked[cur_slot]) begin
@@ -674,65 +678,56 @@ module svo_traversal_mr #(
 
             // -----------------------------------------------------------------
             S_ROOT_SLAB: begin
-                // Slab times come from the shared multiplier bank, then sort/min/max/miss.
-                // rs_wait sequence (0 on entry; both S_RAY_SETUP exits set rs_wait<='0):
-                //   0,1 = issue the 6 slab qmuls (3 lanes x 2 cycles)
-                //   2,3 = bank pipeline fill (QCOL=4)
-                //   4   = collect tx0/ty0/tz0 (issued at 0, ready at 0+QCOL)
-                //   5   = collect tx1/ty1/tz1 (issued at 1, ready at 1+QCOL)
-                //   6   = sort each pair (lo=min, hi=max)
-                //   7   = t_enter=max(lo), t_exit=min(hi)
-                //   8   = miss check + clamp t_min + set node + transition
-                // Algebra identical to before; the slab qmuls just route via the bank.
+                // Slab times come from the shared multiplier bank via the slot-tagged
+                // issue/block/collector mechanism (same as S_RAY_SETUP), so they
+                // survive interleaving. rs_wait sequence (0 on entry; both S_RAY_SETUP
+                // exits set rs_wait<='0):
+                //   0 = issue SLAB0 = qmul(-ro, inv); advance (NOT blocked)
+                //   1 = issue SLAB1 = qmul(WORLD_Q-ro, inv); block; advance to sort
+                //   2 = sort each pair (lo=min, hi=max)   [was rs_wait 6]
+                //   3 = t_enter=max(lo), t_exit=min(hi)   [was rs_wait 7]
+                //   default(4) = miss check + clamp t_min + set node + transition [was 8]
+                // The collector writes rs_tx0/ty0/tz0 (SLAB0, no unblock) and
+                // rs_tx1/ty1/tz1 (SLAB1, +unblock) into the SAME dest regs. At N=1 the
+                // slot resumes the sort exactly when the old code reached rs_wait==6.
                 case (rs_wait[cur_slot])
-                    // Issue tx0/ty0/tz0 = qmul(-ro, inv) on lanes x/y/z
-                    4'd0: begin
-                        q_a0 <= -ro_x[cur_slot];          q_b0 <= inv_x[cur_slot];
-                        q_a1 <= -ro_y[cur_slot];          q_b1 <= inv_y[cur_slot];
-                        q_a2 <= -ro_z[cur_slot];          q_b2 <= inv_z[cur_slot];
+                    4'd0: begin    // issue SLAB0 = qmul(-ro, inv); advance (NOT blocked)
+                        q_a0 <= -ro_x[cur_slot]; q_b0 <= inv_x[cur_slot];
+                        q_a1 <= -ro_y[cur_slot]; q_b1 <= inv_y[cur_slot];
+                        q_a2 <= -ro_z[cur_slot]; q_b2 <= inv_z[cur_slot];
+                        q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_SLAB0};
                         rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
                     end
-                    // Issue tx1/ty1/tz1 = qmul(WORLD_Q-ro, inv)
-                    4'd1: begin
+                    4'd1: begin    // issue SLAB1 = qmul(WORLD_Q-ro, inv); block; advance to sort
                         q_a0 <= WORLD_Q - ro_x[cur_slot]; q_b0 <= inv_x[cur_slot];
                         q_a1 <= WORLD_Q - ro_y[cur_slot]; q_b1 <= inv_y[cur_slot];
                         q_a2 <= WORLD_Q - ro_z[cur_slot]; q_b2 <= inv_z[cur_slot];
-                        rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                    end
-                    4'd2: rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;   // bank fill
-                    4'd3: rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;   // bank fill
-                    // Collect issue-0 result (rs_wait 0 -> 0+QCOL)
-                    4'd4: begin
-                        rs_tx0_r[cur_slot] <= q_p0; rs_ty0_r[cur_slot] <= q_p1; rs_tz0_r[cur_slot] <= q_p2;
-                        rs_wait[cur_slot]  <= rs_wait[cur_slot] + 1'b1;
-                    end
-                    // Collect issue-1 result (rs_wait 1 -> 1+QCOL)
-                    4'd5: begin
-                        rs_tx1_r[cur_slot] <= q_p0; rs_ty1_r[cur_slot] <= q_p1; rs_tz1_r[cur_slot] <= q_p2;
-                        rs_wait[cur_slot]  <= rs_wait[cur_slot] + 1'b1;
+                        q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_SLAB1};
+                        blocked[cur_slot] <= 1'b1;
+                        rs_wait[cur_slot] <= 4'd2;     // -> sort (was rs_wait 6)
                     end
                     // Sort each axis pair -> per-axis (lo=min, hi=max)
-                    4'd6: begin
+                    4'd2: begin
                         rs_lo_x[cur_slot] <= (rs_tx0_r[cur_slot] > rs_tx1_r[cur_slot]) ? rs_tx1_r[cur_slot] : rs_tx0_r[cur_slot];
                         rs_hi_x[cur_slot] <= (rs_tx0_r[cur_slot] > rs_tx1_r[cur_slot]) ? rs_tx0_r[cur_slot] : rs_tx1_r[cur_slot];
                         rs_lo_y[cur_slot] <= (rs_ty0_r[cur_slot] > rs_ty1_r[cur_slot]) ? rs_ty1_r[cur_slot] : rs_ty0_r[cur_slot];
                         rs_hi_y[cur_slot] <= (rs_ty0_r[cur_slot] > rs_ty1_r[cur_slot]) ? rs_ty0_r[cur_slot] : rs_ty1_r[cur_slot];
                         rs_lo_z[cur_slot] <= (rs_tz0_r[cur_slot] > rs_tz1_r[cur_slot]) ? rs_tz1_r[cur_slot] : rs_tz0_r[cur_slot];
                         rs_hi_z[cur_slot] <= (rs_tz0_r[cur_slot] > rs_tz1_r[cur_slot]) ? rs_tz0_r[cur_slot] : rs_tz1_r[cur_slot];
-                        rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
+                        rs_wait[cur_slot] <= 4'd3;
                     end
                     // t_enter = max(lo_x,lo_y,lo_z); t_exit = min(hi_x,hi_y,hi_z)
-                    4'd7: begin
+                    4'd3: begin
                         rs_enter_r[cur_slot] <= (rs_lo_x[cur_slot] > rs_lo_y[cur_slot]) ? ((rs_lo_x[cur_slot] > rs_lo_z[cur_slot]) ? rs_lo_x[cur_slot] : rs_lo_z[cur_slot])
                                                           : ((rs_lo_y[cur_slot] > rs_lo_z[cur_slot]) ? rs_lo_y[cur_slot] : rs_lo_z[cur_slot]);
                         rs_exit_r[cur_slot]  <= (rs_hi_x[cur_slot] < rs_hi_y[cur_slot]) ? ((rs_hi_x[cur_slot] < rs_hi_z[cur_slot]) ? rs_hi_x[cur_slot] : rs_hi_z[cur_slot])
                                                           : ((rs_hi_y[cur_slot] < rs_hi_z[cur_slot]) ? rs_hi_y[cur_slot] : rs_hi_z[cur_slot]);
-                        rs_wait[cur_slot]    <= rs_wait[cur_slot] + 1'b1;
+                        rs_wait[cur_slot]    <= 4'd4;
                     end
                     // Miss check (unclamped t_enter > t_exit) + clamp t_min; set node + state.
                     // Clamp t_min to 0: inside the world box t_enter<0; starting from t=0
                     // gives correct cx/cy/cz (t_next unaffected).
-                    default: begin   // 4'd8
+                    default: begin   // 4'd4
                         t_min[cur_slot] <= ($signed(rs_enter_r[cur_slot]) < 0) ? 32'sh0 : rs_enter_r[cur_slot];
                         t_max[cur_slot] <= rs_exit_r[cur_slot];
                         if (rs_enter_r[cur_slot] > rs_exit_r[cur_slot]) begin
