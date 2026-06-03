@@ -689,16 +689,38 @@ module svo_traversal #(
                     3'd7: begin   // wait: word-0 addr issued in S_ENTER_NODE, data ready next cycle
                         svo_rd_addr <= {node_idx[11:0], 3'd1};
                         bram_field  <= 3'd0;
+                        // geometry stage 0: capture child cell + entry-rel + node_half.
+                        // bw_ex_r and node_* are valid on this first BRAM-wait cycle, so
+                        // dt/prod can be issued early enough (field 0/1) to hide the shared
+                        // bank latency (QCOL=4) entirely inside the 8-cycle read window.
+                        bw_cx_r    <= bw_c_cx;    bw_cy_r    <= bw_c_cy;    bw_cz_r    <= bw_c_cz;
+                        bw_exrel_r <= bw_c_exrel; bw_eyrel_r <= bw_c_eyrel; bw_ezrel_r <= bw_c_ezrel;
+                        bw_nhq_r   <= bw_c_nhq;
                     end
                     3'd0: begin   // read word 0 = bitmask
                         r_bitmask <= svo_rd_data[15:0];
                         svo_rd_addr <= {node_idx[11:0], 3'd2};
                         bram_field  <= 3'd1;
+                        // geometry stage 1: dist to next midplane (conditional, no qmul)
+                        bw_distx_r <= (!step_x[2]) ? (bw_cx_r[0] ? ((bw_nhq_r<<<1)-bw_exrel_r) : (bw_nhq_r-bw_exrel_r))
+                                                   : (bw_cx_r[0] ? (bw_exrel_r-bw_nhq_r) : bw_exrel_r);
+                        bw_disty_r <= (!step_y[2]) ? (bw_cy_r[0] ? ((bw_nhq_r<<<1)-bw_eyrel_r) : (bw_nhq_r-bw_eyrel_r))
+                                                   : (bw_cy_r[0] ? (bw_eyrel_r-bw_nhq_r) : bw_eyrel_r);
+                        bw_distz_r <= (!step_z[2]) ? (bw_cz_r[0] ? ((bw_nhq_r<<<1)-bw_ezrel_r) : (bw_nhq_r-bw_ezrel_r))
+                                                   : (bw_cz_r[0] ? (bw_ezrel_r-bw_nhq_r) : bw_ezrel_r);
+                        // issue dt = node_half*|inv| onto the shared bank (collect @ field 4)
+                        q_a0 <= bw_nhq_r; q_b0 <= qabs(inv_x);
+                        q_a1 <= bw_nhq_r; q_b1 <= qabs(inv_y);
+                        q_a2 <= bw_nhq_r; q_b2 <= qabs(inv_z);
                     end
                     3'd1: begin   // read word 1 = child ptrs 0-1
                         r_child[0]<=svo_rd_data[15:0]; r_child[1]<=svo_rd_data[31:16];
                         svo_rd_addr <= {node_idx[11:0], 3'd3};
                         bram_field  <= 3'd2;
+                        // issue prod = dist*|inv| onto the shared bank (collect @ field 5)
+                        q_a0 <= bw_distx_r; q_b0 <= qabs(inv_x);
+                        q_a1 <= bw_disty_r; q_b1 <= qabs(inv_y);
+                        q_a2 <= bw_distz_r; q_b2 <= qabs(inv_z);
                     end
                     3'd2: begin   // read word 2 = child ptrs 2-3
                         r_child[2]<=svo_rd_data[15:0]; r_child[3]<=svo_rd_data[31:16];
@@ -709,36 +731,21 @@ module svo_traversal #(
                         r_child[4]<=svo_rd_data[15:0]; r_child[5]<=svo_rd_data[31:16];
                         svo_rd_addr <= {node_idx[11:0], 3'd5};
                         bram_field  <= 3'd4;
-                        // geometry stage 0: capture child cell + entry-rel + node_half
-                        bw_cx_r    <= bw_c_cx;    bw_cy_r    <= bw_c_cy;    bw_cz_r    <= bw_c_cz;
-                        bw_exrel_r <= bw_c_exrel; bw_eyrel_r <= bw_c_eyrel; bw_ezrel_r <= bw_c_ezrel;
-                        bw_nhq_r   <= bw_c_nhq;
                     end
                     3'd4: begin   // read word 4 = child ptrs 6-7
                         r_child[6]<=svo_rd_data[15:0]; r_child[7]<=svo_rd_data[31:16];
                         svo_rd_addr <= {node_idx[11:0], 3'd6};
                         bram_field  <= 3'd5;
-                        // geometry stage 1: dist to next midplane (conditional, no qmul)
-                        bw_distx_r <= (!step_x[2]) ? (bw_cx_r[0] ? ((bw_nhq_r<<<1)-bw_exrel_r) : (bw_nhq_r-bw_exrel_r))
-                                                   : (bw_cx_r[0] ? (bw_exrel_r-bw_nhq_r) : bw_exrel_r);
-                        bw_disty_r <= (!step_y[2]) ? (bw_cy_r[0] ? ((bw_nhq_r<<<1)-bw_eyrel_r) : (bw_nhq_r-bw_eyrel_r))
-                                                   : (bw_cy_r[0] ? (bw_eyrel_r-bw_nhq_r) : bw_eyrel_r);
-                        bw_distz_r <= (!step_z[2]) ? (bw_cz_r[0] ? ((bw_nhq_r<<<1)-bw_ezrel_r) : (bw_nhq_r-bw_ezrel_r))
-                                                   : (bw_cz_r[0] ? (bw_ezrel_r-bw_nhq_r) : bw_ezrel_r);
-                        // dt = node_half * |inv|  (one qmul; from registered nhq)
-                        bw_dtx_r <= qmul(bw_nhq_r, qabs(inv_x));
-                        bw_dty_r <= qmul(bw_nhq_r, qabs(inv_y));
-                        bw_dtz_r <= qmul(bw_nhq_r, qabs(inv_z));
+                        // collect dt from the shared bank (issued @ field 0, QCOL=4)
+                        bw_dtx_r <= q_p0; bw_dty_r <= q_p1; bw_dtz_r <= q_p2;
                     end
                     3'd5: begin   // read word 5 = block IDs 0-3; word-6 addr already issued
                         r_block[0]<=svo_rd_data[7:0];   r_block[1]<=svo_rd_data[15:8];
                         r_block[2]<=svo_rd_data[23:16]; r_block[3]<=svo_rd_data[31:24];
                         svo_rd_en  <= '0;
                         bram_field <= 3'd6;
-                        // geometry stage 2: dist * |inv|  (one qmul)
-                        bw_prodx_r <= qmul(bw_distx_r, qabs(inv_x));
-                        bw_prody_r <= qmul(bw_disty_r, qabs(inv_y));
-                        bw_prodz_r <= qmul(bw_distz_r, qabs(inv_z));
+                        // collect prod from the shared bank (issued @ field 1, QCOL=4)
+                        bw_prodx_r <= q_p0; bw_prody_r <= q_p1; bw_prodz_r <= q_p2;
                     end
                     3'd6: begin   // read word 6 = block IDs 4-7; done
                         r_block[4]<=svo_rd_data[7:0];   r_block[5]<=svo_rd_data[15:8];
