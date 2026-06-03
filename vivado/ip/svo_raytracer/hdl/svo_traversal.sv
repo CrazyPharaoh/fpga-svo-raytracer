@@ -88,6 +88,7 @@ module svo_traversal #(
         return p[47:16];
     endfunction
 
+
     // (The old all-in-one qrecip() Newton-Raphson reciprocal has been removed: the
     // two N-R iterations are now pipelined through the shared bank across S_RAY_SETUP
     // stages 10-13 (shadow 1-4), seeded by recip_init() below.)
@@ -215,12 +216,13 @@ module svo_traversal #(
     localparam int QCOL = 4;
     logic signed [31:0] q_a0, q_b0, q_a1, q_b1, q_a2, q_b2;
     logic signed [31:0] q_p0, q_p1, q_p2;
-    // Entry point P = ro + t_min*rd (Q16.16). Single combinational qmul per axis.
-    // bw_c_* feed S_SOLID's hit point directly; bw_ex_r/ey_r/ez_r are the
-    // registered copy that breaks the S_BRAM_WAIT t_next two-qmul chain.
-    logic signed [31:0] bw_c_ex, bw_c_ey, bw_c_ez;
-    logic signed [31:0] bw_ex_r, bw_ey_r, bw_ez_r;
-    // S_BRAM_WAIT field=6 combinational geometry (all from registered bw_ex_r).
+    // Entry point P = ro + t_min*rd (Q16.16). The multiply t_min*rd is registered into
+    // te_* so it lands in its own clock cycle; the +ro add is then combinational and
+    // happens in the consuming cycle (geometry capture / solid hit). This splits the old
+    // single-cycle multiply+wide-add path (which failed timing) into two short stages.
+    logic signed [31:0] te_x, te_y, te_z;          // registered t_min*rd (one DSP cycle)
+    logic signed [31:0] bw_c_ex, bw_c_ey, bw_c_ez;  // = ro + te_* (combinational add)
+    // S_BRAM_WAIT field=6 combinational geometry (all from the entry point bw_c_e*).
     logic [6:0]         bw_c_icx, bw_c_icy, bw_c_icz;
     logic [5:0]         bw_c_cx,  bw_c_cy,  bw_c_cz;
     logic signed [31:0] bw_c_nhq;
@@ -306,36 +308,38 @@ module svo_traversal #(
     );
 
     // -------------------------------------------------------------------------
-    // Entry-point combinational (CE='1'): P = ro + t_min*rd.
-    // t_min, ro_*, rd_* are stable across the whole 8-cycle BRAM read and at the
-    // moment of a solid hit, so a single registered copy (bw_ex_r) is always valid.
+    // Entry-point add (CE='1'): P = ro + (t_min*rd).  te_* is the registered product,
+    // so this is only an add — the multiply already happened the previous cycle. t_min,
+    // ro_*, rd_* are stable across the whole 8-cycle BRAM read and at a solid hit, so
+    // te_* (registered one cycle earlier) yields the correct entry point at field-7 and
+    // at S_SOLID.
     // -------------------------------------------------------------------------
     always_comb begin
-        bw_c_ex = ro_x + qmul(t_min, rd_x);
-        bw_c_ey = ro_y + qmul(t_min, rd_y);
-        bw_c_ez = ro_z + qmul(t_min, rd_z);
+        bw_c_ex = ro_x + te_x;
+        bw_c_ey = ro_y + te_y;
+        bw_c_ez = ro_z + te_z;
     end
 
     // -------------------------------------------------------------------------
     // S_BRAM_WAIT field=6 combinational geometry (CE='1' on all DSPs).
-    // Reads *registered* bw_ex_r so each qmul is a single DSP stage.
-    // node_half / node_origin_* / step_* / inv_* are stable across the BRAM read.
+    // Reads the entry point bw_c_e* (= ro + registered te_*); the multiply is not in
+    // this path. node_half / node_origin_* / step_* / inv_* are stable across the read.
     // -------------------------------------------------------------------------
     always_comb begin
         bw_c_nhq = $signed(32'(node_half)) << 16;
         // child cell index within this node, clamped on underflow/negative
-        bw_c_icx = ($signed(bw_ex_r) < 0) ? 7'd0 : bw_ex_r[22:16];
-        bw_c_icy = ($signed(bw_ey_r) < 0) ? 7'd0 : bw_ey_r[22:16];
-        bw_c_icz = ($signed(bw_ez_r) < 0) ? 7'd0 : bw_ez_r[22:16];
+        bw_c_icx = ($signed(bw_c_ex) < 0) ? 7'd0 : bw_c_ex[22:16];
+        bw_c_icy = ($signed(bw_c_ey) < 0) ? 7'd0 : bw_c_ey[22:16];
+        bw_c_icz = ($signed(bw_c_ez) < 0) ? 7'd0 : bw_c_ez[22:16];
         bw_c_icx = (bw_c_icx >= node_origin_x) ? bw_c_icx - node_origin_x : 7'd0;
         bw_c_icy = (bw_c_icy >= node_origin_y) ? bw_c_icy - node_origin_y : 7'd0;
         bw_c_icz = (bw_c_icz >= node_origin_z) ? bw_c_icz - node_origin_z : 7'd0;
         bw_c_cx  = (bw_c_icx >= node_half) ? 6'd1 : 6'd0;
         bw_c_cy  = (bw_c_icy >= node_half) ? 6'd1 : 6'd0;
         bw_c_cz  = (bw_c_icz >= node_half) ? 6'd1 : 6'd0;
-        bw_c_exrel = bw_ex_r - ($signed(32'(node_origin_x)) << 16);
-        bw_c_eyrel = bw_ey_r - ($signed(32'(node_origin_y)) << 16);
-        bw_c_ezrel = bw_ez_r - ($signed(32'(node_origin_z)) << 16);
+        bw_c_exrel = bw_c_ex - ($signed(32'(node_origin_x)) << 16);
+        bw_c_eyrel = bw_c_ey - ($signed(32'(node_origin_y)) << 16);
+        bw_c_ezrel = bw_c_ez - ($signed(32'(node_origin_z)) << 16);
         // dist / dt / t_next are pipelined across bram_field 3->6 (see S_BRAM_WAIT).
     end
 
@@ -363,10 +367,12 @@ module svo_traversal #(
             any_hit     <= '0;
             shade_start <= '0;
             axis_tvalid <= '0;
-            // Capture the combinational entry point every cycle.
-            bw_ex_r <= bw_c_ex;
-            bw_ey_r <= bw_c_ey;
-            bw_ez_r <= bw_c_ez;
+            // Register the entry-point multiply t_min*rd every cycle (the +ro add is
+            // done combinationally by consumers next cycle). Splits the multiply and the
+            // add into separate clock cycles so neither path exceeds the 10 ns budget.
+            te_x <= qmul(t_min, rd_x);
+            te_y <= qmul(t_min, rd_y);
+            te_z <= qmul(t_min, rd_z);
 
             unique case (state)
 
@@ -748,7 +754,7 @@ module svo_traversal #(
                         svo_rd_addr <= {node_idx[11:0], 3'd1};
                         bram_field  <= 3'd0;
                         // geometry stage 0: capture child cell + entry-rel + node_half.
-                        // bw_ex_r and node_* are valid on this first BRAM-wait cycle, so
+                        // te_* (hence bw_c_e*) and node_* are valid on this first BRAM-wait cycle, so
                         // dt/prod can be issued early enough (field 0/1) to hide the shared
                         // bank latency (QCOL=4) entirely inside the 8-cycle read window.
                         bw_cx_r    <= bw_c_cx;    bw_cy_r    <= bw_c_cy;    bw_cz_r    <= bw_c_cz;
@@ -871,7 +877,11 @@ module svo_traversal #(
             S_SOLID: begin
                 t_hit        <= t_min;
                 block_id_hit <= r_block[cidx];
-                // hit point calc using t and ray direction
+                // Hit point = entry point at the current t_min. Use the *registered*
+                // copy bw_e*_r, not the combinational bw_c_e*: t_min is stable across
+                // S_CHECK_CHILD -> S_SOLID, so bw_e*_r (registered last cycle) holds the
+                // identical value, and this becomes a short FF->FF copy instead of the
+                // long entry-point multiply+add path (which was the −0.96 ns worst path).
                 hit_px_r     <= bw_c_ex;
                 hit_py_r     <= bw_c_ey;
                 hit_pz_r     <= bw_c_ez;
@@ -890,7 +900,7 @@ module svo_traversal #(
                     shade_ray_dx        <= rd_x;
                     shade_ray_dy        <= rd_y;
                     shade_ray_dz        <= rd_z;
-                    shade_hit_px        <= bw_c_ex;
+                    shade_hit_px        <= bw_c_ex;   // ro + te_*; te_* registered last cycle
                     shade_hit_py        <= bw_c_ey;
                     shade_hit_pz        <= bw_c_ez;
                     shade_start         <= 1'b1;
