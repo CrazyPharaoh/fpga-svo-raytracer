@@ -13,7 +13,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'hardware_ref')
 import svo_builder
 import fpga_svo_raytracer as ref
 
-IMG_W, IMG_H = 320, 240
+# Fast-sim crop: must match tb_svo_full.py / the -GIMG_W shade build (Makefile.shade).
+RENDER_DIV   = int(os.environ.get('RENDER_DIV', '1'))
+IMG_W, IMG_H = 320 // RENDER_DIV, 240 // RENDER_DIV
 
 # ─── Constants from shading_pipeline.sv ──────────────────────────────────────
 AMBIENT      = 6554 / 65536.0        # 32'h0000_199A / 65536
@@ -140,14 +142,14 @@ def main():
     fwd   = normalise_list([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
     right = normalise_list(cross(fwd, [0, 1, 0]))
     up    = cross(right, fwd)
-    fov_scale = math.tan(math.radians(60) / 2) / 160.0
+    fov_scale = math.tan(math.radians(60) / 2) / (IMG_W / 2)
 
     print("Rendering shaded reference frame …")
     pixels = []
     for py in range(IMG_H):
         for px in range(IMG_W):
-            u  = (px - 160) * fov_scale
-            v  = (py - 120) * fov_scale
+            u  = (px - IMG_W / 2) * fov_scale
+            v  = (py - IMG_H / 2) * fov_scale
             dx = fwd[0] + u*right[0] - v*up[0]
             dy = fwd[1] + u*right[1] - v*up[1]
             dz = fwd[2] + u*right[2] - v*up[2]

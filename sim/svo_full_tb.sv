@@ -4,7 +4,10 @@
 // Exposes the same BRAM-read and AXI-Stream ports as svo_traversal.sv so that
 // tb_svo_full.py can reuse the existing Python bram_model coroutine.
 `timescale 1ns/1ps
-module svo_full_tb (
+module svo_full_tb #(
+    parameter int IMG_W = 320,   // overridable for the RENDER_DIV fast-sim crop
+    parameter int IMG_H = 240
+)(
     input  logic        clk,
     input  logic        rst,
     input  logic        start,
@@ -107,7 +110,7 @@ module svo_full_tb (
     // -------------------------------------------------------------------------
     // Primary traversal — SHADE_MODE=1, SHADOW_MODE=0
     // -------------------------------------------------------------------------
-    svo_traversal #(.SHADOW_MODE(0), .SHADE_MODE(1)) traversal (
+    svo_traversal #(.SHADOW_MODE(0), .SHADE_MODE(1), .IMG_W(IMG_W), .IMG_H(IMG_H)) traversal (
         .clk(clk), .rst(rst), .start(start),
         .cam_pos_x(cam_pos_x),     .cam_pos_y(cam_pos_y),     .cam_pos_z(cam_pos_z),
         .cam_right_x(cam_right_x), .cam_right_y(cam_right_y), .cam_right_z(cam_right_z),
@@ -161,7 +164,7 @@ module svo_full_tb (
     // -------------------------------------------------------------------------
     localparam bit SHADOW_EN = 1'b0;
     generate if (SHADOW_EN) begin : g_shadow
-    svo_traversal #(.SHADOW_MODE(1), .SHADE_MODE(0)) shadow_trav (
+    svo_traversal #(.SHADOW_MODE(1), .SHADE_MODE(0), .IMG_W(IMG_W), .IMG_H(IMG_H)) shadow_trav (
         .clk(clk), .rst(rst), .start(shadow_start),
         .cam_pos_x(shadow_ro_x), .cam_pos_y(shadow_ro_y), .cam_pos_z(shadow_ro_z),
         .cam_fwd_x(shadow_rd_x), .cam_fwd_y(shadow_rd_y), .cam_fwd_z(shadow_rd_z),

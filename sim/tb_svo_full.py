@@ -14,7 +14,10 @@ from PIL import Image
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'host'))
 import svo_builder
 
-IMG_W, IMG_H   = 320, 240
+# Fast-sim crop: RENDER_DIV downscales the render (same FOV) to gate ~DIV^2 faster.
+# Must match the -GIMG_W/-GIMG_H build (Makefile.shade) and gen_reference_shaded.py.
+RENDER_DIV     = int(os.environ.get('RENDER_DIV', '1'))
+IMG_W, IMG_H   = 320 // RENDER_DIV, 240 // RENDER_DIV
 CLK_PERIOD_NS  = 10
 
 _LM = math.sqrt(1.0**2 + 2.0**2 + 1.5**2)
@@ -312,7 +315,8 @@ async def test_render_frame_shaded(dut):
     fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
     right = normalise(cross(fwd, [0, 1, 0]))
     up    = cross(right, fwd)
-    fov_scale = math.tan(math.radians(60) / 2) / 160.0
+    # scale = tan(fov/2)/(IMG_W/2): same FOV at any RENDER_DIV. At 320 -> /160.0.
+    fov_scale = math.tan(math.radians(60) / 2) / (IMG_W / 2)
 
     dut.cam_pos_x.value   = to_q16(pos[0]);   dut.cam_pos_y.value   = to_q16(pos[1]);   dut.cam_pos_z.value   = to_q16(pos[2])
     dut.cam_right_x.value = to_q16(right[0]); dut.cam_right_y.value = to_q16(right[1]); dut.cam_right_z.value = to_q16(right[2])
