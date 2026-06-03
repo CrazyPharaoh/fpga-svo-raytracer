@@ -88,27 +88,9 @@ module svo_traversal #(
         return p[47:16];
     endfunction
 
-    function automatic logic signed [31:0] qrecip(
-        input logic signed [31:0] x
-    );
-        logic signed [31:0] xabs, r, r2;
-        xabs = (x < 0) ? -x : x;
-        // Initial estimate chosen by magnitude so N-R converges within 3 iterations.
-        // Ray components are normalised so |x| ≤ 1 in practice.
-        if      (|xabs[31:16]) r = 32'h0001_0000;  // x ≥ 1.0      → r₀=1.0
-        else if (xabs[15])     r = 32'h0001_8000;  // x ∈ [0.5,1)  → r₀=1.5
-        else if (xabs[14])     r = 32'h0003_0000;  // x ∈ [0.25,0.5) → r₀=3.0
-        else if (xabs[13])     r = 32'h0006_0000;  // x ∈ [0.125,0.25) → r₀=6.0
-        else if (xabs[12])     r = 32'h000C_0000;  // x ∈ [0.0625,0.125) → r₀=12.0
-        else                   r = 32'h0018_0000;  // x < 0.0625    → r₀=24.0
-        // 2 N-R iterations: r ← r·(2 − x·r)
-        // 3 iterations caused a 140ns combinational chain (23 DSPs, 103 levels),
-        // violating the 110ns multicycle budget. With the 6-way initial estimate,
-        // 2 iterations give ≤0.4% error for |x|≥0.125, acceptable for DDA traversal.
-        r2 = qmul(xabs, r); r2 = 32'h0002_0000 - r2; r = qmul(r, r2);
-        r2 = qmul(xabs, r); r2 = 32'h0002_0000 - r2; r = qmul(r, r2);
-        return (x < 0) ? -r : r;
-    endfunction
+    // (The old all-in-one qrecip() Newton-Raphson reciprocal has been removed: the
+    // two N-R iterations are now pipelined through the shared bank across S_RAY_SETUP
+    // stages 10-13 (shadow 1-4), seeded by recip_init() below.)
 
     // Absolute value for a Q16.16 signed value.
     function automatic logic signed [31:0] qabs(input logic signed [31:0] x);
@@ -203,7 +185,7 @@ module svo_traversal #(
     logic signed [31:0] rs_s4_y0;                   // stage 4: 1.5 - rslen2/2 (NR seed for 1/sqrt(len))
     logic signed [31:0] rs_s5_y0sq;                 // stage 5: y0^2
     logic signed [31:0] rs_s6_r2y0sq;               // stage 6: rslen2 x y0^2
-    // Shared qrecip pipeline -- primary uses these at stages 9-13; shadow at stages 0-4.
+    // Shared reciprocal-N-R registers -- primary uses these at stages 9-13; shadow at 0-4.
     logic signed [31:0] rs_xabs_x, rs_xabs_y, rs_xabs_z;  // |rd_*|
     logic signed [31:0] rs_r0_x,   rs_r0_y,   rs_r0_z;    // initial N-R estimates
     logic signed [31:0] rs_t1_x,   rs_t1_y,   rs_t1_z;    // N-R iteration 1 multiply
@@ -216,14 +198,9 @@ module svo_traversal #(
     // eliminates unconstrained DSP ACOUT paths.  The always_ff stages below
     // capture these signals into the pipeline registers at the correct rs_wait
     // stage; the DSPs themselves run every cycle but cause no timing hazard.
-    logic signed [31:0] rs_c_rsu,    rs_c_rsv;
-    logic signed [31:0] rs_c_s1_a,   rs_c_s1_b;
-    logic signed [31:0] rs_c_s1_c,   rs_c_s1_d;
-    logic signed [31:0] rs_c_s1_e,   rs_c_s1_f;
-    logic signed [31:0] rs_c_dx2,    rs_c_dy2,    rs_c_dz2;
-    // rsqrt/normalize (y0sq/r2y0sq/inv_len/nd, stages 5-8) and the shared N-R reciprocal
-    // (t1/r1/t2/inv, primary 10-13 / shadow 1-4) are issued onto the shared multiplier
-    // bank directly from the FSM, so their dedicated combinational qmuls are removed.
+    // All S_RAY_SETUP qmuls (ray-dir front rsu/rsv/s1/dx2, rsqrt/normalize y0sq/r2y0sq/
+    // inv_len/nd, and the N-R reciprocal t1/r1/t2/inv) are issued onto the shared
+    // multiplier bank directly from the FSM, so no dedicated rs_c_* qmul nets remain.
     // S_ROOT_SLAB: ray-vs-world-box slab intersection times (CE='1' on all DSPs)
     // Shared 3-lane multiplier bank (DSP reduction). The FSM registers operands
     // into q_a*/q_b* in the issue stage; products are valid QCOL = 4 cycles later
@@ -302,28 +279,14 @@ module svo_traversal #(
     logic post_pop;
 
     // -------------------------------------------------------------------------
-    // S_RAY_SETUP combinational stage computations (CE='1' on all DSPs)
+    // S_RAY_SETUP: every multiply is now issued onto the shared multiplier bank
+    // directly from the FSM (q_a*/q_b* -> q_p*), so there are no dedicated qmul
+    // always_comb blocks left here. The pipeline runs entirely on the 3-lane bank:
+    //   stages 0-3  ray-dir front (u/v, u*right + v*up, raw_dir^2)
+    //   stages 5-8  fast inverse sqrt + normalize (y0sq, r2y0sq, inv_len, nd)
+    //   stages 10-13 (shadow 1-4) Newton-Raphson reciprocal (t1, r1, t2, inv)
+    // Adds, sign bits, subtracts and clamps stay combinational in front of the FFs.
     // -------------------------------------------------------------------------
-    always_comb begin
-        rs_c_rsu  = qmul($signed({1'b0, px, 16'd0}) - 32'sh00A0_0000, cam_scale);
-        rs_c_rsv  = qmul($signed({1'b0, py, 16'd0}) - 32'sh0078_0000, cam_scale);
-    end
-    always_comb begin
-        rs_c_s1_a = qmul(rsu, cam_right_x); rs_c_s1_b = qmul(rsv, cam_up_x);
-        rs_c_s1_c = qmul(rsu, cam_right_y); rs_c_s1_d = qmul(rsv, cam_up_y);
-        rs_c_s1_e = qmul(rsu, cam_right_z); rs_c_s1_f = qmul(rsv, cam_up_z);
-    end
-    always_comb begin
-        rs_c_dx2 = qmul(rsdx, rsdx);
-        rs_c_dy2 = qmul(rsdy, rsdy);
-        rs_c_dz2 = qmul(rsdz, rsdz);
-    end
-    // rsqrt / normalization qmuls (y0sq, r2y0sq, inv_len, nd) are now issued onto the
-    // shared bank from primary stages 5-8, so their dedicated combinational qmuls are gone.
-    // Shared N-R iterations (primary stages 10-13; shadow stages 1-4) are now issued
-    // onto the shared multiplier bank directly from the FSM (q_a*/q_b* -> q_p*), so the
-    // dedicated rs_c_t1/r1/t2/inv combinational qmuls have been removed. The 2-x/(2-y)
-    // subtracts and the inv sign-negation are applied combinationally at issue/collect.
 
     // -------------------------------------------------------------------------
     // Shared multiplier bank. The slab times (and, as later clusters migrate,
@@ -426,7 +389,7 @@ module svo_traversal #(
             // Shadow mode: 6-stage pipeline (rs_wait 0->5). Stages 0-4 compute;
             // stage 5 (default) is the pure state transition.
             //
-            // Both modes share rs_xabs/r0/t1/r1/t2/sign registers for qrecip.
+            // Both modes share rs_xabs/r0/t1/r1/t2/sign registers for the reciprocal N-R.
             S_RAY_SETUP: begin
                 if (SHADOW_MODE) begin
                     case (rs_wait)
@@ -502,29 +465,58 @@ module svo_traversal #(
                 end else begin
                     // Primary mode: 14-stage pipeline
                     case (rs_wait)
-                        4'd0: begin
-                            ro_x    <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
-                            rsu     <= rs_c_rsu;
-                            rsv     <= rs_c_rsv;
-                            rs_wait <= rs_wait + 1'b1;
+                        // ---- Screen-space ray direction: raw_dir = fwd + u*right - v*up ----
+                        // u,v are the pixel's offset from screen centre scaled by cam_scale
+                        // (u = (px-160)*scale, v = (py-120)*scale; 160<<16=00A0_0000,
+                        // 120<<16=0078_0000). Stage 0 forms u,v; stage 1 forms the six
+                        // u*right / v*up products; stage 2 sums them into raw_dir; stage 3
+                        // squares raw_dir for len2. All multiplies use the shared bank.
+                        4'd0: begin  // u = (px-160)*scale  ;  v = (py-120)*scale
+                            if (q_phase == 0) begin
+                                ro_x <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
+                                q_a0 <= $signed({1'b0, px, 16'd0}) - 32'sh00A0_0000; q_b0 <= cam_scale;
+                                q_a1 <= $signed({1'b0, py, 16'd0}) - 32'sh0078_0000; q_b1 <= cam_scale;
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                rsu <= q_p0; rsv <= q_p1;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;
+                            end else q_phase <= q_phase - 1'b1;
                         end
-                        4'd1: begin
-                            rs_s1_a <= rs_c_s1_a; rs_s1_b <= rs_c_s1_b;
-                            rs_s1_c <= rs_c_s1_c; rs_s1_d <= rs_c_s1_d;
-                            rs_s1_e <= rs_c_s1_e; rs_s1_f <= rs_c_s1_f;
-                            rs_wait <= rs_wait + 1'b1;
+                        4'd1: begin  // six products over 2 issue cycles (6 muls > 3 lanes)
+                            if (q_phase == 0) begin           // issue A: a/c/e = u * cam_right_{x,y,z}
+                                q_a0 <= rsu; q_b0 <= cam_right_x;
+                                q_a1 <= rsu; q_b1 <= cam_right_y;
+                                q_a2 <= rsu; q_b2 <= cam_right_z;
+                                q_phase <= 3'd5;
+                            end else if (q_phase == 5) begin  // issue B: b/d/f = v * cam_up_{x,y,z}
+                                q_a0 <= rsv; q_b0 <= cam_up_x;
+                                q_a1 <= rsv; q_b1 <= cam_up_y;
+                                q_a2 <= rsv; q_b2 <= cam_up_z;
+                                q_phase <= 3'd4;
+                            end else if (q_phase == 2) begin  // collect A (4 cycles after issue A)
+                                rs_s1_a <= q_p0; rs_s1_c <= q_p1; rs_s1_e <= q_p2;
+                                q_phase <= 3'd1;
+                            end else if (q_phase == 1) begin  // collect B (4 cycles after issue B)
+                                rs_s1_b <= q_p0; rs_s1_d <= q_p1; rs_s1_f <= q_p2;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;
+                            end else q_phase <= q_phase - 1'b1;  // 4->3, 3->2
                         end
-                        4'd2: begin
+                        4'd2: begin  // raw_dir = fwd + u*right - v*up  (adds only)
                             rsdx    <= cam_fwd_x + rs_s1_a - rs_s1_b;
                             rsdy    <= cam_fwd_y + rs_s1_c - rs_s1_d;
                             rsdz    <= cam_fwd_z + rs_s1_e - rs_s1_f;
                             rs_wait <= rs_wait + 1'b1;
                         end
-                        4'd3: begin
-                            rs_s3_dx2 <= rs_c_dx2;
-                            rs_s3_dy2 <= rs_c_dy2;
-                            rs_s3_dz2 <= rs_c_dz2;
-                            rs_wait   <= rs_wait + 1'b1;
+                        4'd3: begin  // dx2/dy2/dz2 = raw_dir^2  (-> len2)
+                            if (q_phase == 0) begin
+                                q_a0 <= rsdx; q_b0 <= rsdx;
+                                q_a1 <= rsdy; q_b1 <= rsdy;
+                                q_a2 <= rsdz; q_b2 <= rsdz;
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                rs_s3_dx2 <= q_p0; rs_s3_dy2 <= q_p1; rs_s3_dz2 <= q_p2;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;
+                            end else q_phase <= q_phase - 1'b1;
                         end
                         4'd4: begin
                             rslen2   <= rs_s3_dx2 + rs_s3_dy2 + rs_s3_dz2;
