@@ -221,12 +221,9 @@ module svo_traversal #(
     logic signed [31:0] rs_c_s1_c,   rs_c_s1_d;
     logic signed [31:0] rs_c_s1_e,   rs_c_s1_f;
     logic signed [31:0] rs_c_dx2,    rs_c_dy2,    rs_c_dz2;
-    logic signed [31:0] rs_c_y0sq;
-    logic signed [31:0] rs_c_r2y0sq;
-    logic signed [31:0] rs_c_inv_len;
-    logic signed [31:0] rs_c_ndx,    rs_c_ndy,    rs_c_ndz;
-    // Shared N-R (primary stages 10-13; shadow stages 1-4) is issued onto the shared
-    // bank from the FSM, so rs_c_t1/r1/t2/inv are no longer needed as dedicated qmuls.
+    // rsqrt/normalize (y0sq/r2y0sq/inv_len/nd, stages 5-8) and the shared N-R reciprocal
+    // (t1/r1/t2/inv, primary 10-13 / shadow 1-4) are issued onto the shared multiplier
+    // bank directly from the FSM, so their dedicated combinational qmuls are removed.
     // S_ROOT_SLAB: ray-vs-world-box slab intersection times (CE='1' on all DSPs)
     // Shared 3-lane multiplier bank (DSP reduction). The FSM registers operands
     // into q_a*/q_b* in the issue stage; products are valid QCOL = 4 cycles later
@@ -321,14 +318,8 @@ module svo_traversal #(
         rs_c_dy2 = qmul(rsdy, rsdy);
         rs_c_dz2 = qmul(rsdz, rsdz);
     end
-    always_comb rs_c_y0sq   = qmul(rs_s4_y0, rs_s4_y0);
-    always_comb rs_c_r2y0sq = qmul(rslen2, rs_s5_y0sq);
-    always_comb rs_c_inv_len = qmul(rs_s4_y0, 32'sh0001_8000 - (rs_s6_r2y0sq >>> 1));
-    always_comb begin
-        rs_c_ndx = qmul(rsdx, rsinv_len);
-        rs_c_ndy = qmul(rsdy, rsinv_len);
-        rs_c_ndz = qmul(rsdz, rsinv_len);
-    end
+    // rsqrt / normalization qmuls (y0sq, r2y0sq, inv_len, nd) are now issued onto the
+    // shared bank from primary stages 5-8, so their dedicated combinational qmuls are gone.
     // Shared N-R iterations (primary stages 10-13; shadow stages 1-4) are now issued
     // onto the shared multiplier bank directly from the FSM (q_a*/q_b* -> q_p*), so the
     // dedicated rs_c_t1/r1/t2/inv combinational qmuls have been removed. The 2-x/(2-y)
@@ -540,23 +531,52 @@ module svo_traversal #(
                             rs_s4_y0 <= 32'sh0001_8000 - ((rs_s3_dx2 + rs_s3_dy2 + rs_s3_dz2) >>> 1);
                             rs_wait  <= rs_wait + 1'b1;
                         end
-                        4'd5: begin
-                            rs_s5_y0sq <= rs_c_y0sq;
-                            rs_wait    <= rs_wait + 1'b1;
+                        // ---- Fast inverse square root: inv_len = 1 / |raw_dir| ----
+                        // One Newton-Raphson rsqrt step on len2 = |raw_dir|^2, using the
+                        // linear seed y0 = 1.5 - len2/2 (valid since raw_dir ~ unit):
+                        //     y0sq    = y0^2
+                        //     r2y0sq  = len2 * y0^2
+                        //     inv_len = y0 * (1.5 - r2y0sq/2)   -> ~1/sqrt(len2)
+                        // Stage 8 then normalizes: nd = raw_dir * inv_len. Each multiply is
+                        // issued on the shared bank (q_phase==0) and collected QCOL cycles
+                        // later (q_phase==1). 1.5_Q16.16 = 0001_8000.
+                        4'd5: begin  // rsqrt: y0sq = y0^2
+                            if (q_phase == 0) begin
+                                q_a0 <= rs_s4_y0; q_b0 <= rs_s4_y0;
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                rs_s5_y0sq <= q_p0;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;
+                            end else q_phase <= q_phase - 1'b1;
                         end
-                        4'd6: begin
-                            rs_s6_r2y0sq <= rs_c_r2y0sq;
-                            rs_wait      <= rs_wait + 1'b1;
+                        4'd6: begin  // rsqrt: r2y0sq = len2 * y0^2
+                            if (q_phase == 0) begin
+                                q_a0 <= rslen2; q_b0 <= rs_s5_y0sq;
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                rs_s6_r2y0sq <= q_p0;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;
+                            end else q_phase <= q_phase - 1'b1;
                         end
-                        4'd7: begin
-                            rsinv_len <= rs_c_inv_len;
-                            rs_wait   <= rs_wait + 1'b1;
+                        4'd7: begin  // rsqrt: inv_len = y0 * (1.5 - r2y0sq/2)
+                            if (q_phase == 0) begin
+                                q_a0 <= rs_s4_y0; q_b0 <= 32'sh0001_8000 - (rs_s6_r2y0sq >>> 1);
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                rsinv_len <= q_p0;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;
+                            end else q_phase <= q_phase - 1'b1;
                         end
-                        4'd8: begin
-                            rsndx   <= rs_c_ndx;
-                            rsndy   <= rs_c_ndy;
-                            rsndz   <= rs_c_ndz;
-                            rs_wait <= rs_wait + 1'b1;
+                        4'd8: begin  // normalize: nd = raw_dir * inv_len   (3 lanes)
+                            if (q_phase == 0) begin
+                                q_a0 <= rsdx; q_b0 <= rsinv_len;
+                                q_a1 <= rsdy; q_b1 <= rsinv_len;
+                                q_a2 <= rsdz; q_b2 <= rsinv_len;
+                                q_phase <= QCOL[2:0];
+                            end else if (q_phase == 1) begin
+                                rsndx <= q_p0; rsndy <= q_p1; rsndz <= q_p2;
+                                q_phase <= '0; rs_wait <= rs_wait + 1'b1;
+                            end else q_phase <= q_phase - 1'b1;
                         end
                         4'd9: begin
                             rs_sign_x <= rsndx[31]; rs_sign_y <= rsndy[31]; rs_sign_z <= rsndz[31];
