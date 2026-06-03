@@ -162,8 +162,16 @@ module svo_traversal_mr #(
     always_comb begin
         for (int s = 0; s < RAY_POOL_N; s++) begin
             ready[s] = (state[s] != S_IDLE) && !blocked[s];
-            // a slot trying to START a read (S_ENTER_NODE) needs the port free/owned
-            if (state[s] == S_ENTER_NODE && bram_busy && (bram_owner != s[SLOT_W-1:0]))
+            // Atomic BRAM read. The 8-word sequential node read advances svo_rd_addr
+            // ONE cycle ahead of the registered BRAM output, so it is only correct if
+            // the owning slot runs on CONSECUTIVE cycles. While a read is in progress
+            // (bram_busy) no OTHER slot may run — the owner keeps the turn until it
+            // releases the port at bram_field==6. This costs no throughput (one slot
+            // advances per cycle regardless; other slots' compute interleaves around
+            // reads, not during them) and subsumes the "can't START a read while
+            // another owns the port" rule. Without it, descheduling the owner mid-read
+            // desyncs addr vs the BRAM's auto-advancing output -> corrupt node data.
+            if (bram_busy && (s[SLOT_W-1:0] != bram_owner))
                 ready[s] = 1'b0;
         end
     end

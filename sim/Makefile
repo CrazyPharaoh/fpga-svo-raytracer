@@ -33,7 +33,7 @@ export RENDER_DIV
 VERILOG_SOURCES = $(RTL_DIR)/shared_qmul3.sv $(RTL_DIR)/pixel_reorder.sv $(RTL_DIR)/ray_scheduler.sv $(RTL_DIR)/svo_traversal_mr.sv
 TOPLEVEL        = svo_traversal_mr
 MODULE          = tb_svo_traversal
-COMPILE_ARGS    = -GSHADE_MODE=0 -GRAY_POOL_N=1 -GIMG_W=$(RENDER_W) -GIMG_H=$(RENDER_H)
+COMPILE_ARGS    = -GSHADE_MODE=0 -GRAY_POOL_N=4 -GIMG_W=$(RENDER_W) -GIMG_H=$(RENDER_H)
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
