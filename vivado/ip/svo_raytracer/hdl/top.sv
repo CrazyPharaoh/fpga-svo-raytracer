@@ -196,11 +196,12 @@ module top #(
     );
 
     // -------------------------------------------------------------------------
-    // OPTION A (2026-06-02): hard shadows temporarily disabled to free ~68 DSP
-    // (the shadow_trav instance) and close Phase 2 timing. Set to 1'b1 to
-    // restore full shadows. See plan 2026-06-02-option-a-shadows-off.md.
+    // Shadows ON: Option A (2026-06-02) temporarily dropped the shadow_trav
+    // instance to free ~68 DSP and close Phase 2 timing. The shared multiplier
+    // banks (shared_qmul3) have since cut DSP usage dramatically, so hard shadows
+    // are restored. Must match SHADOW_EN in sim/svo_full_tb.sv.
     // -------------------------------------------------------------------------
-    localparam bit SHADOW_EN = 1'b0;
+    localparam bit SHADOW_EN = 1'b1;
 
     // Phase 2 only: shading pipeline + shadow traversal
     generate if (SHADE_MODE) begin : g_shading

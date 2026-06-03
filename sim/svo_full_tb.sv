@@ -159,10 +159,11 @@ module svo_full_tb #(
 
     // -------------------------------------------------------------------------
     // Shadow traversal — SHADOW_MODE=1, SHADE_MODE=0.
-    // OPTION A: set SHADOW_EN=1'b0 to mirror the shadows-off synth build
-    // (top.sv). Must match SHADOWS_ENABLED in gen_reference_shaded.py.
+    // Shadows ON: the DSP-sharing work (shared multiplier banks) freed the budget,
+    // so the shadow traversal is back in. Must match SHADOWS_ENABLED in
+    // gen_reference_shaded.py and SHADOW_EN in top.sv.
     // -------------------------------------------------------------------------
-    localparam bit SHADOW_EN = 1'b0;
+    localparam bit SHADOW_EN = 1'b1;
     generate if (SHADOW_EN) begin : g_shadow
     svo_traversal #(.SHADOW_MODE(1), .SHADE_MODE(0), .IMG_W(IMG_W), .IMG_H(IMG_H)) shadow_trav (
         .clk(clk), .rst(rst), .start(shadow_start),

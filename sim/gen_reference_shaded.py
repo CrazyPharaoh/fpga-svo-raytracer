@@ -38,9 +38,9 @@ LUT = [
 ]
 
 SHADOW_BIAS = 0.5    # matches tb_svo_full.py
-# OPTION A: must match SHADOW_EN in svo_full_tb.sv / top.sv.
-# False = shadows off (every lit surface fully lit).
-SHADOWS_ENABLED = False
+# Shadows ON (DSP budget freed by the shared multiplier banks).
+# Must match SHADOW_EN in svo_full_tb.sv / top.sv.
+SHADOWS_ENABLED = True
 
 
 def clamp01(x):
