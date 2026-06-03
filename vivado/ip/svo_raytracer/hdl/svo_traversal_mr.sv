@@ -146,7 +146,46 @@ module svo_traversal_mr #(
     // RAY_POOL_N>1 is added in a later step.
     localparam int SLOT_W = (RAY_POOL_N > 1) ? $clog2(RAY_POOL_N) : 1;
     logic [SLOT_W-1:0] cur_slot;
-    assign cur_slot = '0;
+
+    // -------------------------------------------------------------------------
+    // Round-robin-over-ready scheduler. Each cycle it picks one ready slot to
+    // advance through the shared datapath. A slot is ready when it is mid-ray,
+    // not blocked on a multiply, and (if it wants to START a BRAM read) the
+    // single read port is free or already owned by it.
+    // At RAY_POOL_N=1 this reduces to "advance slot 0 whenever it is mid-ray
+    // and unblocked" — bit-identical to the old !blocked[cur_slot] gate.
+    // -------------------------------------------------------------------------
+    logic                  bram_busy;     // a slot currently owns the read port
+    logic [SLOT_W-1:0]     bram_owner;
+
+    logic [RAY_POOL_N-1:0] ready;
+    always_comb begin
+        for (int s = 0; s < RAY_POOL_N; s++) begin
+            ready[s] = (state[s] != S_IDLE) && !blocked[s];
+            // a slot trying to START a read (S_ENTER_NODE) needs the port free/owned
+            if (state[s] == S_ENTER_NODE && bram_busy && (bram_owner != s[SLOT_W-1:0]))
+                ready[s] = 1'b0;
+        end
+    end
+
+    logic                  grant_valid;
+    logic [SLOT_W-1:0]     grant_slot;
+    logic [SLOT_W-1:0]     last_grant;
+    generate
+        if (RAY_POOL_N == 1) begin : g_sched_n1
+            // ray_scheduler's ports are [$clog2(1)-1:0] = [-1:0] (zero/neg width)
+            // at N=1, so bypass it. grant slot 0 whenever it is ready.
+            assign grant_valid = ready[0];
+            assign grant_slot  = '0;
+        end else begin : g_sched
+            ray_scheduler #(.RAY_POOL_N(RAY_POOL_N)) u_sched (
+                .ready(ready), .last_grant(last_grant),
+                .grant_valid(grant_valid), .grant(grant_slot)
+            );
+        end
+    endgenerate
+
+    assign cur_slot = grant_slot;
     // World box upper boundary in Q16.16 (WORLD_SIZE.0). Used by S_ROOT_SLAB.
     localparam logic signed [31:0] WORLD_Q = WORLD_SIZE << 16;
     // Screen-centre in Q16.16: (IMG_W/2, IMG_H/2). (IMG/2)<<16 == IMG<<15.
@@ -323,7 +362,7 @@ module svo_traversal_mr #(
     localparam logic [DST_W-1:0]
         DST_RS0=0, DST_RS1A=1, DST_RS1B=2, DST_RS3=3, DST_RS5=4, DST_RS6=5,
         DST_RS7=6, DST_RS8=7, DST_RS10=8, DST_RS11=9, DST_RS12=10, DST_RS13=11,
-        DST_SLAB0=12, DST_SLAB1=13;
+        DST_SLAB0=12, DST_SLAB1=13, DST_GDT=14, DST_GPROD=15;
 
     // Set when S_POP_STACK redirects through S_ENTER_NODE to reload r_child[]/r_block[].
     // Suppresses the cx/cy/cz and t_next recomputation in S_BRAM_WAIT field=6.
@@ -384,6 +423,7 @@ module svo_traversal_mr #(
         for (int s = 0; s < RAY_POOL_N; s++) blocked[s] = 1'b0;
         q_iss_v = 1'b0;
         q_tv[0] = 1'b0; q_tv[1] = 1'b0; q_tv[2] = 1'b0;
+        bram_busy = 1'b0; bram_owner = '0; last_grant = '0;
     end
 
     // -------------------------------------------------------------------------
@@ -438,6 +478,7 @@ module svo_traversal_mr #(
             end
             q_iss_v <= 1'b0;
             q_tv[0] <= 1'b0; q_tv[1] <= 1'b0; q_tv[2] <= 1'b0;
+            bram_busy <= 1'b0; bram_owner <= '0; last_grant <= '0;
         end else begin
             // Force pulse signals low every cycle before state case
             fb_wr_en    <= '0;
@@ -485,30 +526,49 @@ module svo_traversal_mr #(
                     end
                     DST_SLAB0: begin rs_tx0_r[cs]<=q_p0; rs_ty0_r[cs]<=q_p1; rs_tz0_r[cs]<=q_p2; end
                     DST_SLAB1: begin rs_tx1_r[cs]<=q_p0; rs_ty1_r[cs]<=q_p1; rs_tz1_r[cs]<=q_p2; end
+                    DST_GDT:   begin bw_dtx_r[cs]<=q_p0;   bw_dty_r[cs]<=q_p1;   bw_dtz_r[cs]<=q_p2;   end
+                    DST_GPROD: begin bw_prodx_r[cs]<=q_p0; bw_prody_r[cs]<=q_p1; bw_prodz_r[cs]<=q_p2; end
                     default: ;
                 endcase
                 // unblock the slot, EXCEPT DST_RS1A and DST_SLAB0 which are the first
                 // of a 2-issue pair (slot stays "running" to issue the second; it
-                // blocks on the second).
-                if (cd != DST_RS1A && cd != DST_SLAB0) blocked[cs] <= 1'b0;
+                // blocks on the second). DST_GDT/DST_GPROD are the S_BRAM_WAIT geometry
+                // multiplies, which never block the slot (it keeps streaming the read),
+                // so there is nothing to unblock.
+                if (cd != DST_RS1A && cd != DST_SLAB0 && cd != DST_GDT && cd != DST_GPROD) blocked[cs] <= 1'b0;
             end
 
-            if (!blocked[cur_slot]) begin
+            // Register the round-robin scheduler's last grant (rotates priority).
+            if (grant_valid) last_grant <= grant_slot;
+
+            // -----------------------------------------------------------------
+            // Launch-init: runs EVERY cycle OUTSIDE the grant gate, keyed on
+            // pr_launch_slot (NOT cur_slot). pixel_reorder launches the next
+            // raster pixel into a FREE (S_IDLE) slot; this initialises its ray.
+            // pr_launch_slot is always a free slot and cur_slot is always a
+            // mid-ray slot, so these two write sites never target the same slot
+            // in the same cycle — no conflict. Both writes live in this single
+            // always_ff so the arrays have exactly one driver process.
+            // -----------------------------------------------------------------
+            if (pr_launch_valid) begin
+                px[pr_launch_slot]       <= pr_launch_px;
+                py[pr_launch_slot]       <= pr_launch_py;
+                sp[pr_launch_slot]       <= '0;
+                rs_wait[pr_launch_slot]  <= '0;
+                post_pop[pr_launch_slot] <= '0;
+                q_phase[pr_launch_slot]  <= '0;
+                blocked[pr_launch_slot]  <= 1'b0;
+                state[pr_launch_slot]    <= S_RAY_SETUP;
+            end
+
+            if (grant_valid) begin
             unique case (state[cur_slot])
 
             // -----------------------------------------------------------------
-            S_IDLE: begin
-                // slot free; pixel_reorder launches the next raster pixel into it
-                if (pr_launch_valid && pr_launch_slot == cur_slot) begin
-                    px[cur_slot]       <= pr_launch_px;
-                    py[cur_slot]       <= pr_launch_py;
-                    sp[cur_slot]       <= '0;
-                    rs_wait[cur_slot]  <= '0;
-                    post_pop[cur_slot] <= '0;
-                    q_phase[cur_slot]  <= '0;
-                    state[cur_slot]    <= S_RAY_SETUP;
-                end
-            end
+            // Launch is handled by the launch-init block above (outside the
+            // grant gate). ready[] excludes S_IDLE so this arm is never granted;
+            // it is a no-op kept only for case completeness.
+            S_IDLE: ;
 
             // -----------------------------------------------------------------
             // S_RAY_SETUP: compute normalised ray direction from pixel + camera.
@@ -745,6 +805,10 @@ module svo_traversal_mr #(
 
             // -----------------------------------------------------------------
             S_ENTER_NODE: begin
+                // Only reached when ready (port free or already ours): take ownership
+                // of the single BRAM read port for the duration of this 8-cycle read.
+                bram_busy   <= 1'b1;
+                bram_owner  <= cur_slot;
                 bram_field[cur_slot]  <= 3'd7;   // sentinel: first S_BRAM_WAIT cycle absorbs BRAM latency
                 svo_rd_en   <= 1'b1;
                 svo_rd_addr <= {node_idx[cur_slot][11:0], 3'd0};
@@ -780,19 +844,24 @@ module svo_traversal_mr #(
                                                    : (bw_cy_r[cur_slot][0] ? (bw_eyrel_r[cur_slot]-bw_nhq_r[cur_slot]) : bw_eyrel_r[cur_slot]);
                         bw_distz_r[cur_slot] <= (!step_z[cur_slot][2]) ? (bw_cz_r[cur_slot][0] ? ((bw_nhq_r[cur_slot]<<<1)-bw_ezrel_r[cur_slot]) : (bw_nhq_r[cur_slot]-bw_ezrel_r[cur_slot]))
                                                    : (bw_cz_r[cur_slot][0] ? (bw_ezrel_r[cur_slot]-bw_nhq_r[cur_slot]) : bw_ezrel_r[cur_slot]);
-                        // issue dt = node_half*|inv| onto the shared bank (collect @ field 4)
+                        // issue dt = node_half*|inv| onto the shared bank (collect @ field 4).
+                        // Tagged so the collector writes bw_dt*_r when the product arrives;
+                        // the slot does NOT block (it keeps streaming the BRAM read).
                         q_a0 <= bw_nhq_r[cur_slot]; q_b0 <= qabs(inv_x[cur_slot]);
                         q_a1 <= bw_nhq_r[cur_slot]; q_b1 <= qabs(inv_y[cur_slot]);
                         q_a2 <= bw_nhq_r[cur_slot]; q_b2 <= qabs(inv_z[cur_slot]);
+                        q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_GDT};
                     end
                     3'd1: begin   // read word 1 = child ptrs 0-1
                         r_child[cur_slot][0]<=svo_rd_data[15:0]; r_child[cur_slot][1]<=svo_rd_data[31:16];
                         svo_rd_addr <= {node_idx[cur_slot][11:0], 3'd3};
                         bram_field[cur_slot]  <= 3'd2;
-                        // issue prod = dist*|inv| onto the shared bank (collect @ field 5)
+                        // issue prod = dist*|inv| onto the shared bank (collect @ field 5).
+                        // Tagged; the slot does NOT block (it keeps streaming the BRAM read).
                         q_a0 <= bw_distx_r[cur_slot]; q_b0 <= qabs(inv_x[cur_slot]);
                         q_a1 <= bw_disty_r[cur_slot]; q_b1 <= qabs(inv_y[cur_slot]);
                         q_a2 <= bw_distz_r[cur_slot]; q_b2 <= qabs(inv_z[cur_slot]);
+                        q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_GPROD};
                     end
                     3'd2: begin   // read word 2 = child ptrs 2-3
                         r_child[cur_slot][2]<=svo_rd_data[15:0]; r_child[cur_slot][3]<=svo_rd_data[31:16];
@@ -808,16 +877,16 @@ module svo_traversal_mr #(
                         r_child[cur_slot][6]<=svo_rd_data[15:0]; r_child[cur_slot][7]<=svo_rd_data[31:16];
                         svo_rd_addr <= {node_idx[cur_slot][11:0], 3'd6};
                         bram_field[cur_slot]  <= 3'd5;
-                        // collect dt from the shared bank (issued @ field 0, QCOL=4)
-                        bw_dtx_r[cur_slot] <= q_p0; bw_dty_r[cur_slot] <= q_p1; bw_dtz_r[cur_slot] <= q_p2;
+                        // dt (issued @ field 0) is now written by the tagged collector
+                        // (DST_GDT), which fires this same cycle (QCOL=4 after field 0).
                     end
                     3'd5: begin   // read word 5 = block IDs 0-3; word-6 addr already issued
                         r_block[cur_slot][0]<=svo_rd_data[7:0];   r_block[cur_slot][1]<=svo_rd_data[15:8];
                         r_block[cur_slot][2]<=svo_rd_data[23:16]; r_block[cur_slot][3]<=svo_rd_data[31:24];
                         svo_rd_en  <= '0;
                         bram_field[cur_slot] <= 3'd6;
-                        // collect prod from the shared bank (issued @ field 1, QCOL=4)
-                        bw_prodx_r[cur_slot] <= q_p0; bw_prody_r[cur_slot] <= q_p1; bw_prodz_r[cur_slot] <= q_p2;
+                        // prod (issued @ field 1) is now written by the tagged collector
+                        // (DST_GPROD), which fires this same cycle (QCOL=4 after field 1).
                     end
                     3'd6: begin   // read word 6 = block IDs 4-7; done
                         r_block[cur_slot][4]<=svo_rd_data[7:0];   r_block[cur_slot][5]<=svo_rd_data[15:8];
@@ -827,6 +896,7 @@ module svo_traversal_mr #(
                 endcase
                 if (bram_field[cur_slot] == 3'd6) begin
                     svo_rd_en <= '0;
+                    bram_busy <= 1'b0;   // release the read port (read complete)
                     bitmask[cur_slot]   <= r_bitmask[cur_slot];
                     // dt comes from the pipelined qmul (stage 1); correct in BOTH the
                     // fresh-descend and post-pop cases (bw_nhq_r captured the restored
@@ -1006,7 +1076,7 @@ module svo_traversal_mr #(
             S_NEXT_PIXEL: ;
 
             endcase
-            end  // if (!blocked[cur_slot])
+            end  // if (grant_valid)
         end
     end
 
