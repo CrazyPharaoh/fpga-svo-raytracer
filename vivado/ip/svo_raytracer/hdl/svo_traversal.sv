@@ -134,6 +134,12 @@ module svo_traversal #(
     (* fsm_encoding = "sequential" *) state_t state;
     // World box upper boundary in Q16.16 (WORLD_SIZE.0). Used by S_ROOT_SLAB.
     localparam logic signed [31:0] WORLD_Q = WORLD_SIZE << 16;
+    // Screen-centre in Q16.16: (IMG_W/2, IMG_H/2). (IMG/2)<<16 == IMG<<15.
+    // Derived from the resolution params so a lower-res build (e.g. -GIMG_W=64
+    // for the fast sim crop) stays centred. At 320x240 these equal the old
+    // hardcoded 32'sh00A0_0000 / 32'sh0078_0000 exactly.
+    localparam logic signed [31:0] CENTER_X_Q = $signed(32'(IMG_W) << 15);
+    localparam logic signed [31:0] CENTER_Y_Q = $signed(32'(IMG_H) << 15);
     logic [3:0] state_raw; assign state_raw = state;
     assign dbg_state   = state_raw;
     assign dbg_rs_wait = rs_wait;
@@ -467,15 +473,16 @@ module svo_traversal #(
                     case (rs_wait)
                         // ---- Screen-space ray direction: raw_dir = fwd + u*right - v*up ----
                         // u,v are the pixel's offset from screen centre scaled by cam_scale
-                        // (u = (px-160)*scale, v = (py-120)*scale; 160<<16=00A0_0000,
-                        // 120<<16=0078_0000). Stage 0 forms u,v; stage 1 forms the six
-                        // u*right / v*up products; stage 2 sums them into raw_dir; stage 3
-                        // squares raw_dir for len2. All multiplies use the shared bank.
-                        4'd0: begin  // u = (px-160)*scale  ;  v = (py-120)*scale
+                        // (u = (px - IMG_W/2)*scale, v = (py - IMG_H/2)*scale; the centre
+                        // CENTER_X_Q/CENTER_Y_Q is derived from the resolution params).
+                        // Stage 0 forms u,v; stage 1 forms the six u*right / v*up products;
+                        // stage 2 sums them into raw_dir; stage 3 squares raw_dir for len2.
+                        // All multiplies use the shared bank.
+                        4'd0: begin  // u = (px - IMG_W/2)*scale ; v = (py - IMG_H/2)*scale
                             if (q_phase == 0) begin
                                 ro_x <= cam_pos_x; ro_y <= cam_pos_y; ro_z <= cam_pos_z;
-                                q_a0 <= $signed({1'b0, px, 16'd0}) - 32'sh00A0_0000; q_b0 <= cam_scale;
-                                q_a1 <= $signed({1'b0, py, 16'd0}) - 32'sh0078_0000; q_b1 <= cam_scale;
+                                q_a0 <= $signed({1'b0, px, 16'd0}) - CENTER_X_Q; q_b0 <= cam_scale;
+                                q_a1 <= $signed({1'b0, py, 16'd0}) - CENTER_Y_Q; q_b1 <= cam_scale;
                                 q_phase <= QCOL[2:0];
                             end else if (q_phase == 1) begin
                                 rsu <= q_p0; rsv <= q_p1;

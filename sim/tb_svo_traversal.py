@@ -10,7 +10,12 @@ from PIL import Image
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'host'))
 import svo_builder
 
-IMG_W, IMG_H = 320, 240
+# Fast-sim crop: RENDER_DIV downscales the render by an integer factor while keeping
+# the same field of view (a true downscale of the full image), so a small region gates
+# correctness ~DIV^2 faster. DIV=1 -> full 320x240 (must stay bit-identical to before).
+# The RTL must be built with matching -GIMG_W/-GIMG_H (see sim/Makefile RENDER_DIV).
+RENDER_DIV = int(os.environ.get('RENDER_DIV', '1'))
+IMG_W, IMG_H = 320 // RENDER_DIV, 240 // RENDER_DIV
 CLK_PERIOD_NS = 10
 
 
@@ -122,6 +127,51 @@ async def collect_pixels_axis(dut, pixels):
             pixels.append(((tdata >> 16) & 0xFF, (tdata >> 8) & 0xFF, tdata & 0xFF))
             if len(pixels) % 1000 == 0:
                 cocotb.log.info(f"  {len(pixels)}/{IMG_W*IMG_H} pixels collected")
+
+
+async def state_profiler(dut, counts):
+    """
+    Cycle-accurate FSM profiler. Samples dbg_state every clock while the core is
+    busy (i.e. during the render only, excluding idle before/after) and tallies
+    a per-state cycle histogram into `counts` (dict: state_id -> cycle count).
+
+    Use write_state_profile() after the frame to print the breakdown. This tells
+    you exactly where the render spends its cycles (e.g. S_BRAM_WAIT = memory,
+    S_RAY_SETUP = the shared-bank ray setup latency).
+    """
+    while True:
+        await RisingEdge(dut.clk)
+        await Timer(1, unit='ns')          # let NBA region commit
+        if int(dut.rst.value):
+            continue
+        if not int(dut.busy.value):        # only profile the active render
+            continue
+        s = int(dut.dbg_state.value)
+        counts[s] = counts.get(s, 0) + 1
+
+
+def write_state_profile(counts, log_path):
+    """Print the FSM cycle breakdown to the log and write it to log_path."""
+    total = sum(counts.values())
+    rows  = sorted(counts.items(), key=lambda kv: -kv[1])
+    lines = []
+    lines.append("=" * 52)
+    lines.append(f"FSM STATE CYCLE PROFILE  (busy cycles: {total})")
+    lines.append("=" * 52)
+    lines.append(f"{'state':<16}{'cycles':>14}{'percent':>12}")
+    lines.append("-" * 52)
+    for s, c in rows:
+        name = _STATE_NAMES.get(s, f'S_{s}')
+        pct  = (100.0 * c / total) if total else 0.0
+        lines.append(f"{name:<16}{c:>14,}{pct:>11.2f}%")
+    lines.append("-" * 52)
+    lines.append(f"{'TOTAL':<16}{total:>14,}{100.0:>11.2f}%")
+    text = "\n".join(lines)
+    cocotb.log.info("\n" + text)
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, 'w') as f:
+        f.write(text + "\n")
+    cocotb.log.info(f"State profile written: {log_path}")
 
 
 async def pixel_tracer(dut, pixel_logs):
@@ -340,9 +390,11 @@ async def test_render_frame(dut):
     # DEBUG: per-pixel FSM trace. Remove pixel_logs, pixel_tracer start_soon(),
     # and write_pixel_trace_log() call when debug logging is no longer needed.
     pixel_logs = []
+    state_counts = {}
     cocotb.start_soon(bram_model(dut, svo_words))
     cocotb.start_soon(collect_pixels_axis(dut, pixels))
     cocotb.start_soon(pixel_tracer(dut, pixel_logs))
+    cocotb.start_soon(state_profiler(dut, state_counts))
     # shade_stub handles shade_done/shade_pixel_color; safe in SHADE_MODE=0 too
     cocotb.start_soon(shade_stub(dut))
 
@@ -360,7 +412,9 @@ async def test_render_frame(dut):
     fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
     right = normalise(cross(fwd, [0, 1, 0]))
     up    = cross(right, fwd)
-    fov_scale = math.tan(math.radians(60) / 2) / 160.0
+    # scale = tan(fov/2) / (IMG_W/2): keeps the same horizontal FOV at any RENDER_DIV,
+    # so the crop is a faithful downscale of the full-res image. At 320 -> /160.0 as before.
+    fov_scale = math.tan(math.radians(60) / 2) / (IMG_W / 2)
 
     dut.cam_pos_x.value   = to_q16(pos[0]);   dut.cam_pos_y.value   = to_q16(pos[1]);   dut.cam_pos_z.value   = to_q16(pos[2])
     dut.cam_right_x.value = to_q16(right[0]); dut.cam_right_y.value = to_q16(right[1]); dut.cam_right_z.value = to_q16(right[2])
@@ -402,3 +456,5 @@ async def test_render_frame(dut):
     logs_dir   = os.path.join(os.path.dirname(__file__), 'output', 'logs')
     trace_path = os.path.join(logs_dir, 'pixel_trace.txt')
     write_pixel_trace_log(pixel_logs, trace_path)
+    # FSM cycle profile (per-state cycle counts + percentage breakdown)
+    write_state_profile(state_counts, os.path.join(logs_dir, 'state_profile.txt'))

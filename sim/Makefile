@@ -15,11 +15,23 @@ $(shell mkdir -p $(OUTPUT_DIR))
 
 RTL_DIR = $(abspath ../vivado/ip/svo_raytracer/hdl)
 
+# ─── Fast-sim crop ───────────────────────────────────────────────────────────
+# RENDER_DIV downscales the render by an integer factor (same FOV), gating
+# correctness ~DIV^2 faster. Drives both the RTL build (-GIMG_W/-GIMG_H) and the
+# Python tb / gen_reference (via the exported env var) so they stay matched.
+#   make                       full 320x240 (bit-identical to before)
+#   RENDER_DIV=5 make          64x48 render, ~25x faster
+# NOTE: changing RENDER_DIV changes COMPILE_ARGS -> run `make clean` first.
+RENDER_DIV ?= 1
+RENDER_W   := $(shell expr 320 / $(RENDER_DIV))
+RENDER_H   := $(shell expr 240 / $(RENDER_DIV))
+export RENDER_DIV
+
 # ─── Phase 1: traversal-only (SHADE_MODE=0) ──────────────────────────────────
 VERILOG_SOURCES = $(RTL_DIR)/shared_qmul3.sv $(RTL_DIR)/svo_traversal.sv
 TOPLEVEL        = svo_traversal
 MODULE          = tb_svo_traversal
-COMPILE_ARGS    = -GSHADE_MODE=0
+COMPILE_ARGS    = -GSHADE_MODE=0 -GIMG_W=$(RENDER_W) -GIMG_H=$(RENDER_H)
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
