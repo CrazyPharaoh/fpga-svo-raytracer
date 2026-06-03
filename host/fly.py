@@ -20,29 +20,39 @@ EVIOCGRAB  = 0x40044590                     # _IOW('E',0x90,int)
 KEY = dict(W=17, A=30, S=31, D=32, SPACE=57, LSHIFT=42, Q=16, E=18,
            UP=103, DOWN=108, LEFT=105, RIGHT=106, ESC=1)
 
-def find_keyboard(override=None):
+def find_keyboard(override=None, wait=20.0):
+    """Find the keyboard device. Waits up to `wait` seconds so you can plug it in
+    after launching (a USB keyboard takes a moment to enumerate)."""
     if override:
         return override
-    cands = []
-    for dev in sorted(glob.glob('/dev/input/event*')):
-        node = os.path.basename(dev)
-        try:
-            name = open(f'/sys/class/input/{node}/device/name').read().strip()
-        except OSError:
-            name = '?'
-        try:
-            words = open(f'/sys/class/input/{node}/device/capabilities/key').read().split()
-            # last word = key-capability bits 0..W-1; KEY_W(17) lives there regardless of
-            # 32- vs 64-bit kernel word size, so this works on the 32-bit PYNQ.
-            low = int(words[-1], 16)
-            cands.append(f'{dev}  ({name})')
-            if low & (1 << KEY['W']):
-                print(f'Keyboard: {dev}  ({name})')
-                return dev
-        except (OSError, ValueError):
-            pass
-    raise RuntimeError('No keyboard found. Candidates:\n  ' + '\n  '.join(cands) +
-                       '\nPass the device explicitly: sudo python3 fly.py /dev/input/eventN')
+    deadline = time.time() + wait
+    announced = False
+    while True:
+        cands = []
+        for dev in sorted(glob.glob('/dev/input/event*')):
+            node = os.path.basename(dev)
+            try:
+                name = open(f'/sys/class/input/{node}/device/name').read().strip()
+            except OSError:
+                name = '?'
+            try:
+                words = open(f'/sys/class/input/{node}/device/capabilities/key').read().split()
+                # last word = key-capability bits 0..W-1; KEY_W(17) lives there regardless of
+                # 32- vs 64-bit kernel word size, so this works on the 32-bit PYNQ.
+                low = int(words[-1], 16)
+                cands.append(f'{dev}  ({name})')
+                if low & (1 << KEY['W']):
+                    print(f'Keyboard: {dev}  ({name})')
+                    return dev
+            except (OSError, ValueError):
+                pass
+        if time.time() > deadline:
+            raise RuntimeError('No keyboard found. Candidates:\n  ' + '\n  '.join(cands) +
+                               '\nPass the device explicitly: sudo python3 fly.py /dev/input/eventN')
+        if not announced:
+            print('Waiting for a keyboard — plug it in now ...')
+            announced = True
+        time.sleep(0.5)
 
 class Keyboard:
     def __init__(self, path):
