@@ -120,9 +120,13 @@ class Renderer:
         self.ol = Overlay(BITSTREAM); self.ip = self.ol.top_0
         base = self.ol.ip_dict['axi_vdma_0']['phys_addr']
         self.vdma = MMIO(base, 0x1000); self.mm2s = MMIO(base, 0x100)
-        self.buf  = allocate(shape=(IMG_H, IMG_W, BPP), dtype=np.uint8)
-        self.phys = self.buf.physical_address
-        self._upload_svo(); self._shading(); self._arm_s2mm(); self._arm_mm2s()
+        # Double buffer: render into the off-screen buffer, scan out the other -> no tearing.
+        self.bufs = [allocate(shape=(IMG_H, IMG_W, BPP), dtype=np.uint8) for _ in range(2)]
+        self.phys = [b.physical_address for b in self.bufs]
+        self.front = 0                       # buffer currently scanned out to HDMI
+        self._upload_svo(); self._shading()
+        self._arm_s2mm(1 - self.front)       # first render targets the back buffer
+        self._arm_mm2s()
     def _upload_svo(self):
         words = svo_builder.serialise_nodes(
             svo_builder.flatten_svo(svo_builder.build_svo(svo_builder.build_world())))
@@ -140,17 +144,20 @@ class Renderer:
             self.ip.write(0x50 + i*4, cc(r, g, b))
         self.ip.write(0x68, cc(135,206,235)); self.ip.write(0x6C, cc(180,200,220))
         self.ip.write(0x70, to_q16(15.0)); self.ip.write(0x74, to_q16(0.5))
-    def _arm_s2mm(self):
+    def _arm_s2mm(self, idx):
+        # arm the render-write channel to write the frame into buffer `idx`
         self.vdma.write(0x30, 0x4)
         while self.vdma.read(0x30) & 0x4: pass
-        for o in (0xAC, 0xB0, 0xB4): self.vdma.write(o, self.phys)
+        for o in (0xAC, 0xB0, 0xB4): self.vdma.write(o, self.phys[idx])
         self.vdma.write(0xA8, STRIDE); self.vdma.write(0xA4, HSIZE)
         self.vdma.write(0x30, 0x3); self.vdma.write(0xA0, IMG_H)
     def _arm_mm2s(self):
+        # frame store 0/1 -> buf0/buf1; the read channel parks on `front`
         self.mm2s.write(0x00, 0x4)
         while self.mm2s.read(0x00) & 0x4: pass
-        for o in (0x5C, 0x60, 0x64): self.mm2s.write(o, self.phys)
-        self.mm2s.write(0x28, 0x0); self.mm2s.write(0x58, STRIDE); self.mm2s.write(0x54, HSIZE)
+        self.mm2s.write(0x5C, self.phys[0]); self.mm2s.write(0x60, self.phys[1]); self.mm2s.write(0x64, self.phys[1])
+        self.mm2s.write(0x28, self.front)        # PARK_PTR_REG [4:0] = MM2S park frame store
+        self.mm2s.write(0x58, STRIDE); self.mm2s.write(0x54, HSIZE)
         self.mm2s.write(0x00, 0x1); self.mm2s.write(0x50, IMG_H)
     def set_camera(self, cam):
         fwd, right, up = cam.vectors()
@@ -160,17 +167,23 @@ class Renderer:
         self.ip.write(0x2C, to_q16(fwd[0]));     self.ip.write(0x30, to_q16(fwd[1]));     self.ip.write(0x34, to_q16(fwd[2]))
         self.ip.write(0x38, to_q16(cam.scale))
     def render(self, timeout=2.0):
-        self._arm_s2mm()
+        back = 1 - self.front
+        self._arm_s2mm(back)                     # render into the off-screen buffer
         t0 = time.time(); self.ip.write(0x00, 1)
         while not (self.ip.read(0x04) & 0x1):
             if time.time() - t0 > 0.5: return False
         while self.ip.read(0x04) & 0x1:
             if time.time() - t0 > timeout: return False
+        # frame is complete in `back`; flip to it. The VDMA latches the new park frame at
+        # the next start-of-frame, so the swap happens between scans -> no tearing.
+        self.front = back
+        self.mm2s.write(0x28, self.front)
         return True
     def stop(self):
         self.vdma.write(0x30, 0x0)
-        try: self.buf.freebuffer()
-        except Exception: pass
+        for b in self.bufs:
+            try: b.freebuffer()
+            except Exception: pass
 
 # ── main loop ─────────────────────────────────────────────────────────────────
 MOVE = 1.5                   # world-units per frame
