@@ -28,10 +28,12 @@ RENDER_H   := $(shell expr 240 / $(RENDER_DIV))
 export RENDER_DIV
 
 # ─── Phase 1: traversal-only (SHADE_MODE=0) ──────────────────────────────────
-VERILOG_SOURCES = $(RTL_DIR)/shared_qmul3.sv $(RTL_DIR)/svo_traversal.sv
-TOPLEVEL        = svo_traversal
+# Multi-ray core (svo_traversal_mr). RAY_POOL_N=1 is bit-identical to the old
+# single-ray svo_traversal — gate against output/golden/golden_phase1_*.png.
+VERILOG_SOURCES = $(RTL_DIR)/shared_qmul3.sv $(RTL_DIR)/svo_traversal_mr.sv
+TOPLEVEL        = svo_traversal_mr
 MODULE          = tb_svo_traversal
-COMPILE_ARGS    = -GSHADE_MODE=0 -GIMG_W=$(RENDER_W) -GIMG_H=$(RENDER_H)
+COMPILE_ARGS    = -GSHADE_MODE=0 -GRAY_POOL_N=1 -GIMG_W=$(RENDER_W) -GIMG_H=$(RENDER_H)
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
@@ -53,4 +55,4 @@ compare-shade:
 
 clean::
 	rm -rf sim_build __pycache__ results.xml shade_build
-	find $(OUTPUT_DIR) -mindepth 1 -maxdepth 1 ! -name shaded ! -name profiles -exec rm -rf {} +
+	find $(OUTPUT_DIR) -mindepth 1 -maxdepth 1 ! -name shaded ! -name profiles ! -name golden -exec rm -rf {} +

@@ -132,6 +132,31 @@ async def collect_pixels_axis(dut, pixels):
 
 
 
+# ── slot view for the multi-ray core ─────────────────────────────────────────
+# svo_traversal_mr stores per-ray state in [slot] arrays. At RAY_POOL_N=1 the
+# active slot is 0. _SlotView wraps the dut so the tracer's reads of per-ray
+# signals auto-index the active slot, while ports / dbg_* / clk / rst / axis_*
+# pass through untouched. (Plan Task 10 generalises this for N>1.)
+_PER_RAY_SIGNALS = {
+    'step_x', 'step_y', 'step_z', 'rd_x', 'rd_y', 'rd_z', 'ro_x', 'ro_y', 'ro_z',
+    'inv_x', 'inv_y', 'inv_z', 't_min', 't_max', 'node_idx', 'node_half',
+    'node_origin_x', 'node_origin_y', 'node_origin_z', 'sp', 'bitmask',
+    'cx', 'cy', 'cz', 't_next_x', 't_next_y', 't_next_z',
+    'dt_x', 'dt_y', 'dt_z', 'cidx', 'pixel_color',
+}
+_TRACE_SLOT = 0
+
+
+class _SlotView:
+    """Read-only dut wrapper that auto-indexes per-ray array signals to a slot."""
+    def __init__(self, dut):
+        object.__setattr__(self, '_dut', dut)
+
+    def __getattr__(self, name):
+        sig = getattr(self._dut, name)
+        return sig[_TRACE_SLOT] if name in _PER_RAY_SIGNALS else sig
+
+
 async def pixel_tracer(dut, pixel_logs):
     """
     DEBUG COROUTINE — samples internal DUT signals on every FSM state transition
@@ -146,6 +171,7 @@ async def pixel_tracer(dut, pixel_logs):
     Remove this function and its cocotb.start_soon() call when debug logging
     is no longer needed.
     """
+    dut = _SlotView(dut)   # per-ray signals -> active slot (N=1: slot 0)
     prev_state = -1
     step = 0
     cur_px = cur_py = 0
