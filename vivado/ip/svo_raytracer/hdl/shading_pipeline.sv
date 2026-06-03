@@ -133,6 +133,24 @@ module shading_pipeline (
     localparam logic signed [31:0] AMBIENT = 32'h0000_199A;
 
     // -------------------------------------------------------------------------
+    // Shading's own shared 3-lane multiplier bank (DSP reduction). Every shading
+    // qmul is issued onto these lanes from the FSM and collected QCOL cycles later
+    // instead of inferring one dedicated DSP per multiply. A multiply stage issues
+    // operands at q_phase==0, waits QCOL cycles, collects the product at q_phase==1,
+    // then advances. Non-multiply stages leave q_phase at 0 (single cycle).
+    // -------------------------------------------------------------------------
+    localparam int QCOL = 4;
+    logic signed [31:0] q_a0, q_b0, q_a1, q_b1, q_a2, q_b2;
+    logic signed [31:0] q_p0, q_p1, q_p2;
+    logic [2:0]         q_phase;
+
+    shared_qmul3 #(.LAT(3)) u_qmul (
+        .clk(clk),
+        .a0(q_a0), .b0(q_b0), .a1(q_a1), .b1(q_b1), .a2(q_a2), .b2(q_b2),
+        .p0(q_p0), .p1(q_p1), .p2(q_p2)
+    );
+
+    // -------------------------------------------------------------------------
     // FSM
     // -------------------------------------------------------------------------
     always_ff @(posedge clk) begin
@@ -140,6 +158,7 @@ module shading_pipeline (
             state        <= S_IDLE;
             done         <= '0;
             shadow_start <= '0;
+            q_phase      <= '0;
         end else begin
             done         <= '0;
             shadow_start <= '0;
@@ -167,21 +186,34 @@ module shading_pipeline (
             // Pipelined diffuse + specular: ONE arithmetic op per stage so every
             // combinational path is <= one qmul (~6 ns) and fits the 10 ns clock.
             // Algebra is identical to the original single-cycle S_DIFFSPEC.
+            // Two 3-lane multiply groups over 2 issue cycles (6 muls > 3 lanes):
+            //   A: pn = dot(normal,light) partial products (summed in S_DS_B,
+            //      reused for diffuse + specular reflect)
+            //   B: n*bias for the shadow ray origin = hit_pos + normal*bias
+            //      (pruned when the shadow traversal is not built).
             S_DS_A: begin
-                // dot(normal, light) partial products — summed in S_DS_B and
-                // reused for both diffuse and the specular reflect.
-                pn_x <= qmul(nx, light_dir_x);
-                pn_y <= qmul(ny, light_dir_y);
-                pn_z <= qmul(nz, light_dir_z);
-                // Shadow ray origin = hit_pos + normal*bias (independent; the
-                // outputs are pruned when the shadow traversal is not built).
-                shadow_ro_x <= hit_px + qmul(nx, shadow_bias);
-                shadow_ro_y <= hit_py + qmul(ny, shadow_bias);
-                shadow_ro_z <= hit_pz + qmul(nz, shadow_bias);
-                shadow_rd_x <= light_dir_x;
-                shadow_rd_y <= light_dir_y;
-                shadow_rd_z <= light_dir_z;
-                state <= S_DS_B;
+                if (q_phase == 0) begin           // issue A: pn = n * light
+                    q_a0 <= nx; q_b0 <= light_dir_x;
+                    q_a1 <= ny; q_b1 <= light_dir_y;
+                    q_a2 <= nz; q_b2 <= light_dir_z;
+                    shadow_rd_x <= light_dir_x;    // independent passthrough
+                    shadow_rd_y <= light_dir_y;
+                    shadow_rd_z <= light_dir_z;
+                    q_phase <= 3'd5;
+                end else if (q_phase == 5) begin  // issue B: n * shadow_bias
+                    q_a0 <= nx; q_b0 <= shadow_bias;
+                    q_a1 <= ny; q_b1 <= shadow_bias;
+                    q_a2 <= nz; q_b2 <= shadow_bias;
+                    q_phase <= 3'd4;
+                end else if (q_phase == 2) begin  // collect A (pn), 4 after issue A
+                    pn_x <= q_p0; pn_y <= q_p1; pn_z <= q_p2;
+                    q_phase <= 3'd1;
+                end else if (q_phase == 1) begin  // collect B -> shadow_ro = hit + n*bias
+                    shadow_ro_x <= hit_px + q_p0;
+                    shadow_ro_y <= hit_py + q_p1;
+                    shadow_ro_z <= hit_pz + q_p2;
+                    q_phase <= '0; state <= S_DS_B;
+                end else q_phase <= q_phase - 1'b1;  // 4->3, 3->2
             end
 
             S_DS_B: begin
@@ -195,11 +227,16 @@ module shading_pipeline (
             end
 
             S_DS_C: begin
-                // reflect numerator m = dot(light,normal) * normal
-                m_nx <= qmul(dnl, nx);
-                m_ny <= qmul(dnl, ny);
-                m_nz <= qmul(dnl, nz);
-                state <= S_DS_D;
+                // reflect numerator m = dot(light,normal) * normal  (shared bank)
+                if (q_phase == 0) begin
+                    q_a0 <= dnl; q_b0 <= nx;
+                    q_a1 <= dnl; q_b1 <= ny;
+                    q_a2 <= dnl; q_b2 <= nz;
+                    q_phase <= QCOL[2:0];
+                end else if (q_phase == 1) begin
+                    m_nx <= q_p0; m_ny <= q_p1; m_nz <= q_p2;
+                    q_phase <= '0; state <= S_DS_D;
+                end else q_phase <= q_phase - 1'b1;
             end
 
             S_DS_D: begin
@@ -211,10 +248,16 @@ module shading_pipeline (
             end
 
             S_DS_E: begin
-                pr_x <= qmul(rf_x, ray_dx);
-                pr_y <= qmul(rf_y, ray_dy);
-                pr_z <= qmul(rf_z, ray_dz);
-                state <= S_DS_F;
+                // reflect·ray partial products  (shared bank)
+                if (q_phase == 0) begin
+                    q_a0 <= rf_x; q_b0 <= ray_dx;
+                    q_a1 <= rf_y; q_b1 <= ray_dy;
+                    q_a2 <= rf_z; q_b2 <= ray_dz;
+                    q_phase <= QCOL[2:0];
+                end else if (q_phase == 1) begin
+                    pr_x <= q_p0; pr_y <= q_p1; pr_z <= q_p2;
+                    q_phase <= '0; state <= S_DS_F;
+                end else q_phase <= q_phase - 1'b1;
             end
 
             S_DS_F: begin
@@ -227,14 +270,24 @@ module shading_pipeline (
                 state <= S_DS_H;
             end
 
-            S_DS_H: begin
-                s2    <= qmul(s_cl, s_cl);    // ^2
-                state <= S_DS_I;
+            S_DS_H: begin                     // s2 = s_cl^2  (shared bank, lane 0)
+                if (q_phase == 0) begin
+                    q_a0 <= s_cl; q_b0 <= s_cl;
+                    q_phase <= QCOL[2:0];
+                end else if (q_phase == 1) begin
+                    s2 <= q_p0;
+                    q_phase <= '0; state <= S_DS_I;
+                end else q_phase <= q_phase - 1'b1;
             end
 
-            S_DS_I: begin
-                spec  <= qmul(s2, s2);        // ^4
-                state <= S_SHADOW;
+            S_DS_I: begin                     // spec = s2^2 (= s_cl^4)  (shared bank)
+                if (q_phase == 0) begin
+                    q_a0 <= s2; q_b0 <= s2;
+                    q_phase <= QCOL[2:0];
+                end else if (q_phase == 1) begin
+                    spec <= q_p0;
+                    q_phase <= '0; state <= S_SHADOW;
+                end else q_phase <= q_phase - 1'b1;
             end
 
             // -----------------------------------------------------------------
