@@ -55,14 +55,8 @@ module shading_pipeline (
     // -------------------------------------------------------------------------
     // Q16.16 helpers
     // -------------------------------------------------------------------------
-    function automatic logic signed [31:0] qmul(
-        input logic signed [31:0] a, b
-    );
-        logic signed [63:0] p;
-        p = a * b;
-        return p[47:16];
-    endfunction
-
+    // (The qmul() function has been removed: every shading multiply is now issued
+    // onto the shared_qmul3 bank from the FSM. Only qclamp01 remains.)
     function automatic logic signed [31:0] qclamp01(
         input logic signed [31:0] v
     );
@@ -315,11 +309,16 @@ module shading_pipeline (
             end
 
             S_COMB2: begin
-                // base_color * direct  (one qmul per channel)
-                cmb_r <= qmul({16'd0, base_color[23:16]}, direct);
-                cmb_g <= qmul({16'd0, base_color[15:8]},  direct);
-                cmb_b <= qmul({16'd0, base_color[7:0]},   direct);
-                state <= S_COMB3;
+                // base_color * direct  (one lane per channel, shared bank)
+                if (q_phase == 0) begin
+                    q_a0 <= {16'd0, base_color[23:16]}; q_b0 <= direct;
+                    q_a1 <= {16'd0, base_color[15:8]};  q_b1 <= direct;
+                    q_a2 <= {16'd0, base_color[7:0]};   q_b2 <= direct;
+                    q_phase <= QCOL[2:0];
+                end else if (q_phase == 1) begin
+                    cmb_r <= q_p0; cmb_g <= q_p1; cmb_b <= q_p2;
+                    q_phase <= '0; state <= S_COMB3;
+                end else q_phase <= q_phase - 1'b1;
             end
 
             S_COMB3: begin
@@ -337,17 +336,24 @@ module shading_pipeline (
 
             // -----------------------------------------------------------------
             S_FOG: begin
-                if (is_miss) begin
-                    pixel_color <= sky_color;
-                    state       <= S_DONE;
-                end else if (t_hit > fog_start) begin
-                    // blend_raw = fog_dist * (1/range)  — pure qmul (subtract done in S_COMBINE)
-                    blend_raw <= qmul(fog_dist, FOG_INV_RANGE);
-                    state     <= S_FOG_CLAMP;
-                end else begin
-                    pixel_color <= combined;
-                    state       <= S_DONE;
-                end
+                // Conditional: only the fog branch uses the bank; the miss / no-fog
+                // branches exit at q_phase==0 (q_phase untouched, single cycle).
+                if (q_phase == 0) begin
+                    if (is_miss) begin
+                        pixel_color <= sky_color;
+                        state       <= S_DONE;
+                    end else if (t_hit > fog_start) begin
+                        // issue blend_raw = fog_dist * (1/range)  (subtract done in S_COMBINE)
+                        q_a0    <= fog_dist; q_b0 <= FOG_INV_RANGE;
+                        q_phase <= QCOL[2:0];
+                    end else begin
+                        pixel_color <= combined;
+                        state       <= S_DONE;
+                    end
+                end else if (q_phase == 1) begin
+                    blend_raw <= q_p0;
+                    q_phase   <= '0; state <= S_FOG_CLAMP;
+                end else q_phase <= q_phase - 1'b1;
             end
 
             S_FOG_CLAMP: begin
@@ -361,11 +367,16 @@ module shading_pipeline (
             end
 
             S_FOG_LERP: begin
-                // fog deltas = blend * (fog_color - combined)  (pure qmul/channel)
-                fog_dr <= qmul(blend, fdiff_r);
-                fog_dg <= qmul(blend, fdiff_g);
-                fog_db <= qmul(blend, fdiff_b);
-                state  <= S_FOG_LERP2;
+                // fog deltas = blend * (fog_color - combined)  (one lane/channel, shared bank)
+                if (q_phase == 0) begin
+                    q_a0 <= blend; q_b0 <= fdiff_r;
+                    q_a1 <= blend; q_b1 <= fdiff_g;
+                    q_a2 <= blend; q_b2 <= fdiff_b;
+                    q_phase <= QCOL[2:0];
+                end else if (q_phase == 1) begin
+                    fog_dr <= q_p0; fog_dg <= q_p1; fog_db <= q_p2;
+                    q_phase <= '0; state <= S_FOG_LERP2;
+                end else q_phase <= q_phase - 1'b1;
             end
 
             S_FOG_LERP2: begin
