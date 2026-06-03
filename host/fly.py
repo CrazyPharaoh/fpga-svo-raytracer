@@ -129,11 +129,16 @@ class Renderer:
         self.ip.write(0x48, 0)
         for w in words: self.ip.write(0x4C, w)
     def _shading(self):
+        # HDMI channel-order fix: the HDMI path (no color_swap block in the BD, unlike the
+        # reference design) swaps G<->B. Pre-swap G<->B in every colour we write so it
+        # cancels out and the monitor shows correct colours. (Proper fix = add a color_swap
+        # block in Vivado, then drop this swap.)  cc(r,g,b) writes (r, b, g).
+        def cc(r, g, b): return pack_rgb(r, b, g)
         lm = math.sqrt(1 + 4 + 2.25); ld = (1/lm, 2/lm, 1.5/lm)
         self.ip.write(0x3C, to_q16(ld[0])); self.ip.write(0x40, to_q16(ld[1])); self.ip.write(0x44, to_q16(ld[2]))
         for i, (r, g, b) in enumerate([(0,0,0),(120,120,120),(60,160,40),(255,0,0),(0,0,0),(0,0,0)]):
-            self.ip.write(0x50 + i*4, pack_rgb(r, g, b))
-        self.ip.write(0x68, pack_rgb(135,206,235)); self.ip.write(0x6C, pack_rgb(180,200,220))
+            self.ip.write(0x50 + i*4, cc(r, g, b))
+        self.ip.write(0x68, cc(135,206,235)); self.ip.write(0x6C, cc(180,200,220))
         self.ip.write(0x70, to_q16(15.0)); self.ip.write(0x74, to_q16(0.5))
     def _arm_s2mm(self):
         self.vdma.write(0x30, 0x4)
