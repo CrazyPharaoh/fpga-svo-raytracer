@@ -324,6 +324,35 @@ module svo_traversal_mr #(
     );
 
     // -------------------------------------------------------------------------
+    // Pixel launch/retire reorder buffer (owns AXIS output + busy/frame_done).
+    // The core no longer sequences px/py or drives AXIS: pixel_reorder launches
+    // pixels in raster order into free slots and emits finished colours on AXIS
+    // in raster order. The core starts a ray when launched and pulses pr_done_*
+    // when a slot's ray finishes. This module is primary-only (SHADOW_MODE=0).
+    // -------------------------------------------------------------------------
+    logic              pr_launch_valid;
+    logic [SLOT_W-1:0] pr_launch_slot;
+    logic [8:0]        pr_launch_px;
+    logic [7:0]        pr_launch_py;
+    logic              pr_done_valid;
+    logic [SLOT_W-1:0] pr_done_slot;
+    logic [23:0]       pr_done_color;
+
+    pixel_reorder #(.IMG_W(IMG_W), .IMG_H(IMG_H), .RAY_POOL_N(RAY_POOL_N), .SLOT_W(SLOT_W)) u_reorder (
+        .clk(clk), .rst(rst), .start(start),
+        .launch_valid(pr_launch_valid), .launch_slot(pr_launch_slot),
+        .launch_px(pr_launch_px), .launch_py(pr_launch_py),
+        .done_valid(pr_done_valid), .done_slot(pr_done_slot), .done_color(pr_done_color),
+        .axis_tvalid(axis_tvalid), .axis_tdata(axis_tdata),
+        .axis_tlast(axis_tlast), .axis_tuser(axis_tuser), .axis_tready(axis_tready),
+        .busy(busy), .frame_done(frame_done)
+    );
+
+    // any_hit is unused in primary mode (SHADOW_MODE=0 in every instance of this
+    // module). The FSM no longer drives it; tie it low continuously.
+    assign any_hit = 1'b0;
+
+    // -------------------------------------------------------------------------
     // Entry-point add (CE='1'): P = ro + (t_min*rd).  te_* is the registered product,
     // so this is only an add — the multiply already happened the previous cycle. t_min,
     // ro_*, rd_* are stable across the whole 8-cycle BRAM read and at a solid hit, so
@@ -364,16 +393,10 @@ module svo_traversal_mr #(
     // -------------------------------------------------------------------------
     always_ff @(posedge clk) begin
         if (rst) begin
-            busy       <= '0;
-            frame_done <= '0;
-            any_hit    <= '0;
             fb_wr_en    <= '0;
             svo_rd_en   <= '0;
             shade_start <= '0;
-            axis_tvalid <= '0;
-            axis_tdata  <= '0;
-            axis_tlast  <= '0;
-            axis_tuser  <= '0;
+            pr_done_valid <= 1'b0;
             for (int s = 0; s < RAY_POOL_N; s++) begin
                 state[s] <= S_IDLE; px[s] <= '0; py[s] <= '0; sp[s] <= '0;
                 rs_wait[s] <= '0; post_pop[s] <= '0; q_phase[s] <= '0;
@@ -381,10 +404,8 @@ module svo_traversal_mr #(
         end else begin
             // Force pulse signals low every cycle before state case
             fb_wr_en    <= '0;
-            frame_done  <= '0;
-            any_hit     <= '0;
             shade_start <= '0;
-            axis_tvalid <= '0;
+            pr_done_valid <= 1'b0;
             // Register the entry-point multiply t_min*rd every cycle (the +ro add is
             // done combinationally by consumers next cycle). Splits the multiply and the
             // add into separate clock cycles so neither path exceeds the 10 ns budget.
@@ -396,14 +417,15 @@ module svo_traversal_mr #(
 
             // -----------------------------------------------------------------
             S_IDLE: begin
-                busy <= '0;
-                if (start) begin
-                    busy    <= 1'b1;
-                    px[cur_slot]      <= '0;
-                    py[cur_slot]      <= '0;
-                    sp[cur_slot]      <= '0;
-                    rs_wait[cur_slot] <= '0;
-                    state[cur_slot]   <= S_RAY_SETUP;
+                // slot free; pixel_reorder launches the next raster pixel into it
+                if (pr_launch_valid && pr_launch_slot == cur_slot) begin
+                    px[cur_slot]       <= pr_launch_px;
+                    py[cur_slot]       <= pr_launch_py;
+                    sp[cur_slot]       <= '0;
+                    rs_wait[cur_slot]  <= '0;
+                    post_pop[cur_slot] <= '0;
+                    q_phase[cur_slot]  <= '0;
+                    state[cur_slot]    <= S_RAY_SETUP;
                 end
             end
 
@@ -421,79 +443,9 @@ module svo_traversal_mr #(
             //
             // Both modes share rs_xabs/r0/t1/r1/t2/sign registers for the reciprocal N-R.
             S_RAY_SETUP: begin
-                if (SHADOW_MODE) begin
-                    case (rs_wait[cur_slot])
-                        4'd0: begin
-                            ro_x[cur_slot]      <= cam_pos_x; ro_y[cur_slot] <= cam_pos_y; ro_z[cur_slot] <= cam_pos_z;
-                            rd_x[cur_slot]      <= cam_fwd_x; rd_y[cur_slot] <= cam_fwd_y; rd_z[cur_slot] <= cam_fwd_z;
-                            step_x[cur_slot]    <= cam_fwd_x[31] ? -3'sd1 : 3'sd1;
-                            step_y[cur_slot]    <= cam_fwd_y[31] ? -3'sd1 : 3'sd1;
-                            step_z[cur_slot]    <= cam_fwd_z[31] ? -3'sd1 : 3'sd1;
-                            rs_sign_x[cur_slot] <= cam_fwd_x[31]; rs_sign_y[cur_slot] <= cam_fwd_y[31]; rs_sign_z[cur_slot] <= cam_fwd_z[31];
-                            rs_xabs_x[cur_slot] <= qabs(cam_fwd_x); rs_xabs_y[cur_slot] <= qabs(cam_fwd_y); rs_xabs_z[cur_slot] <= qabs(cam_fwd_z);
-                            rs_r0_x[cur_slot]   <= recip_init(cam_fwd_x);
-                            rs_r0_y[cur_slot]   <= recip_init(cam_fwd_y);
-                            rs_r0_z[cur_slot]   <= recip_init(cam_fwd_z);
-                            rs_wait[cur_slot]   <= rs_wait[cur_slot] + 1'b1;
-                        end
-                        // Newton-Raphson reciprocal inv = 1/dir (same algorithm as the
-                        // primary-mode stages 10-13 below; see the block comment there).
-                        // Shadow rays skip normalization, so the N-R runs directly on the
-                        // (already-unit) forward vector loaded in stage 0.
-                        4'd1: begin  // N-R pass 1: t1 = |x| * r0   (residual)
-                            if (q_phase[cur_slot] == 0) begin
-                                q_a0 <= rs_xabs_x[cur_slot]; q_b0 <= rs_r0_x[cur_slot];
-                                q_a1 <= rs_xabs_y[cur_slot]; q_b1 <= rs_r0_y[cur_slot];
-                                q_a2 <= rs_xabs_z[cur_slot]; q_b2 <= rs_r0_z[cur_slot];
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                rs_t1_x[cur_slot] <= q_p0; rs_t1_y[cur_slot] <= q_p1; rs_t1_z[cur_slot] <= q_p2;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
-                        end
-                        4'd2: begin  // N-R pass 1: r1 = r0 * (2 - t1)   (refined estimate)
-                            if (q_phase[cur_slot] == 0) begin
-                                q_a0 <= rs_r0_x[cur_slot]; q_b0 <= 32'sh0002_0000 - rs_t1_x[cur_slot];
-                                q_a1 <= rs_r0_y[cur_slot]; q_b1 <= 32'sh0002_0000 - rs_t1_y[cur_slot];
-                                q_a2 <= rs_r0_z[cur_slot]; q_b2 <= 32'sh0002_0000 - rs_t1_z[cur_slot];
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                rs_r1_x[cur_slot] <= q_p0; rs_r1_y[cur_slot] <= q_p1; rs_r1_z[cur_slot] <= q_p2;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
-                        end
-                        4'd3: begin  // N-R pass 2: t2 = |x| * r1   (residual)
-                            if (q_phase[cur_slot] == 0) begin
-                                q_a0 <= rs_xabs_x[cur_slot]; q_b0 <= rs_r1_x[cur_slot];
-                                q_a1 <= rs_xabs_y[cur_slot]; q_b1 <= rs_r1_y[cur_slot];
-                                q_a2 <= rs_xabs_z[cur_slot]; q_b2 <= rs_r1_z[cur_slot];
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                rs_t2_x[cur_slot] <= q_p0; rs_t2_y[cur_slot] <= q_p1; rs_t2_z[cur_slot] <= q_p2;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
-                        end
-                        4'd4: begin  // N-R pass 2: inv = sign(x) * r1 * (2 - t2); reset sp
-                            if (q_phase[cur_slot] == 0) begin
-                                q_a0 <= rs_r1_x[cur_slot]; q_b0 <= 32'sh0002_0000 - rs_t2_x[cur_slot];
-                                q_a1 <= rs_r1_y[cur_slot]; q_b1 <= 32'sh0002_0000 - rs_t2_y[cur_slot];
-                                q_a2 <= rs_r1_z[cur_slot]; q_b2 <= 32'sh0002_0000 - rs_t2_z[cur_slot];
-                                q_phase[cur_slot] <= QCOL[2:0];
-                            end else if (q_phase[cur_slot] == 1) begin
-                                inv_x[cur_slot]   <= rs_sign_x[cur_slot] ? -q_p0 : q_p0;
-                                inv_y[cur_slot]   <= rs_sign_y[cur_slot] ? -q_p1 : q_p1;
-                                inv_z[cur_slot]   <= rs_sign_z[cur_slot] ? -q_p2 : q_p2;
-                                sp[cur_slot]      <= '0;
-                                q_phase[cur_slot] <= '0; rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;  // -> 5
-                            end else q_phase[cur_slot] <= q_phase[cur_slot] - 1'b1;
-                        end
-                        default: begin  // 4'd5 -- pure state transition, no computation
-                            rs_wait[cur_slot] <= '0;
-                            state[cur_slot]   <= S_ROOT_SLAB;
-                        end
-                    endcase
-                end else begin
-                    // Primary mode: 14-stage pipeline
+                begin
+                    // Primary mode: 14-stage pipeline (SHADOW_MODE=0 only; shadow
+                    // branch removed — this module is instantiated primary-only).
                     case (rs_wait[cur_slot])
                         // ---- Screen-space ray direction: raw_dir = fwd + u*right - v*up ----
                         // u,v are the pixel's offset from screen centre scaled by cam_scale
@@ -903,12 +855,7 @@ module svo_traversal_mr #(
                 hit_px_r[cur_slot]     <= bw_c_ex;
                 hit_py_r[cur_slot]     <= bw_c_ey;
                 hit_pz_r[cur_slot]     <= bw_c_ez;
-                if (SHADOW_MODE) begin
-                    // Shadow mode: immediately signal hit and stop
-                    any_hit    <= 1'b1;
-                    frame_done <= 1'b1;
-                    state[cur_slot]      <= S_IDLE;
-                end else if (SHADE_MODE) begin
+                if (SHADE_MODE) begin
                     // hand off to shading pipeline
                     shade_is_miss       <= 1'b0;
                     shade_hit_face      <= hit_face[cur_slot];
@@ -983,11 +930,8 @@ module svo_traversal_mr #(
             // -----------------------------------------------------------------
             S_MISS: begin
                 // any_hit not asserted, just says its done
-                if (SHADOW_MODE) begin
-                    frame_done <= 1'b1;
-                    state[cur_slot]      <= S_IDLE;
+                if (SHADE_MODE) begin
                     // Go into shading pipeline as miss
-                end else if (SHADE_MODE) begin
                     shade_is_miss  <= 1'b1;
                     shade_start    <= 1'b1;
                     state[cur_slot]          <= S_WAIT_SHADE;
@@ -1009,41 +953,19 @@ module svo_traversal_mr #(
 
             // -----------------------------------------------------------------
             S_WRITE_PIXEL: begin
-                axis_tvalid <= 1'b1;
-                axis_tdata  <= {8'h00, pixel_color[cur_slot]};
-                // tlast high for last pixel of each line
-                //tuser high on first pixel
-                axis_tlast  <= (px[cur_slot] == 9'(IMG_W - 1));
-                axis_tuser  <= (px[cur_slot] == '0 && py[cur_slot] == '0) ? 1'b1 : 1'b0;
-                if (axis_tready)
-                    state[cur_slot] <= S_NEXT_PIXEL;
-                // else: hold tvalid high until tready (AXI-Stream rules)
+                // Signal this slot's ray finished; pixel_reorder retires the colour
+                // on AXIS (in raster order) and relaunches the slot. One-cycle pulse.
+                pr_done_valid <= 1'b1;
+                pr_done_slot  <= cur_slot;
+                pr_done_color <= pixel_color[cur_slot];
+                state[cur_slot] <= S_IDLE;     // slot free; pixel_reorder retires + relaunches
             end
 
             // -----------------------------------------------------------------
-            S_NEXT_PIXEL: begin
-                axis_tvalid <= 1'b0;
-                sp[cur_slot]          <= '0;
-                post_pop[cur_slot]    <= 1'b0;
-                // reach end of line, reset x and increment y
-                if (px[cur_slot] == 9'(IMG_W - 1)) begin
-                    px[cur_slot] <= '0;
-                    // end of frame
-                    if (py[cur_slot] == 8'(IMG_H - 1)) begin
-                        py[cur_slot]         <= '0;
-                        frame_done <= 1'b1;
-                        state[cur_slot]      <= S_IDLE;
-                    end else begin
-                        py[cur_slot]      <= py[cur_slot] + 1'b1;
-                        rs_wait[cur_slot] <= '0;
-                        state[cur_slot]   <= S_RAY_SETUP;
-                    end
-                end else begin
-                    px[cur_slot]      <= px[cur_slot] + 1'b1;
-                    rs_wait[cur_slot] <= '0;
-                    state[cur_slot]   <= S_RAY_SETUP;
-                end
-            end
+            // S_NEXT_PIXEL is dead: pixel advance + framing are now pixel_reorder's
+            // job. Nothing transitions here; the enum value is kept to preserve the
+            // FSM state encoding.
+            S_NEXT_PIXEL: ;
 
             endcase
         end

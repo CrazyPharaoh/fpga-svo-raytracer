@@ -30,7 +30,7 @@ export RENDER_DIV
 # ─── Phase 1: traversal-only (SHADE_MODE=0) ──────────────────────────────────
 # Multi-ray core (svo_traversal_mr). RAY_POOL_N=1 is bit-identical to the old
 # single-ray svo_traversal — gate against output/golden/golden_phase1_*.png.
-VERILOG_SOURCES = $(RTL_DIR)/shared_qmul3.sv $(RTL_DIR)/svo_traversal_mr.sv
+VERILOG_SOURCES = $(RTL_DIR)/shared_qmul3.sv $(RTL_DIR)/pixel_reorder.sv $(RTL_DIR)/svo_traversal_mr.sv
 TOPLEVEL        = svo_traversal_mr
 MODULE          = tb_svo_traversal
 COMPILE_ARGS    = -GSHADE_MODE=0 -GRAY_POOL_N=1 -GIMG_W=$(RENDER_W) -GIMG_H=$(RENDER_H)
