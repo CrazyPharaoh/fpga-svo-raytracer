@@ -10,7 +10,7 @@ HWH_SRC_HDMI := $(VIVADO_PROJECT_HDMI)/svo_raytracer.gen/sources_1/bd/svo_system
 PYNQ      := xilinx@192.168.2.99
 PYNQ_DIR  := /home/xilinx/jupyter_notebooks
 
-PY_FILES  := svo_builder.py display_frame.py main_phase1.py main.py camera.py hdmi_display.py
+PY_FILES  := svo_builder.py display_frame.py main_phase1.py main.py camera.py hdmi_display.py fly.py fly_camera.py
 
 .PHONY: upload upload-hdmi upload-py
 
