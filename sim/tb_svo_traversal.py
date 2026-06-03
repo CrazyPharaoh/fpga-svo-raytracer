@@ -8,7 +8,9 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'host'))
+sys.path.insert(0, os.path.dirname(__file__))
 import svo_builder
+from sim_profiling import state_profiler, write_state_profile
 
 # Fast-sim crop: RENDER_DIV downscales the render by an integer factor while keeping
 # the same field of view (a true downscale of the full image), so a small region gates
@@ -128,50 +130,6 @@ async def collect_pixels_axis(dut, pixels):
             if len(pixels) % 1000 == 0:
                 cocotb.log.info(f"  {len(pixels)}/{IMG_W*IMG_H} pixels collected")
 
-
-async def state_profiler(dut, counts):
-    """
-    Cycle-accurate FSM profiler. Samples dbg_state every clock while the core is
-    busy (i.e. during the render only, excluding idle before/after) and tallies
-    a per-state cycle histogram into `counts` (dict: state_id -> cycle count).
-
-    Use write_state_profile() after the frame to print the breakdown. This tells
-    you exactly where the render spends its cycles (e.g. S_BRAM_WAIT = memory,
-    S_RAY_SETUP = the shared-bank ray setup latency).
-    """
-    while True:
-        await RisingEdge(dut.clk)
-        await Timer(1, unit='ns')          # let NBA region commit
-        if int(dut.rst.value):
-            continue
-        if not int(dut.busy.value):        # only profile the active render
-            continue
-        s = int(dut.dbg_state.value)
-        counts[s] = counts.get(s, 0) + 1
-
-
-def write_state_profile(counts, log_path):
-    """Print the FSM cycle breakdown to the log and write it to log_path."""
-    total = sum(counts.values())
-    rows  = sorted(counts.items(), key=lambda kv: -kv[1])
-    lines = []
-    lines.append("=" * 52)
-    lines.append(f"FSM STATE CYCLE PROFILE  (busy cycles: {total})")
-    lines.append("=" * 52)
-    lines.append(f"{'state':<16}{'cycles':>14}{'percent':>12}")
-    lines.append("-" * 52)
-    for s, c in rows:
-        name = _STATE_NAMES.get(s, f'S_{s}')
-        pct  = (100.0 * c / total) if total else 0.0
-        lines.append(f"{name:<16}{c:>14,}{pct:>11.2f}%")
-    lines.append("-" * 52)
-    lines.append(f"{'TOTAL':<16}{total:>14,}{100.0:>11.2f}%")
-    text = "\n".join(lines)
-    cocotb.log.info("\n" + text)
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    with open(log_path, 'w') as f:
-        f.write(text + "\n")
-    cocotb.log.info(f"State profile written: {log_path}")
 
 
 async def pixel_tracer(dut, pixel_logs):
@@ -456,5 +414,8 @@ async def test_render_frame(dut):
     logs_dir   = os.path.join(os.path.dirname(__file__), 'output', 'logs')
     trace_path = os.path.join(logs_dir, 'pixel_trace.txt')
     write_pixel_trace_log(pixel_logs, trace_path)
-    # FSM cycle profile (per-state cycle counts + percentage breakdown)
-    write_state_profile(state_counts, os.path.join(logs_dir, 'state_profile.txt'))
+    # FSM cycle profile (per-state cycle counts + percentage breakdown).
+    # Canonical copy in logs/ (overwritten); dated history in output/profiles/.
+    profiles_dir = os.path.join(os.path.dirname(__file__), 'output', 'profiles')
+    write_state_profile(state_counts, os.path.join(logs_dir, 'state_profile.txt'),
+                        IMG_W, IMG_H, archive_dir=profiles_dir, label='phase1')

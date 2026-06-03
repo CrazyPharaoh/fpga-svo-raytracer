@@ -53,4 +53,4 @@ compare-shade:
 
 clean::
 	rm -rf sim_build __pycache__ results.xml shade_build
-	find $(OUTPUT_DIR) -mindepth 1 -maxdepth 1 ! -name shaded -exec rm -rf {} +
+	find $(OUTPUT_DIR) -mindepth 1 -maxdepth 1 ! -name shaded ! -name profiles -exec rm -rf {} +

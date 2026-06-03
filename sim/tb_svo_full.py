@@ -12,7 +12,9 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'host'))
+sys.path.insert(0, os.path.dirname(__file__))
 import svo_builder
+from sim_profiling import state_profiler, write_state_profile
 
 # Fast-sim crop: RENDER_DIV downscales the render (same FOV) to gate ~DIV^2 faster.
 # Must match the -GIMG_W/-GIMG_H build (Makefile.shade) and gen_reference_shaded.py.
@@ -297,9 +299,11 @@ async def test_render_frame_shaded(dut):
 
     pixels    = []
     pixel_logs = []
+    state_counts = {}
     cocotb.start_soon(bram_model(dut, svo_words))
     cocotb.start_soon(collect_pixels_axis(dut, pixels))
     cocotb.start_soon(pixel_tracer(dut, pixel_logs))
+    cocotb.start_soon(state_profiler(dut, state_counts))
 
     # Reset
     dut.rst.value   = 1
@@ -372,3 +376,7 @@ async def test_render_frame_shaded(dut):
         pixel_logs,
         os.path.join(out_dir, 'logs', 'pixel_trace_shaded.txt')
     )
+    # FSM cycle profile (shade path): canonical copy in logs/ + dated history in profiles/.
+    write_state_profile(state_counts, os.path.join(out_dir, 'logs', 'state_profile_shaded.txt'),
+                        IMG_W, IMG_H,
+                        archive_dir=os.path.join(out_dir, 'profiles'), label='shade')
