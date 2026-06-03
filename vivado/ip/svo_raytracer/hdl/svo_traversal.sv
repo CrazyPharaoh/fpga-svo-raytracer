@@ -184,7 +184,10 @@ module svo_traversal #(
     logic [5:0] node_half;
     logic [5:0] node_origin_x, node_origin_y, node_origin_z;
 
-    logic signed [31:0] rs_tx0, rs_tx1, rs_ty0, rs_ty1, rs_tz0, rs_tz1, rs_tmp;
+    // S_ROOT_SLAB is pipelined across rs_wait 0->3; these are its stage registers.
+    logic signed [31:0] rs_tx0_r, rs_tx1_r, rs_ty0_r, rs_ty1_r, rs_tz0_r, rs_tz1_r; // stage 0: registered slab times
+    logic signed [31:0] rs_lo_x, rs_hi_x, rs_lo_y, rs_hi_y, rs_lo_z, rs_hi_z;        // stage 1: sorted per-axis min/max
+    logic signed [31:0] rs_enter_r, rs_exit_r;                                       // stage 2: t_enter / t_exit
 
     logic [1:0]         em_face;
     logic               em_fsign;
@@ -228,7 +231,13 @@ module svo_traversal #(
     logic signed [31:0] rs_c_t2_x,   rs_c_t2_y,   rs_c_t2_z;
     logic signed [31:0] rs_c_inv_x,  rs_c_inv_y,  rs_c_inv_z;
     // S_ROOT_SLAB: ray-vs-world-box slab intersection times (CE='1' on all DSPs)
-    logic signed [31:0] rs_c_tx0, rs_c_tx1, rs_c_ty0, rs_c_ty1, rs_c_tz0, rs_c_tz1;
+    // Shared 3-lane multiplier bank (DSP reduction). The FSM registers operands
+    // into q_a*/q_b* in the issue stage; products are valid QCOL = 4 cycles later
+    // (shared_qmul3 latency 3 + the operand register). Traversal qmuls migrate to
+    // this bank cluster by cluster; the first user is S_ROOT_SLAB (slab times).
+    localparam int QCOL = 4;
+    logic signed [31:0] q_a0, q_b0, q_a1, q_b1, q_a2, q_b2;
+    logic signed [31:0] q_p0, q_p1, q_p2;
     // Entry point P = ro + t_min*rd (Q16.16). Single combinational qmul per axis.
     // bw_c_* feed S_SOLID's hit point directly; bw_ex_r/ey_r/ez_r are the
     // registered copy that breaks the S_BRAM_WAIT t_next two-qmul chain.
@@ -239,9 +248,13 @@ module svo_traversal #(
     logic [5:0]         bw_c_cx,  bw_c_cy,  bw_c_cz;
     logic signed [31:0] bw_c_nhq;
     logic signed [31:0] bw_c_exrel, bw_c_eyrel, bw_c_ezrel;
-    logic signed [31:0] bw_c_distx, bw_c_disty, bw_c_distz;
-    logic signed [31:0] bw_c_dtx,   bw_c_dty,   bw_c_dtz;
-    logic signed [31:0] bw_c_tnx,   bw_c_tny,   bw_c_tnz;
+    // S_BRAM_WAIT geometry is pipelined across bram_field 3->6; stage registers:
+    logic [5:0]         bw_cx_r, bw_cy_r, bw_cz_r;            // stage 0: child cell within node
+    logic signed [31:0] bw_exrel_r, bw_eyrel_r, bw_ezrel_r;  // stage 0: entry pt relative to node origin
+    logic signed [31:0] bw_nhq_r;                            // stage 0: node_half in Q16.16
+    logic signed [31:0] bw_distx_r, bw_disty_r, bw_distz_r;  // stage 1: dist to next midplane
+    logic signed [31:0] bw_dtx_r,   bw_dty_r,   bw_dtz_r;    // stage 1: dt = node_half*|inv|
+    logic signed [31:0] bw_prodx_r, bw_prody_r, bw_prodz_r;  // stage 2: dist*|inv|
 
     // -------------------------------------------------------------------------
     // SVO node registers
@@ -340,17 +353,15 @@ module svo_traversal #(
     end
 
     // -------------------------------------------------------------------------
-    // S_ROOT_SLAB combinational slab-intersection (CE='1' on all DSPs)
-    // ro_* and inv_* are stable from end of S_RAY_SETUP through S_ROOT_SLAB.
+    // Shared multiplier bank. The slab times (and, as later clusters migrate,
+    // the rest of the traversal's qmuls) are issued onto these 3 lanes by the
+    // FSM and collected QCOL cycles later. The slab is the first user (S_ROOT_SLAB).
     // -------------------------------------------------------------------------
-    always_comb begin
-        rs_c_tx0 = qmul(-ro_x,          inv_x);
-        rs_c_tx1 = qmul(WORLD_Q - ro_x, inv_x);
-        rs_c_ty0 = qmul(-ro_y,          inv_y);
-        rs_c_ty1 = qmul(WORLD_Q - ro_y, inv_y);
-        rs_c_tz0 = qmul(-ro_z,          inv_z);
-        rs_c_tz1 = qmul(WORLD_Q - ro_z, inv_z);
-    end
+    shared_qmul3 #(.LAT(3)) u_qmul (
+        .clk(clk),
+        .a0(q_a0), .b0(q_b0), .a1(q_a1), .b1(q_b1), .a2(q_a2), .b2(q_b2),
+        .p0(q_p0), .p1(q_p1), .p2(q_p2)
+    );
 
     // -------------------------------------------------------------------------
     // Entry-point combinational (CE='1'): P = ro + t_min*rd.
@@ -383,24 +394,7 @@ module svo_traversal #(
         bw_c_exrel = bw_ex_r - ($signed(32'(node_origin_x)) << 16);
         bw_c_eyrel = bw_ey_r - ($signed(32'(node_origin_y)) << 16);
         bw_c_ezrel = bw_ez_r - ($signed(32'(node_origin_z)) << 16);
-        if (!step_x[2])
-            bw_c_distx = bw_c_cx[0] ? ((bw_c_nhq <<< 1) - bw_c_exrel) : (bw_c_nhq - bw_c_exrel);
-        else
-            bw_c_distx = bw_c_cx[0] ? (bw_c_exrel - bw_c_nhq) : bw_c_exrel;
-        if (!step_y[2])
-            bw_c_disty = bw_c_cy[0] ? ((bw_c_nhq <<< 1) - bw_c_eyrel) : (bw_c_nhq - bw_c_eyrel);
-        else
-            bw_c_disty = bw_c_cy[0] ? (bw_c_eyrel - bw_c_nhq) : bw_c_eyrel;
-        if (!step_z[2])
-            bw_c_distz = bw_c_cz[0] ? ((bw_c_nhq <<< 1) - bw_c_ezrel) : (bw_c_nhq - bw_c_ezrel);
-        else
-            bw_c_distz = bw_c_cz[0] ? (bw_c_ezrel - bw_c_nhq) : bw_c_ezrel;
-        bw_c_dtx = qmul(bw_c_nhq, qabs(inv_x));
-        bw_c_dty = qmul(bw_c_nhq, qabs(inv_y));
-        bw_c_dtz = qmul(bw_c_nhq, qabs(inv_z));
-        bw_c_tnx = t_min + qmul(bw_c_distx, qabs(inv_x));
-        bw_c_tny = t_min + qmul(bw_c_disty, qabs(inv_y));
-        bw_c_tnz = t_min + qmul(bw_c_distz, qabs(inv_z));
+        // dist / dt / t_next are pipelined across bram_field 3->6 (see S_BRAM_WAIT).
     end
 
     // -------------------------------------------------------------------------
@@ -603,32 +597,78 @@ module svo_traversal #(
 
             // -----------------------------------------------------------------
             S_ROOT_SLAB: begin
-                // Slab boundary times come from the always_comb DSPs (no inline qmul)
-                rs_tx0 = rs_c_tx0; rs_tx1 = rs_c_tx1;
-                rs_ty0 = rs_c_ty0; rs_ty1 = rs_c_ty1;
-                rs_tz0 = rs_c_tz0; rs_tz1 = rs_c_tz1;
-                // sort so tx0 is always the smaller value
-                if (rs_tx0 > rs_tx1) begin rs_tmp=rs_tx0; rs_tx0=rs_tx1; rs_tx1=rs_tmp; end
-                if (rs_ty0 > rs_ty1) begin rs_tmp=rs_ty0; rs_ty0=rs_ty1; rs_ty1=rs_tmp; end
-                if (rs_tz0 > rs_tz1) begin rs_tmp=rs_tz0; rs_tz0=rs_tz1; rs_tz1=rs_tmp; end
-                // rs_tmp = unclamped t_enter = max(tx0, ty0, tz0); used for miss check
-                rs_tmp = (rs_tx0>rs_ty0)?((rs_tx0>rs_tz0)?rs_tx0:rs_tz0):((rs_ty0>rs_tz0)?rs_ty0:rs_tz0);
-                // Clamp t_min to 0: when ray origin is inside the world box t_enter < 0,
-                // and the backward-projected boundary point would select the wrong child
-                // octant. Starting from t=0 (the actual origin) gives correct cx/cy/cz.
-                // t_next values are unaffected: t_next = t_min + dist/|rd| algebraically
-                // equals the true midplane crossing time regardless of t_min.
-                t_min <= ($signed(rs_tmp) < 0) ? 32'sh0 : rs_tmp; //non-blocking for use later
-                t_max <= (rs_tx1<rs_ty1)?((rs_tx1<rs_tz1)?rs_tx1:rs_tz1):((rs_ty1<rs_tz1)?rs_ty1:rs_tz1);
-                if (rs_tmp >    // use unclamped t_enter for miss check
-                    (rs_tx1<rs_ty1 ? (rs_tx1<rs_tz1 ? rs_tx1:rs_tz1):(rs_ty1<rs_tz1 ? rs_ty1:rs_tz1)))
-                    state <= S_MISS;
-                else begin
-                    node_idx      <= '0;
-                    node_half     <= 6'(WORLD_SIZE >> 1);
-                    node_origin_x <= '0; node_origin_y <= '0; node_origin_z <= '0;
-                    state <= S_ENTER_NODE;
-                end
+                // Slab times come from the shared multiplier bank, then sort/min/max/miss.
+                // rs_wait sequence (0 on entry; both S_RAY_SETUP exits set rs_wait<='0):
+                //   0,1 = issue the 6 slab qmuls (3 lanes x 2 cycles)
+                //   2,3 = bank pipeline fill (QCOL=4)
+                //   4   = collect tx0/ty0/tz0 (issued at 0, ready at 0+QCOL)
+                //   5   = collect tx1/ty1/tz1 (issued at 1, ready at 1+QCOL)
+                //   6   = sort each pair (lo=min, hi=max)
+                //   7   = t_enter=max(lo), t_exit=min(hi)
+                //   8   = miss check + clamp t_min + set node + transition
+                // Algebra identical to before; the slab qmuls just route via the bank.
+                case (rs_wait)
+                    // Issue tx0/ty0/tz0 = qmul(-ro, inv) on lanes x/y/z
+                    4'd0: begin
+                        q_a0 <= -ro_x;          q_b0 <= inv_x;
+                        q_a1 <= -ro_y;          q_b1 <= inv_y;
+                        q_a2 <= -ro_z;          q_b2 <= inv_z;
+                        rs_wait <= rs_wait + 1'b1;
+                    end
+                    // Issue tx1/ty1/tz1 = qmul(WORLD_Q-ro, inv)
+                    4'd1: begin
+                        q_a0 <= WORLD_Q - ro_x; q_b0 <= inv_x;
+                        q_a1 <= WORLD_Q - ro_y; q_b1 <= inv_y;
+                        q_a2 <= WORLD_Q - ro_z; q_b2 <= inv_z;
+                        rs_wait <= rs_wait + 1'b1;
+                    end
+                    4'd2: rs_wait <= rs_wait + 1'b1;   // bank fill
+                    4'd3: rs_wait <= rs_wait + 1'b1;   // bank fill
+                    // Collect issue-0 result (rs_wait 0 -> 0+QCOL)
+                    4'd4: begin
+                        rs_tx0_r <= q_p0; rs_ty0_r <= q_p1; rs_tz0_r <= q_p2;
+                        rs_wait  <= rs_wait + 1'b1;
+                    end
+                    // Collect issue-1 result (rs_wait 1 -> 1+QCOL)
+                    4'd5: begin
+                        rs_tx1_r <= q_p0; rs_ty1_r <= q_p1; rs_tz1_r <= q_p2;
+                        rs_wait  <= rs_wait + 1'b1;
+                    end
+                    // Sort each axis pair -> per-axis (lo=min, hi=max)
+                    4'd6: begin
+                        rs_lo_x <= (rs_tx0_r > rs_tx1_r) ? rs_tx1_r : rs_tx0_r;
+                        rs_hi_x <= (rs_tx0_r > rs_tx1_r) ? rs_tx0_r : rs_tx1_r;
+                        rs_lo_y <= (rs_ty0_r > rs_ty1_r) ? rs_ty1_r : rs_ty0_r;
+                        rs_hi_y <= (rs_ty0_r > rs_ty1_r) ? rs_ty0_r : rs_ty1_r;
+                        rs_lo_z <= (rs_tz0_r > rs_tz1_r) ? rs_tz1_r : rs_tz0_r;
+                        rs_hi_z <= (rs_tz0_r > rs_tz1_r) ? rs_tz0_r : rs_tz1_r;
+                        rs_wait <= rs_wait + 1'b1;
+                    end
+                    // t_enter = max(lo_x,lo_y,lo_z); t_exit = min(hi_x,hi_y,hi_z)
+                    4'd7: begin
+                        rs_enter_r <= (rs_lo_x > rs_lo_y) ? ((rs_lo_x > rs_lo_z) ? rs_lo_x : rs_lo_z)
+                                                          : ((rs_lo_y > rs_lo_z) ? rs_lo_y : rs_lo_z);
+                        rs_exit_r  <= (rs_hi_x < rs_hi_y) ? ((rs_hi_x < rs_hi_z) ? rs_hi_x : rs_hi_z)
+                                                          : ((rs_hi_y < rs_hi_z) ? rs_hi_y : rs_hi_z);
+                        rs_wait    <= rs_wait + 1'b1;
+                    end
+                    // Miss check (unclamped t_enter > t_exit) + clamp t_min; set node + state.
+                    // Clamp t_min to 0: inside the world box t_enter<0; starting from t=0
+                    // gives correct cx/cy/cz (t_next unaffected).
+                    default: begin   // 4'd8
+                        t_min <= ($signed(rs_enter_r) < 0) ? 32'sh0 : rs_enter_r;
+                        t_max <= rs_exit_r;
+                        if (rs_enter_r > rs_exit_r) begin
+                            state <= S_MISS;
+                        end else begin
+                            node_idx      <= '0;
+                            node_half     <= 6'(WORLD_SIZE >> 1);
+                            node_origin_x <= '0; node_origin_y <= '0; node_origin_z <= '0;
+                            state <= S_ENTER_NODE;
+                        end
+                        rs_wait <= '0;
+                    end
+                endcase
             end
 
             // -----------------------------------------------------------------
@@ -669,17 +709,36 @@ module svo_traversal #(
                         r_child[4]<=svo_rd_data[15:0]; r_child[5]<=svo_rd_data[31:16];
                         svo_rd_addr <= {node_idx[11:0], 3'd5};
                         bram_field  <= 3'd4;
+                        // geometry stage 0: capture child cell + entry-rel + node_half
+                        bw_cx_r    <= bw_c_cx;    bw_cy_r    <= bw_c_cy;    bw_cz_r    <= bw_c_cz;
+                        bw_exrel_r <= bw_c_exrel; bw_eyrel_r <= bw_c_eyrel; bw_ezrel_r <= bw_c_ezrel;
+                        bw_nhq_r   <= bw_c_nhq;
                     end
                     3'd4: begin   // read word 4 = child ptrs 6-7
                         r_child[6]<=svo_rd_data[15:0]; r_child[7]<=svo_rd_data[31:16];
                         svo_rd_addr <= {node_idx[11:0], 3'd6};
                         bram_field  <= 3'd5;
+                        // geometry stage 1: dist to next midplane (conditional, no qmul)
+                        bw_distx_r <= (!step_x[2]) ? (bw_cx_r[0] ? ((bw_nhq_r<<<1)-bw_exrel_r) : (bw_nhq_r-bw_exrel_r))
+                                                   : (bw_cx_r[0] ? (bw_exrel_r-bw_nhq_r) : bw_exrel_r);
+                        bw_disty_r <= (!step_y[2]) ? (bw_cy_r[0] ? ((bw_nhq_r<<<1)-bw_eyrel_r) : (bw_nhq_r-bw_eyrel_r))
+                                                   : (bw_cy_r[0] ? (bw_eyrel_r-bw_nhq_r) : bw_eyrel_r);
+                        bw_distz_r <= (!step_z[2]) ? (bw_cz_r[0] ? ((bw_nhq_r<<<1)-bw_ezrel_r) : (bw_nhq_r-bw_ezrel_r))
+                                                   : (bw_cz_r[0] ? (bw_ezrel_r-bw_nhq_r) : bw_ezrel_r);
+                        // dt = node_half * |inv|  (one qmul; from registered nhq)
+                        bw_dtx_r <= qmul(bw_nhq_r, qabs(inv_x));
+                        bw_dty_r <= qmul(bw_nhq_r, qabs(inv_y));
+                        bw_dtz_r <= qmul(bw_nhq_r, qabs(inv_z));
                     end
                     3'd5: begin   // read word 5 = block IDs 0-3; word-6 addr already issued
                         r_block[0]<=svo_rd_data[7:0];   r_block[1]<=svo_rd_data[15:8];
                         r_block[2]<=svo_rd_data[23:16]; r_block[3]<=svo_rd_data[31:24];
                         svo_rd_en  <= '0;
                         bram_field <= 3'd6;
+                        // geometry stage 2: dist * |inv|  (one qmul)
+                        bw_prodx_r <= qmul(bw_distx_r, qabs(inv_x));
+                        bw_prody_r <= qmul(bw_disty_r, qabs(inv_y));
+                        bw_prodz_r <= qmul(bw_distz_r, qabs(inv_z));
                     end
                     3'd6: begin   // read word 6 = block IDs 4-7; done
                         r_block[4]<=svo_rd_data[7:0];   r_block[5]<=svo_rd_data[15:8];
@@ -690,19 +749,21 @@ module svo_traversal #(
                 if (bram_field == 3'd6) begin
                     svo_rd_en <= '0;
                     bitmask   <= r_bitmask;
-                    // dt depends only on the (already-restored or freshly-halved)
-                    // node_half + |inv|, stable across the BRAM read, so it is
-                    // correct in BOTH the fresh-descend and post-pop cases.
-                    dt_x <= bw_c_dtx; dt_y <= bw_c_dty; dt_z <= bw_c_dtz;
+                    // dt comes from the pipelined qmul (stage 1); correct in BOTH the
+                    // fresh-descend and post-pop cases (bw_nhq_r captured the restored
+                    // node_half).
+                    dt_x <= bw_dtx_r; dt_y <= bw_dty_r; dt_z <= bw_dtz_r;
                     if (post_pop) begin
                         // r_child[]/r_block[] now hold the parent node's data.
                         // cx/cy/cz and t_next were already restored by S_POP_STACK;
-                        // dt is recomputed above from the restored node_half.
+                        // the geometry pipeline output is ignored here (only dt is used).
                         post_pop <= 1'b0;
                         state    <= S_EMPTY;
                     end else begin
-                        cx       <= bw_c_cx; cy <= bw_c_cy; cz <= bw_c_cz;
-                        t_next_x <= bw_c_tnx; t_next_y <= bw_c_tny; t_next_z <= bw_c_tnz;
+                        cx       <= bw_cx_r; cy <= bw_cy_r; cz <= bw_cz_r;
+                        t_next_x <= t_min + bw_prodx_r;   // geometry stage 3: t_min + dist*|inv|
+                        t_next_y <= t_min + bw_prody_r;
+                        t_next_z <= t_min + bw_prodz_r;
                         state    <= S_CHECK_CHILD;
                     end
                 end

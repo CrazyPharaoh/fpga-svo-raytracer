@@ -6,7 +6,7 @@ TOPLEVEL_LANG = verilog
 
 RTL_DIR = $(abspath ../vivado/ip/svo_raytracer/hdl)
 
-VERILOG_SOURCES  = $(RTL_DIR)/svo_traversal.sv
+VERILOG_SOURCES  = $(RTL_DIR)/shared_qmul3.sv $(RTL_DIR)/svo_traversal.sv
 VERILOG_SOURCES += $(RTL_DIR)/shading_pipeline.sv
 VERILOG_SOURCES += $(abspath svo_full_tb.sv)
 TOPLEVEL         = svo_full_tb

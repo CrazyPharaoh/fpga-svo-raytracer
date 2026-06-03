@@ -16,7 +16,7 @@ $(shell mkdir -p $(OUTPUT_DIR))
 RTL_DIR = $(abspath ../vivado/ip/svo_raytracer/hdl)
 
 # ─── Phase 1: traversal-only (SHADE_MODE=0) ──────────────────────────────────
-VERILOG_SOURCES = $(RTL_DIR)/svo_traversal.sv
+VERILOG_SOURCES = $(RTL_DIR)/shared_qmul3.sv $(RTL_DIR)/svo_traversal.sv
 TOPLEVEL        = svo_traversal
 MODULE          = tb_svo_traversal
 COMPILE_ARGS    = -GSHADE_MODE=0

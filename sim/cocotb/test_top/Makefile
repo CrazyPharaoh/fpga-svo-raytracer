@@ -1,6 +1,7 @@
 VERILOG_SOURCES += $(RTL_DIR)/axi_lite_slave.sv
 VERILOG_SOURCES += $(RTL_DIR)/axi_lite_slave.sv
 VERILOG_SOURCES += $(RTL_DIR)/svo_bram.sv
+VERILOG_SOURCES += $(RTL_DIR)/shared_qmul3.sv
 VERILOG_SOURCES += $(RTL_DIR)/svo_traversal.sv
 VERILOG_SOURCES += $(RTL_DIR)/shading_pipeline.sv
 VERILOG_SOURCES += $(RTL_DIR)/framebuffer.sv
