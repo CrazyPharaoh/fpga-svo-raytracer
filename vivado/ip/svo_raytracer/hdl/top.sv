@@ -7,7 +7,13 @@
 module top #(
     parameter int  C_S_AXI_DATA_WIDTH = 32,
     parameter int  C_S_AXI_ADDR_WIDTH = 8,
-    parameter bit  SHADE_MODE         = 1   // Phase 2: full shading + shadow rays
+    parameter bit  SHADE_MODE         = 1,  // Phase 2: full shading + shadow rays
+    // Multi-ray pool size for the primary traversal core (svo_traversal_mr).
+    // RAY_POOL_N=1 = single ray (original behaviour). RAY_POOL_N=4 = interleaved
+    // multi-ray core (M1). NOTE: shaded mode (SHADE_MODE=1) currently requires
+    // RAY_POOL_N=1 — the Phase-2 shading handoff is not yet arbitrated across
+    // slots. For the multi-ray build set SHADE_MODE=0 (Phase 1) + RAY_POOL_N=4.
+    parameter int  RAY_POOL_N          = 4
 )(
     // AXI4-Lite slave
     input  logic        s_axi_aclk,
@@ -169,7 +175,7 @@ module top #(
         .addr_b(svo_rd_addr_mux), .dout_b(svo_rd_data_mux)
     );
 
-    svo_traversal #(.SHADOW_MODE(0), .SHADE_MODE(SHADE_MODE)) traversal (
+    svo_traversal_mr #(.RAY_POOL_N(RAY_POOL_N), .SHADOW_MODE(0), .SHADE_MODE(SHADE_MODE)) traversal (
         .clk(clk), .rst(rst), .start(ctrl_trigger),
         .cam_pos_x(cam_pos_x),   .cam_pos_y(cam_pos_y),   .cam_pos_z(cam_pos_z),
         .cam_right_x(cam_right_x),.cam_right_y(cam_right_y),.cam_right_z(cam_right_z),

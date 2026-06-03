@@ -27,13 +27,17 @@ RENDER_W   := $(shell expr 320 / $(RENDER_DIV))
 RENDER_H   := $(shell expr 240 / $(RENDER_DIV))
 export RENDER_DIV
 
+# Multi-ray pool size for the N-sweep. Overridable: `RAY_POOL_N=6 make`.
+# NOTE: changing RAY_POOL_N changes COMPILE_ARGS -> run `make clean` first.
+RAY_POOL_N ?= 4
+
 # ─── Phase 1: traversal-only (SHADE_MODE=0) ──────────────────────────────────
 # Multi-ray core (svo_traversal_mr). RAY_POOL_N=1 is bit-identical to the old
 # single-ray svo_traversal — gate against output/golden/golden_phase1_*.png.
 VERILOG_SOURCES = $(RTL_DIR)/shared_qmul3.sv $(RTL_DIR)/pixel_reorder.sv $(RTL_DIR)/ray_scheduler.sv $(RTL_DIR)/svo_traversal_mr.sv
 TOPLEVEL        = svo_traversal_mr
 MODULE          = tb_svo_traversal
-COMPILE_ARGS    = -GSHADE_MODE=0 -GRAY_POOL_N=4 -GIMG_W=$(RENDER_W) -GIMG_H=$(RENDER_H)
+COMPILE_ARGS    = -GSHADE_MODE=0 -GRAY_POOL_N=$(RAY_POOL_N) -GIMG_W=$(RENDER_W) -GIMG_H=$(RENDER_H)
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
