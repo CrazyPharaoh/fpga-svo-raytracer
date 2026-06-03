@@ -34,6 +34,7 @@ module axis_upscale_2x #(
     logic [10:0] out_col;              // 0..OUT_W-1
     logic [10:0] out_row;              // 0..OUT_H-1
     logic        phase_b;              // 0 = LINE_A (read input), 1 = LINE_B (replay)
+    logic        synced;               // has the upscaler locked to an input frame start (tuser)?
 
     wire        src_even = ~out_col[0];      // even out col needs a new source pixel (phase A)
     wire [10:0] src_col  = out_col >> 1;     // 0..IN_W-1
@@ -52,23 +53,32 @@ module axis_upscale_2x #(
     // phase A odd  col: re-emit hold            -> always valid
     // phase B        : replay buffer            -> always valid
     always_comb begin
-        if (phase_b)        m_axis_tvalid = 1'b1;
+        if (!synced)        m_axis_tvalid = 1'b0;        // hold output until locked to input SOF
+        else if (phase_b)   m_axis_tvalid = 1'b1;
         else if (src_even)  m_axis_tvalid = s_axis_tvalid;
         else                m_axis_tvalid = 1'b1;
     end
-    assign s_axis_tready = (!phase_b) && src_even && m_axis_tready;
+    assign s_axis_tready = synced && (!phase_b) && src_even && m_axis_tready;
 
     wire adv = m_axis_tvalid && m_axis_tready;   // one output pixel committed
 
     always_ff @(posedge aclk) begin
         if (!aresetn) begin
-            out_col <= '0; out_row <= '0; phase_b <= 1'b0;
+            out_col <= '0; out_row <= '0; phase_b <= 1'b0; synced <= 1'b0;
         end else begin
             if (s_axis_tready && s_axis_tvalid) begin
                 hold             <= s_axis_tdata;
                 linebuf[src_col] <= s_axis_tdata;
             end
-            if (adv) begin
+            if (!synced) begin
+                // Lock to the input frame start: ignore everything until the first SOF
+                // (tuser), then begin aligned at (0,0). Without this the column counter
+                // starts wherever the MM2S happens to be mid-frame as the upscaler leaves
+                // reset -> a constant horizontal offset that wraps each line.
+                if (s_axis_tvalid && s_axis_tuser) begin
+                    synced <= 1'b1; out_col <= '0; out_row <= '0; phase_b <= 1'b0;
+                end
+            end else if (adv) begin
                 if (out_col == OUT_W-1) begin
                     out_col <= '0;
                     phase_b <= ~phase_b;                          // A -> B (replay), B -> A (next line)
