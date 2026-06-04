@@ -45,6 +45,14 @@ module pixel_reorder #(
     logic [7:0]        lpy;
     logic              launched_all; // all IMG_W*IMG_H pixels have been launched
 
+    // Edge-detect start: the hardware ctrl_trigger is a multi-cycle (32) pulse, but
+    // the init below must fire ONCE — otherwise it re-zeros lp/rp/inflight every
+    // cycle start is high while the core's launch-init is already launching slots,
+    // desyncing the in-flight accounting and deadlocking. (Sim used a 1-cycle start
+    // so never hit this.)
+    logic              start_d;
+    wire               start_pulse = start && !start_d;
+
     logic        sdone  [0:RAY_POOL_N-1];
     logic [23:0] scolor [0:RAY_POOL_N-1];
     logic [8:0]  spx    [0:RAY_POOL_N-1];
@@ -81,10 +89,12 @@ module pixel_reorder #(
             lpx         <= '0;
             lpy         <= '0;
             launched_all <= 1'b0;
+            start_d     <= 1'b0;
             for (int i=0;i<RAY_POOL_N;i++) sdone[i] <= 1'b0;
         end else begin
             frame_done <= 1'b0;
-            if (start) begin
+            start_d    <= start;
+            if (start_pulse) begin
                 busy        <= 1'b1;
                 lp          <= '0;
                 rp          <= '0;
