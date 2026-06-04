@@ -57,6 +57,7 @@ module top #(
     logic [7:0] dbg_py_w;
     logic       dbg_tvalid_w;
     logic       dbg_tready_w;
+    logic [31:0] dbg_mr_w;
 
     // -------------------------------------------------------------------------
     // AXI slave → pipeline wires
@@ -146,7 +147,8 @@ module top #(
         .fog_start(fog_start_reg), .shadow_bias(shadow_bias_reg),
         .dbg_state(dbg_state_w), .dbg_rs_wait(dbg_rs_wait_w),
         .dbg_px(dbg_px_w), .dbg_py(dbg_py_w),
-        .dbg_tvalid(dbg_tvalid_w), .dbg_tready(dbg_tready_w)
+        .dbg_tvalid(dbg_tvalid_w), .dbg_tready(dbg_tready_w),
+        .dbg_mr(dbg_mr_w)
     );
 
     // svo_wr_addr is incremented in the same non-blocking cycle as svo_wr_en is
@@ -189,7 +191,8 @@ module top #(
         .busy(status_busy), .frame_done(status_frame_done), .any_hit(),
         .dbg_state(dbg_state_w), .dbg_rs_wait(dbg_rs_wait_w),
         .dbg_px(dbg_px_w), .dbg_py(dbg_py_w),
-        .dbg_tvalid(dbg_tvalid_w), .dbg_tready(dbg_tready_w)
+        .dbg_tvalid(dbg_tvalid_w), .dbg_tready(dbg_tready_w),
+        .dbg_mr(dbg_mr_w)
     );
 
     // -------------------------------------------------------------------------

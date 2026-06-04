@@ -81,7 +81,8 @@ module svo_traversal_mr #(
     output logic [8:0]  dbg_px,       // current pixel X
     output logic [7:0]  dbg_py,       // current pixel Y
     output logic        dbg_tvalid,   // axis_tvalid: IP is outputting a pixel
-    output logic        dbg_tready    // axis_tready: VDMA is accepting the pixel
+    output logic        dbg_tready,   // axis_tready: VDMA is accepting the pixel
+    output logic [31:0] dbg_mr        // multi-ray internals (see packing below)
 );
 
     // -------------------------------------------------------------------------
@@ -220,6 +221,21 @@ module svo_traversal_mr #(
     assign dbg_py      = py[cur_slot];
     assign dbg_tvalid  = axis_tvalid;
     assign dbg_tready  = axis_tready;
+
+    // Debug word (read via AXI 0x80) to localise hangs:
+    //   [15:0]  state[0..3]  (4 bits each; only first RAY_POOL_N valid)
+    //   [16]    grant_valid   [17] bram_busy   [18] shade_busy
+    //   [23:20] ready vector  [25:24] bram_owner  [27:26] shade_owner
+    always_comb begin
+        dbg_mr = '0;
+        for (int s = 0; s < RAY_POOL_N; s++) dbg_mr[s*4 +: 4] = 4'(state[s]);
+        dbg_mr[16] = grant_valid;
+        dbg_mr[17] = bram_busy;
+        dbg_mr[18] = shade_busy;
+        for (int s = 0; s < RAY_POOL_N; s++) dbg_mr[20 + s] = ready[s];
+        dbg_mr[24 +: SLOT_W] = bram_owner;
+        dbg_mr[26 +: SLOT_W] = shade_owner;
+    end
 
     // -------------------------------------------------------------------------
     // Pixel counters (primary-ray mode only)

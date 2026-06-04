@@ -29,6 +29,21 @@ def decode_dbg(d78, d7c):
     return dict(state=d78 & 0xF, tvalid=(d78>>4)&1, tready=(d78>>5)&1,
                 rs_wait=(d78>>6)&0xF, px=(d7c>>8)&0x1FF, py=d7c & 0xFF)
 
+def decode_mr(v):
+    # 0x80: [15:0] state[0..3] (4b each); [16]grant_valid [17]bram_busy [18]shade_busy
+    #       [23:20]ready  [25:24]bram_owner  [27:26]shade_owner
+    return dict(s0=v&0xF, s1=(v>>4)&0xF, s2=(v>>8)&0xF, s3=(v>>12)&0xF,
+                grant_valid=(v>>16)&1, bram_busy=(v>>17)&1, shade_busy=(v>>18)&1,
+                ready=(v>>20)&0xF, bram_owner=(v>>24)&3, shade_owner=(v>>26)&3)
+
+def fmt_mr(v):
+    m = decode_mr(v)
+    sn = lambda x: STATE_NAMES.get(x, str(x))
+    return (f"slots=[{sn(m['s0'])},{sn(m['s1'])},{sn(m['s2'])},{sn(m['s3'])}] "
+            f"ready={m['ready']:04b} grant_valid={m['grant_valid']} "
+            f"bram_busy={m['bram_busy']}(own{m['bram_owner']}) "
+            f"shade_busy={m['shade_busy']}(own{m['shade_owner']})")
+
 def vdma_s2mm(vdma):
     cr = vdma.read(0x30); sr = vdma.read(0x34)
     return dict(CR=hex(cr), SR=hex(sr), RS=cr & 1, Halted=sr & 1,
@@ -82,9 +97,9 @@ ip.write(0x00, 1)
 t0 = time.time()
 ever_busy = False; last_busy_t = None; t_first_busy = None
 while time.time() - t0 < 20.0:
-    s  = ip.read(0x04); d78 = ip.read(0x78); d7c = ip.read(0x7C)
+    s  = ip.read(0x04); d78 = ip.read(0x78); d7c = ip.read(0x7C); d80 = ip.read(0x80)
     t  = time.time() - t0
-    samples.append((t, s, d78, d7c))
+    samples.append((t, s, d78, d7c, d80))
     if s & 1:
         ever_busy = True; last_busy_t = t
         if t_first_busy is None: t_first_busy = t
@@ -97,22 +112,29 @@ print(f"first busy=1 at  : {t_first_busy}")
 print(f"last  busy=1 at  : {last_busy_t}")
 print(f"final status     : {hex(samples[-1][1])}  frame_done bit = {(samples[-1][1]>>1)&1}")
 
-pxs = [decode_dbg(d78,d7c)['px'] for _,_,d78,d7c in samples]
-pys = [decode_dbg(d78,d7c)['py'] for _,_,d78,d7c in samples]
-sts = [d78 & 0xF for _,_,d78,_ in samples]
+pxs = [decode_dbg(s[2],s[3])['px'] for s in samples]
+pys = [decode_dbg(s[2],s[3])['py'] for s in samples]
+sts = [s[2] & 0xF for s in samples]
 print(f"px range         : min={min(pxs)} max={max(pxs)}   (frame is 0..{IMG_W-1})")
 print(f"py range         : min={min(pys)} max={max(pys)}   (frame is 0..{IMG_H-1})")
 print(f"FSM states seen  : {[f'{s}:{STATE_NAMES.get(s,s)}' for s in sorted(set(sts))]}")
 
 print("\n--- trace (only when state/px/py/busy change) ---")
 prev=None; shown=0
-for t,s,d78,d7c in samples:
+for t,s,d78,d7c,d80 in samples:
     d = decode_dbg(d78,d7c); key=(d['state'],d['px'],d['py'],s&1)
     if key != prev:
         print(f"  t={t:6.3f}  busy={s&1} fd={(s>>1)&1}  {d['state']:2d}:{STATE_NAMES.get(d['state'],'?'):<11s} "
               f"px={d['px']:3d} py={d['py']:3d} rs={d['rs_wait']} tv={d['tvalid']} tr={d['tready']}")
         prev=key; shown+=1
     if shown > 60: print("  … (truncated)"); break
+
+# Multi-ray internals (0x80): all slot states + scheduler/arbiter flags.
+# When hung, this shows EXACTLY where: e.g. all slots WAIT_SHADE + shade_busy=1 =
+# shader stuck; ready!=0 but grant_valid=0 = scheduler not granting (the suspect).
+print("\n=== MULTI-RAY internals (0x80) — last 8 samples ===")
+for t,s,d78,d7c,d80 in samples[-8:]:
+    print(f"  t={t:6.3f} busy={s&1}  {fmt_mr(d80)}")
 
 print("\nVDMA S2MM after  :", vdma_s2mm(vdma))
 

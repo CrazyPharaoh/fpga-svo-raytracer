@@ -59,7 +59,8 @@ module axi_lite_slave #(
     input  logic [8:0]  dbg_px,
     input  logic [7:0]  dbg_py,
     input  logic        dbg_tvalid,   // 1 = IP outputting pixel to VDMA
-    input  logic        dbg_tready    // 1 = VDMA accepting the pixel
+    input  logic        dbg_tready,   // 1 = VDMA accepting the pixel
+    input  logic [31:0] dbg_mr        // multi-ray core internals (read at 0x80)
 );
 
     logic [C_S_AXI_ADDR_WIDTH-1:0] aw_addr_lat;
@@ -175,6 +176,8 @@ module axi_lite_slave #(
                     6'h1E:   S_AXI_RDATA <= {22'd0, dbg_rs_wait, dbg_tready, dbg_tvalid, dbg_state};
                     // 0x7C: pixel position — bits[16:8]=px, bits[7:0]=py
                     6'h1F:   S_AXI_RDATA <= {15'd0, dbg_px, dbg_py};
+                    // 0x80: multi-ray core internals (per-slot state + arbiter flags)
+                    6'h20:   S_AXI_RDATA <= dbg_mr;
                     default: S_AXI_RDATA <= 32'hDEAD_BEEF;
                 endcase
             end else begin
