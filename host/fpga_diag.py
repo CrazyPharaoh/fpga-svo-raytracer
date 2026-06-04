@@ -65,7 +65,7 @@ for off, c in [(0x50,(0,0,0)),(0x54,(128,128,128)),(0x58,(60,160,40)),
                (0x5C,(255,220,80)),(0x60,(0,0,0)),(0x64,(0,0,0)),
                (0x68,(135,206,235)),(0x6C,(180,200,220))]:
     ip.write(off, pack_rgb(*c))
-ip.write(0x70, to_q16(15.0)); ip.write(0x74, to_q16(0.01))
+ip.write(0x70, to_q16(15.0)); ip.write(0x74, to_q16(0.5))   # shadow_bias 0.5 (matches gen_reference_shaded.py; 0.01 self-shadows)
 pos=[32.0,40.0,-20.0]; fwd=normalise([32-pos[0],4-pos[1],32-pos[2]])
 right=normalise(cross(fwd,[0,1,0])); up=cross(right,fwd)
 ip.write(0x38, to_q16(math.tan(math.radians(60)/2)/(IMG_W/2)))
