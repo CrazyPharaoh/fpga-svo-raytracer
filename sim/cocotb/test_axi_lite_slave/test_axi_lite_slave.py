@@ -223,3 +223,17 @@ async def test_status_register_read(dut):
     await ClockCycles(dut.S_AXI_ACLK, 1)
     data = await axi_read(dut, 0x04)
     assert (data & 0x3) == 0b10, f"STATUS=0x{data:08X}, expected busy=0 fd=1"
+
+
+@cocotb.test()
+async def test_dbg_mr_register_0x80(dut):
+    """0x80 returns the dbg_mr debug word verbatim (multi-ray slot/scheduler state)."""
+    await reset(dut)
+    dut.dbg_mr.value = 0xDEAD_BEEF
+    await ClockCycles(dut.S_AXI_ACLK, 2)
+    data = await axi_read(dut, 0x80)
+    assert data == 0xDEAD_BEEF, f"0x80 read = 0x{data:08X}, expected 0xDEADBEEF"
+    dut.dbg_mr.value = 0x0BAD_F00D
+    await ClockCycles(dut.S_AXI_ACLK, 2)
+    data = await axi_read(dut, 0x80)
+    assert data == 0x0BAD_F00D, f"0x80 read = 0x{data:08X}, expected 0x0BADF00D"
