@@ -226,16 +226,23 @@ module svo_traversal_mr #(
     //   [15:0]  state[0..3]  (4 bits each; only first RAY_POOL_N valid)
     //   [16]    grant_valid   [17] bram_busy   [18] shade_busy
     //   [23:20] ready vector  [25:24] bram_owner  [27:26] shade_owner
+    // Packed combinationally, then REGISTERED into dbg_mr so the long route from
+    // deep-in-the-core slot state out to the AXI slave is a register->route->
+    // register path (a full clock), not part of a combinational path. A 1-cycle
+    // delay on a debug readout is irrelevant; this keeps dbg_mr off the critical
+    // path (it cost ~the timing margin as a combinational output).
+    logic [31:0] dbg_mr_c;
     always_comb begin
-        dbg_mr = '0;
-        for (int s = 0; s < RAY_POOL_N; s++) dbg_mr[s*4 +: 4] = 4'(state[s]);
-        dbg_mr[16] = grant_valid;
-        dbg_mr[17] = bram_busy;
-        dbg_mr[18] = shade_busy;
-        for (int s = 0; s < RAY_POOL_N; s++) dbg_mr[20 + s] = ready[s];
-        dbg_mr[24 +: SLOT_W] = bram_owner;
-        dbg_mr[26 +: SLOT_W] = shade_owner;
+        dbg_mr_c = '0;
+        for (int s = 0; s < RAY_POOL_N; s++) dbg_mr_c[s*4 +: 4] = 4'(state[s]);
+        dbg_mr_c[16] = grant_valid;
+        dbg_mr_c[17] = bram_busy;
+        dbg_mr_c[18] = shade_busy;
+        for (int s = 0; s < RAY_POOL_N; s++) dbg_mr_c[20 + s] = ready[s];
+        dbg_mr_c[24 +: SLOT_W] = bram_owner;
+        dbg_mr_c[26 +: SLOT_W] = shade_owner;
     end
+    always_ff @(posedge clk) dbg_mr <= dbg_mr_c;
 
     // -------------------------------------------------------------------------
     // Pixel counters (primary-ray mode only)
