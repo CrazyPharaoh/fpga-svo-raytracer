@@ -95,21 +95,27 @@ _FACE_NAMES  = {0: 'X', 1: 'Y', 2: 'Z'}
 # ─── BRAM model ───────────────────────────────────────────────────────────────
 
 async def bram_model(dut, words):
-    """1-cycle registered BRAM model (mirrors svo_bram.sv behaviour).
-    svo_full_tb exposes the arbiter output as svo_rd_addr/en/data ports.
-    Both primary and shadow traversal read data flows through here."""
-    pending_data = None
-    dut.svo_rd_data.value = 0
+    """Dual-port 1-cycle registered BRAM model.
+    Port B (primary, gated on en) -> svo_rd_data_prim.
+    Port A (shadow, always reads addr) -> svo_rd_data_shad."""
+    def rd(addr):
+        a = int(addr)
+        return int(words[a]) if a < len(words) else 0
+    pend_prim = None
+    pend_shad = None
+    dut.svo_rd_data_prim.value = 0
+    dut.svo_rd_data_shad.value = 0
     while True:
         await RisingEdge(dut.clk)
         await Timer(1, unit='ns')
-        if pending_data is not None:
-            dut.svo_rd_data.value = pending_data
-        if int(dut.svo_rd_en.value):
-            addr = int(dut.svo_rd_addr.value)
-            pending_data = int(words[addr]) if addr < len(words) else 0
-        else:
-            pending_data = None
+        if pend_prim is not None:
+            dut.svo_rd_data_prim.value = pend_prim
+        if pend_shad is not None:
+            dut.svo_rd_data_shad.value = pend_shad
+        # primary: port B, gated on en (matches dout_b <= mem[addr_b] if en_b)
+        pend_prim = rd(dut.svo_rd_addr_prim.value) if int(dut.svo_rd_en_prim.value) else None
+        # shadow: port A, always reads addr (matches dout_a <= mem[addr_a])
+        pend_shad = rd(dut.svo_rd_addr_shad.value)
 
 
 # ─── Pixel collector ──────────────────────────────────────────────────────────
@@ -132,11 +138,35 @@ async def collect_pixels_axis(dut, pixels):
 # Accesses traversal internal signals via dut.traversal.* (--public-flat-rw
 # exposes all hierarchy; svo_full_tb names the primary instance "traversal").
 
+# Per-ray signals became [slot] arrays in svo_traversal_mr. _SlotView wraps the
+# traversal sub-hierarchy so the tracer's reads of per-ray signals auto-index the
+# active slot (0); scalar internals pass through. (Plan Task 10 generalises N>1.)
+_PER_RAY_SIGNALS = {
+    'bitmask', 'cidx', 'cx', 'cy', 'cz', 'dt_x', 'dt_y', 'dt_z',
+    'hit_face', 'hit_face_sign_r', 'inv_x', 'inv_y', 'inv_z',
+    'node_half', 'node_idx', 'node_origin_x', 'node_origin_y', 'node_origin_z',
+    'r_block', 'rd_x', 'rd_y', 'rd_z', 'ro_x', 'ro_y', 'ro_z', 'sp',
+    'step_x', 'step_y', 'step_z', 't_max', 't_min',
+    't_next_x', 't_next_y', 't_next_z',
+}
+_TRACE_SLOT = 0
+
+
+class _SlotView:
+    """Read-only wrapper that auto-indexes per-ray array signals to a slot."""
+    def __init__(self, hier):
+        object.__setattr__(self, '_hier', hier)
+
+    def __getattr__(self, name):
+        sig = getattr(self._hier, name)
+        return sig[_TRACE_SLOT] if name in _PER_RAY_SIGNALS else sig
+
+
 async def pixel_tracer(dut, pixel_logs):
     """Per-pixel FSM trace for Phase 2. Logs state transitions from the primary
     traversal instance (dut.traversal) plus shade/shadow handshake from the
     top-level svo_full_tb wires (dut.shade_start, dut.shade_done, etc.)."""
-    t = dut.traversal   # shorthand for primary traversal sub-hierarchy
+    t = _SlotView(dut.traversal)   # per-ray signals -> active slot (N=1: slot 0)
 
     prev_state = -1
     step = 0

@@ -10,9 +10,10 @@ module top #(
     parameter bit  SHADE_MODE         = 1,  // Phase 2: full shading + shadow rays
     // Multi-ray pool size for the primary traversal core (svo_traversal_mr).
     // RAY_POOL_N=1 = single ray (original behaviour). RAY_POOL_N=4 = interleaved
-    // multi-ray core (M1). NOTE: shaded mode (SHADE_MODE=1) currently requires
-    // RAY_POOL_N=1 — the Phase-2 shading handoff is not yet arbitrated across
-    // slots. For the multi-ray build set SHADE_MODE=0 (Phase 1) + RAY_POOL_N=4.
+    // multi-ray core (M1). Works in BOTH Phase 1 (SHADE_MODE=0) and Phase 2
+    // (SHADE_MODE=1, shaded+shadowed): the shading pipeline is arbitrated across
+    // slots (one shade at a time) and the shadow ray reads BRAM port A while the
+    // primary reads port B, so the two never contend.
     parameter int  RAY_POOL_N          = 4
 )(
     // AXI4-Lite slave
@@ -75,34 +76,20 @@ module top #(
     logic signed [31:0] fog_start_reg, shadow_bias_reg;
 
     // -------------------------------------------------------------------------
-    // SVO BRAM — shared by primary traversal and shadow traversal (arbitrated)
+    // SVO BRAM — true dual-port. Primary traversal reads port B; shadow
+    // traversal reads port A (idle for writes during render). No arbiter — the
+    // two readers are fully independent, so neither desyncs the other's
+    // sequential 8-word node reads.
     // -------------------------------------------------------------------------
-    // Primary traversal read port
+    // Primary traversal read port (port B)
     logic [14:0] svo_rd_addr_prim;
     logic [31:0] svo_rd_data_prim;
     logic        svo_rd_en_prim;
 
-    // Shadow traversal read port
+    // Shadow traversal read port (port A)
     logic [14:0] svo_rd_addr_shad;
     logic [31:0] svo_rd_data_shad;
     logic        svo_rd_en_shad;
-
-    // Simple priority arbiter: primary wins; shadow gets access when primary idle
-    logic [14:0] svo_rd_addr_mux;
-    logic        svo_rd_en_mux;
-    logic [31:0] svo_rd_data_mux;
-
-    always_comb begin
-        if (svo_rd_en_prim) begin
-            svo_rd_addr_mux = svo_rd_addr_prim;
-            svo_rd_en_mux   = 1'b1;
-        end else begin
-            svo_rd_addr_mux = svo_rd_addr_shad;
-            svo_rd_en_mux   = svo_rd_en_shad;
-        end
-    end
-    assign svo_rd_data_prim = svo_rd_data_mux;
-    assign svo_rd_data_shad = svo_rd_data_mux;
 
     // -------------------------------------------------------------------------
     // AXI-Stream from traversal to VDMA
@@ -168,11 +155,15 @@ module top #(
     logic [14:0] svo_wr_addr_lat;
     always_ff @(posedge clk) svo_wr_addr_lat <= svo_wr_addr;
 
+    // Port A serves the SVO write (upload) AND the shadow read. During a write
+    // use the write address; otherwise present the shadow read address.
+    wire [14:0] svo_addr_a = svo_wr_en ? svo_wr_addr_lat : svo_rd_addr_shad;
+
     svo_bram svo_mem (
-        .clk_a(clk), .en_a(svo_wr_en),
-        .addr_a(svo_wr_addr_lat), .din_a(svo_wr_data),
-        .clk_b(clk), .en_b(svo_rd_en_mux),
-        .addr_b(svo_rd_addr_mux), .dout_b(svo_rd_data_mux)
+        .clk_a(clk), .en_a(svo_wr_en), .addr_a(svo_addr_a), .din_a(svo_wr_data),
+        .dout_a(svo_rd_data_shad),                 // shadow reads port A
+        .clk_b(clk), .en_b(svo_rd_en_prim),
+        .addr_b(svo_rd_addr_prim), .dout_b(svo_rd_data_prim)  // primary reads port B
     );
 
     svo_traversal_mr #(.RAY_POOL_N(RAY_POOL_N), .SHADOW_MODE(0), .SHADE_MODE(SHADE_MODE)) traversal (

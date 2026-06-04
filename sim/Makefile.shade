@@ -15,12 +15,19 @@ RENDER_W   := $(shell expr 320 / $(RENDER_DIV))
 RENDER_H   := $(shell expr 240 / $(RENDER_DIV))
 export RENDER_DIV
 
-VERILOG_SOURCES  = $(RTL_DIR)/shared_qmul3.sv $(RTL_DIR)/svo_traversal.sv
+# Multi-ray pool size for the primary core. NOTE: changing it changes COMPILE_ARGS
+# -> the `shade` target cleans shade_build, but if you run this Makefile directly
+# run `make -f Makefile.shade clean` first.
+RAY_POOL_N ?= 4
+
+# Primary traversal = svo_traversal_mr (multi-ray); shadow trav = old svo_traversal.
+VERILOG_SOURCES  = $(RTL_DIR)/shared_qmul3.sv $(RTL_DIR)/pixel_reorder.sv $(RTL_DIR)/ray_scheduler.sv
+VERILOG_SOURCES += $(RTL_DIR)/svo_traversal_mr.sv $(RTL_DIR)/svo_traversal.sv
 VERILOG_SOURCES += $(RTL_DIR)/shading_pipeline.sv
 VERILOG_SOURCES += $(abspath svo_full_tb.sv)
 TOPLEVEL         = svo_full_tb
 MODULE           = tb_svo_full
-COMPILE_ARGS     = -GIMG_W=$(RENDER_W) -GIMG_H=$(RENDER_H)
+COMPILE_ARGS     = -GRAY_POOL_N=$(RAY_POOL_N) -GIMG_W=$(RENDER_W) -GIMG_H=$(RENDER_H)
 
 EXTRA_ARGS  = --language 1800-2012
 EXTRA_ARGS += -Wno-WIDTHTRUNC -Wno-WIDTHEXPAND -Wno-CASEINCOMPLETE

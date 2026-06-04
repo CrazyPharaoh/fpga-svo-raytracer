@@ -158,10 +158,21 @@ module svo_traversal_mr #(
     logic                  bram_busy;     // a slot currently owns the read port
     logic [SLOT_W-1:0]     bram_owner;
 
+    // Shading arbiter (SHADE_MODE=1 only). The single shading pipeline serves one
+    // ray at a time; slots that hit/miss raise shade_pending and park in
+    // S_WAIT_SHADE. The arbiter grants one pending slot when the shader is free,
+    // drives the shade_* outputs from that slot's stored hit info, asserts
+    // shade_start, and on shade_done writes the owner's pixel + frees the shader.
+    // Pattern mirrors bram_busy/bram_owner. Inert when SHADE_MODE=0 (Phase 1).
+    logic                  shade_busy;            // shading pipeline in use
+    logic [SLOT_W-1:0]     shade_owner;           // slot currently being shaded
+    logic                  shade_pending [0:RAY_POOL_N-1];  // slot wants shading
+    logic                  shade_is_miss_r [0:RAY_POOL_N-1]; // per-slot: hit(0)/miss(1)
+
     logic [RAY_POOL_N-1:0] ready;
     always_comb begin
         for (int s = 0; s < RAY_POOL_N; s++) begin
-            ready[s] = (state[s] != S_IDLE) && !blocked[s];
+            ready[s] = (state[s] != S_IDLE) && (state[s] != S_WAIT_SHADE) && !blocked[s];
             // Atomic BRAM read. The 8-word sequential node read advances svo_rd_addr
             // ONE cycle ahead of the registered BRAM output, so it is only correct if
             // the owning slot runs on CONSECUTIVE cycles. While a read is in progress
@@ -428,10 +439,56 @@ module svo_traversal_mr #(
 
     // Icarus X-avoid: deterministic init of the block/tag machinery.
     initial begin
-        for (int s = 0; s < RAY_POOL_N; s++) blocked[s] = 1'b0;
+        for (int s = 0; s < RAY_POOL_N; s++) begin
+            blocked[s] = 1'b0;
+            shade_pending[s] = 1'b0;
+            shade_is_miss_r[s] = 1'b0;
+        end
         q_iss_v = 1'b0;
         q_tv[0] = 1'b0; q_tv[1] = 1'b0; q_tv[2] = 1'b0;
         bram_busy = 1'b0; bram_owner = '0; last_grant = '0;
+        shade_busy = 1'b0; shade_owner = '0;
+    end
+
+    // -------------------------------------------------------------------------
+    // Shading arbiter (combinational): pick one pending slot when the shader is
+    // free. Gated by SHADE_MODE, so inert in Phase 1.
+    // -------------------------------------------------------------------------
+    logic              shade_grant;
+    logic [SLOT_W-1:0] shade_grant_slot;
+    always_comb begin
+        shade_grant = 1'b0;
+        shade_grant_slot = '0;
+        if (SHADE_MODE && !shade_busy) begin
+            for (int s = 0; s < RAY_POOL_N; s++)
+                if (!shade_grant && shade_pending[s]) begin
+                    shade_grant = 1'b1;
+                    shade_grant_slot = s[SLOT_W-1:0];
+                end
+        end
+    end
+
+    // Drive the shade_* outputs from the slot CURRENTLY being shaded, held stable
+    // for the WHOLE shade. The shading pipeline reads its inputs across multiple
+    // stages (block_id, hit_p*, ray_d*, t_hit at different cycles), NOT just on
+    // start, so the inputs must persist: use shade_owner while busy, and the
+    // freshly-granted slot on the grant cycle (before shade_owner is registered).
+    // shade_start is the 1-cycle grant pulse. These outputs are combinational (no
+    // <= anywhere); the always_ff drives only the grant register + collector.
+    wire [SLOT_W-1:0] shade_active = shade_busy ? shade_owner : shade_grant_slot;
+    always_comb begin
+        shade_start         = shade_grant;
+        shade_is_miss       = shade_is_miss_r[shade_active];
+        shade_hit_face      = hit_face[shade_active];
+        shade_hit_face_sign = hit_face_sign_r[shade_active];
+        shade_block_id      = block_id_hit[shade_active];
+        shade_t_hit         = t_hit[shade_active];
+        shade_ray_dx        = rd_x[shade_active];
+        shade_ray_dy        = rd_y[shade_active];
+        shade_ray_dz        = rd_z[shade_active];
+        shade_hit_px        = hit_px_r[shade_active];
+        shade_hit_py        = hit_py_r[shade_active];
+        shade_hit_pz        = hit_pz_r[shade_active];
     end
 
     // -------------------------------------------------------------------------
@@ -477,20 +534,20 @@ module svo_traversal_mr #(
         if (rst) begin
             fb_wr_en    <= '0;
             svo_rd_en   <= '0;
-            shade_start <= '0;
             pr_done_valid <= 1'b0;
             for (int s = 0; s < RAY_POOL_N; s++) begin
                 state[s] <= S_IDLE; px[s] <= '0; py[s] <= '0; sp[s] <= '0;
                 rs_wait[s] <= '0; post_pop[s] <= '0; q_phase[s] <= '0;
                 blocked[s] <= 1'b0;
+                shade_pending[s] <= 1'b0;
             end
             q_iss_v <= 1'b0;
             q_tv[0] <= 1'b0; q_tv[1] <= 1'b0; q_tv[2] <= 1'b0;
             bram_busy <= 1'b0; bram_owner <= '0; last_grant <= '0;
+            shade_busy <= 1'b0; shade_owner <= '0;
         end else begin
             // Force pulse signals low every cycle before state case
             fb_wr_en    <= '0;
-            shade_start <= '0;
             pr_done_valid <= 1'b0;
             // Register the entry-point multiply t_min*rd every cycle (the +ro add is
             // done combinationally by consumers next cycle). Splits the multiply and the
@@ -567,6 +624,26 @@ module svo_traversal_mr #(
                 q_phase[pr_launch_slot]  <= '0;
                 blocked[pr_launch_slot]  <= 1'b0;
                 state[pr_launch_slot]    <= S_RAY_SETUP;
+            end
+
+            // -----------------------------------------------------------------
+            // Shading arbiter register + collector (OUTSIDE the grant gate).
+            // shade_grant requires !shade_busy and shade_done requires the
+            // pipeline was busy, so these fire on mutually-exclusive cycles --
+            // no conflict writing shade_busy. Inert when SHADE_MODE=0 (shade_grant
+            // gated off, shade_pending never set, shade_done path is shadow-only).
+            // -----------------------------------------------------------------
+            if (shade_grant) begin
+                // take the shader for the granted slot
+                shade_busy                      <= 1'b1;
+                shade_owner                     <= shade_grant_slot;
+                shade_pending[shade_grant_slot] <= 1'b0;
+            end
+            if (SHADE_MODE && shade_done) begin
+                // shading finished -> write the owner's pixel + free the shader
+                pixel_color[shade_owner] <= shade_pixel_color;
+                state[shade_owner]       <= S_WRITE_PIXEL;
+                shade_busy               <= 1'b0;
             end
 
             if (grant_valid) begin
@@ -972,20 +1049,11 @@ module svo_traversal_mr #(
                 hit_py_r[cur_slot]     <= bw_c_ey;
                 hit_pz_r[cur_slot]     <= bw_c_ez;
                 if (SHADE_MODE) begin
-                    // hand off to shading pipeline
-                    shade_is_miss       <= 1'b0;
-                    shade_hit_face      <= hit_face[cur_slot];
-                    shade_hit_face_sign <= hit_face_sign_r[cur_slot];
-                    shade_block_id      <= r_block[cur_slot][cidx[cur_slot]];
-                    shade_t_hit         <= t_min[cur_slot];
-                    shade_ray_dx        <= rd_x[cur_slot];
-                    shade_ray_dy        <= rd_y[cur_slot];
-                    shade_ray_dz        <= rd_z[cur_slot];
-                    shade_hit_px        <= bw_c_ex;   // ro + te_*; te_* registered last cycle
-                    shade_hit_py        <= bw_c_ey;
-                    shade_hit_pz        <= bw_c_ez;
-                    shade_start         <= 1'b1;
-                    state[cur_slot]               <= S_WAIT_SHADE;
+                    // hand off to shading pipeline via the arbiter: store this hit
+                    // (the per-slot regs above), raise pending, park in S_WAIT_SHADE.
+                    shade_is_miss_r[cur_slot] <= 1'b0;
+                    shade_pending[cur_slot]   <= 1'b1;
+                    state[cur_slot]           <= S_WAIT_SHADE;
                 end else begin
                     // non shading for traversal test
                     pixel_color[cur_slot] <= 24'hFF_FF_FF;
@@ -1047,10 +1115,11 @@ module svo_traversal_mr #(
             S_MISS: begin
                 // any_hit not asserted, just says its done
                 if (SHADE_MODE) begin
-                    // Go into shading pipeline as miss
-                    shade_is_miss  <= 1'b1;
-                    shade_start    <= 1'b1;
-                    state[cur_slot]          <= S_WAIT_SHADE;
+                    // Go into shading pipeline as miss via the arbiter:
+                    // mark this slot as a miss, raise pending, park in S_WAIT_SHADE.
+                    shade_is_miss_r[cur_slot] <= 1'b1;
+                    shade_pending[cur_slot]   <= 1'b1;
+                    state[cur_slot]           <= S_WAIT_SHADE;
                 end else begin
                     // Non shading mode for testing traversal
                     pixel_color[cur_slot] <= sky_color;
@@ -1059,13 +1128,10 @@ module svo_traversal_mr #(
             end
 
             // -----------------------------------------------------------------
-            S_WAIT_SHADE: begin
-                shade_start <= '0;
-                if (shade_done) begin
-                    pixel_color[cur_slot] <= shade_pixel_color;
-                    state[cur_slot]       <= S_WRITE_PIXEL;
-                end //Stalls here until shade_done
-            end
+            // The shade collector (outside the grant gate) moves the owning slot
+            // to S_WRITE_PIXEL on shade_done; a parked slot is excluded from ready
+            // (never granted), so this arm is just a no-op for case completeness.
+            S_WAIT_SHADE: ;
 
             // -----------------------------------------------------------------
             S_WRITE_PIXEL: begin

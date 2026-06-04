@@ -6,7 +6,8 @@
 `timescale 1ns/1ps
 module svo_full_tb #(
     parameter int IMG_W = 320,   // overridable for the RENDER_DIV fast-sim crop
-    parameter int IMG_H = 240
+    parameter int IMG_H = 240,
+    parameter int RAY_POOL_N = 4 // primary multi-ray core pool size
 )(
     input  logic        clk,
     input  logic        rst,
@@ -32,10 +33,14 @@ module svo_full_tb #(
     // lut_0..5 map to block_id 0..5 in shading_pipeline
     input  logic [23:0] lut_0, lut_1, lut_2, lut_3, lut_4, lut_5,
 
-    // SVO BRAM read port (Python bram_model drives svo_rd_data)
-    output logic [14:0] svo_rd_addr,
-    input  logic [31:0] svo_rd_data,
-    output logic        svo_rd_en,
+    // SVO BRAM read ports — two independent ports (Python bram_model drives data).
+    // Primary reads port B; shadow reads port A.
+    output logic [14:0] svo_rd_addr_prim,
+    input  logic [31:0] svo_rd_data_prim,
+    output logic        svo_rd_en_prim,
+    output logic [14:0] svo_rd_addr_shad,
+    input  logic [31:0] svo_rd_data_shad,
+    output logic        svo_rd_en_shad,
 
     // AXI-Stream pixel output
     output logic        axis_tvalid,
@@ -78,25 +83,6 @@ module svo_full_tb #(
     logic signed [31:0] shadow_rd_x, shadow_rd_y, shadow_rd_z;
 
     // -------------------------------------------------------------------------
-    // BRAM arbiter: primary wins; shadow gets access when primary idle
-    // (mirrors the arbiter in top.sv)
-    // -------------------------------------------------------------------------
-    logic [14:0] svo_rd_addr_prim, svo_rd_addr_shad;
-    logic        svo_rd_en_prim,   svo_rd_en_shad;
-
-    always_comb begin
-        if (svo_rd_en_prim) begin
-            svo_rd_addr = svo_rd_addr_prim;
-            svo_rd_en   = 1'b1;
-        end else begin
-            svo_rd_addr = svo_rd_addr_shad;
-            svo_rd_en   = svo_rd_en_shad;
-        end
-    end
-    // Both traversals share the single read-data bus
-    // svo_rd_data is driven by the Python bram_model from outside
-
-    // -------------------------------------------------------------------------
     // LUT: individual ports → unpacked array for shading_pipeline
     // -------------------------------------------------------------------------
     logic [31:0] lut_arr [0:5];
@@ -110,7 +96,7 @@ module svo_full_tb #(
     // -------------------------------------------------------------------------
     // Primary traversal — SHADE_MODE=1, SHADOW_MODE=0
     // -------------------------------------------------------------------------
-    svo_traversal #(.SHADOW_MODE(0), .SHADE_MODE(1), .IMG_W(IMG_W), .IMG_H(IMG_H)) traversal (
+    svo_traversal_mr #(.RAY_POOL_N(RAY_POOL_N), .SHADOW_MODE(0), .SHADE_MODE(1), .IMG_W(IMG_W), .IMG_H(IMG_H)) traversal (
         .clk(clk), .rst(rst), .start(start),
         .cam_pos_x(cam_pos_x),     .cam_pos_y(cam_pos_y),     .cam_pos_z(cam_pos_z),
         .cam_right_x(cam_right_x), .cam_right_y(cam_right_y), .cam_right_z(cam_right_z),
@@ -118,7 +104,7 @@ module svo_full_tb #(
         .cam_fwd_x(cam_fwd_x),     .cam_fwd_y(cam_fwd_y),     .cam_fwd_z(cam_fwd_z),
         .cam_scale(cam_scale),
         .sky_color(sky_color),
-        .svo_rd_addr(svo_rd_addr_prim), .svo_rd_data(svo_rd_data), .svo_rd_en(svo_rd_en_prim),
+        .svo_rd_addr(svo_rd_addr_prim), .svo_rd_data(svo_rd_data_prim), .svo_rd_en(svo_rd_en_prim),
         .fb_wr_addr(), .fb_wr_data(), .fb_wr_en(),
         .axis_tvalid(axis_tvalid), .axis_tdata(axis_tdata),
         .axis_tlast(axis_tlast),   .axis_tuser(axis_tuser),
@@ -172,7 +158,7 @@ module svo_full_tb #(
         .cam_right_x('0), .cam_right_y('0), .cam_right_z('0),
         .cam_up_x('0),    .cam_up_y('0),    .cam_up_z('0),
         .cam_scale('0),   .sky_color('0),
-        .svo_rd_addr(svo_rd_addr_shad), .svo_rd_data(svo_rd_data), .svo_rd_en(svo_rd_en_shad),
+        .svo_rd_addr(svo_rd_addr_shad), .svo_rd_data(svo_rd_data_shad), .svo_rd_en(svo_rd_en_shad),
         .fb_wr_addr(), .fb_wr_data(), .fb_wr_en(),
         .axis_tvalid(), .axis_tdata(), .axis_tlast(), .axis_tuser(),
         .axis_tready('0),

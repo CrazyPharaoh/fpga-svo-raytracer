@@ -10,6 +10,7 @@ module svo_bram (
     input  logic        en_a,
     input  logic [14:0] addr_a,
     input  logic [31:0] din_a,
+    output logic [31:0] dout_a,
 
     // Port B — read (traversal FSM)
     input  logic        clk_b,
@@ -24,11 +25,14 @@ module svo_bram (
     initial begin
         integer i;
         for (i = 0; i < 32768; i++) mem[i] = '0;
+        dout_a = '0;
         dout_b = '0;
     end
 
-    always @(posedge clk_a)
-        if (en_a) mem[addr_a] <= din_a;
+    always @(posedge clk_a) begin
+        if (en_a) mem[addr_a] <= din_a;   // write (SVO upload)
+        dout_a <= mem[addr_a];            // read (shadow traversal, during render)
+    end
 
     always @(posedge clk_b)
         if (en_b) dout_b <= mem[addr_b];
