@@ -15,7 +15,7 @@ HWH_SRC_MULTI := $(VIVADO_PROJECT_MULTI)/svo_raytracer.gen/sources_1/bd/svo_syst
 PYNQ      := xilinx@192.168.2.99
 PYNQ_DIR  := /home/xilinx/jupyter_notebooks
 
-PY_FILES  := svo_builder.py display_frame.py main_phase1.py main.py camera.py hdmi_display.py fly.py fly_camera.py
+PY_FILES  := svo_builder.py display_frame.py main_phase1.py main.py camera.py hdmi_display.py fly.py fly_camera.py fpga_diag.py
 
 .PHONY: upload upload-hdmi upload-multi upload-py
 
