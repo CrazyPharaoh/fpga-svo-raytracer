@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 # host/fpga_diag.py
-# Diagnostic for the multi-ray render hang. Mirrors display_frame.py's setup,
-# then tight-loops the status + debug regs during the render and decodes the
-# VDMA S2MM state, so we can tell whether the core (a) never starts, (b) runs and
-# finishes but emits nothing, or (c) genuinely deadlocks — and whether the VDMA
-# write channel is armed/erroring.
+# Diagnostic for the multi-ray render hang. Mirrors the notebook/hdmi_display.py
+# setup (raw MMIO + allocate — the AxiVDMA driver fails to instantiate on this
+# bitstream), then tight-loops the status + debug regs during the render and
+# decodes the VDMA S2MM state, so we can tell whether the core (a) never starts,
+# (b) runs and finishes but emits nothing, or (c) genuinely deadlocks — and
+# whether the VDMA write channel is armed/erroring.
 #   Run on the PYNQ: sudo /usr/local/share/pynq-venv/bin/python3 fpga_diag.py
 
 import time, math
 import numpy as np
-from pynq import Overlay
-from pynq.lib.video import common
+from pynq import Overlay, MMIO, allocate
 import svo_builder
 
 BITSTREAM = '/home/xilinx/jupyter_notebooks/svo_system.bit'
 IMG_W, IMG_H = 320, 240
+BPP = 4
+STRIDE = HSIZE = IMG_W * BPP   # 1280
 
 def to_q16(f): return int(f * 65536) & 0xFFFF_FFFF
 def pack_rgb(r, g, b): return ((int(r)&0xFF)<<16)|((int(g)&0xFF)<<8)|(int(b)&0xFF)
@@ -28,21 +30,29 @@ def decode_dbg(d78, d7c):
                 rs_wait=(d78>>6)&0xF, px=(d7c>>8)&0x1FF, py=d7c & 0xFF)
 
 def vdma_s2mm(vdma):
-    cr = vdma.mmio.read(0x30); sr = vdma.mmio.read(0x34)
-    return dict(CR=hex(cr), SR=hex(sr),
-                RS=cr & 1, Halted=sr & 1,
+    cr = vdma.read(0x30); sr = vdma.read(0x34)
+    return dict(CR=hex(cr), SR=hex(sr), RS=cr & 1, Halted=sr & 1,
                 Err=(sr>>4)&0x7, IRQ=(sr>>12)&0xF)
 
 STATE_NAMES = {0:'IDLE',1:'RAY_SETUP',2:'ROOT_SLAB',3:'ENTER_NODE',4:'BRAM_WAIT',
                5:'CHECK_CHILD',6:'EMPTY',7:'SOLID',8:'MIXED',9:'POP_STACK',
                10:'MISS',11:'WAIT_SHADE',12:'WRITE_PIXEL',13:'NEXT_PIXEL'}
 
-# ── load + arm VDMA ──────────────────────────────────────────────────────────
+# ── load + arm VDMA (raw MMIO, like hdmi_display.py) ─────────────────────────
 print("Loading bitstream …")
 ol = Overlay(BITSTREAM); ip = ol.top_0
-vdma = ol.axi_vdma_0
-vdma.writechannel.mode = common.VideoMode(IMG_W, IMG_H, 32)
-vdma.writechannel.start()
+VDMA_BASE = ol.ip_dict['axi_vdma_0']['phys_addr']
+vdma = MMIO(VDMA_BASE, 0x1000)
+frame_buf  = allocate(shape=(IMG_H, IMG_W, BPP), dtype=np.uint8)
+frame_phys = frame_buf.physical_address
+print(f"Frame buffer phys = 0x{frame_phys:08X}")
+
+vdma.write(0x30, 0x4)                       # reset
+while vdma.read(0x30) & 0x4: pass
+vdma.write(0xAC, frame_phys); vdma.write(0xB0, frame_phys); vdma.write(0xB4, frame_phys)
+vdma.write(0xA8, STRIDE); vdma.write(0xA4, HSIZE)
+vdma.write(0x30, 0x3)                       # RS=1, circular
+vdma.write(0xA0, IMG_H)                      # VSIZE last = arm
 print("VDMA S2MM after arm:", vdma_s2mm(vdma))
 
 # ── SVO + scene + camera (identical to display_frame.py) ─────────────────────
@@ -67,7 +77,7 @@ print("Pre-trigger status:", hex(ip.read(0x04)), " dbg:", decode_dbg(ip.read(0x7
 
 # ── trigger + tight-loop sample ──────────────────────────────────────────────
 print("Triggering …")
-samples = []          # (t, status, dbg78, dbg7c)
+samples = []
 ip.write(0x00, 1)
 t0 = time.time()
 ever_busy = False; last_busy_t = None; t_first_busy = None
@@ -78,27 +88,23 @@ while time.time() - t0 < 20.0:
     if s & 1:
         ever_busy = True; last_busy_t = t
         if t_first_busy is None: t_first_busy = t
-    # stop early once it's been not-busy for 0.3s after having been busy
     if ever_busy and (s & 1) == 0 and last_busy_t is not None and t - last_busy_t > 0.3:
         break
 
 print(f"\n=== {len(samples)} polls in {samples[-1][0]:.2f}s ===")
-print(f"ever_busy          : {ever_busy}")
-print(f"first busy=1 at     : {t_first_busy}")
-print(f"last  busy=1 at     : {last_busy_t}  (busy duration ~ {last_busy_t if last_busy_t else 0:.3f}s)")
-print(f"final status        : {hex(samples[-1][1])}  frame_done bit = {(samples[-1][1]>>1)&1}")
+print(f"ever_busy        : {ever_busy}")
+print(f"first busy=1 at  : {t_first_busy}")
+print(f"last  busy=1 at  : {last_busy_t}")
+print(f"final status     : {hex(samples[-1][1])}  frame_done bit = {(samples[-1][1]>>1)&1}")
 
-# trajectory: max px/py reached, distinct states seen, did it move?
 pxs = [decode_dbg(d78,d7c)['px'] for _,_,d78,d7c in samples]
 pys = [decode_dbg(d78,d7c)['py'] for _,_,d78,d7c in samples]
 sts = [d78 & 0xF for _,_,d78,_ in samples]
-print(f"px range            : min={min(pxs)} max={max(pxs)}   (frame is 0..{IMG_W-1})")
-print(f"py range            : min={min(pys)} max={max(pys)}   (frame is 0..{IMG_H-1})")
-seen = sorted(set(sts))
-print(f"FSM states seen     : {[f'{s}:{STATE_NAMES.get(s,s)}' for s in seen]}")
+print(f"px range         : min={min(pxs)} max={max(pxs)}   (frame is 0..{IMG_W-1})")
+print(f"py range         : min={min(pys)} max={max(pys)}   (frame is 0..{IMG_H-1})")
+print(f"FSM states seen  : {[f'{s}:{STATE_NAMES.get(s,s)}' for s in sorted(set(sts))]}")
 
-# a thinned trace (every Nth distinct change) so we can see the motion
-print("\n--- trace (only when state/px/py change) ---")
+print("\n--- trace (only when state/px/py/busy change) ---")
 prev=None; shown=0
 for t,s,d78,d7c in samples:
     d = decode_dbg(d78,d7c); key=(d['state'],d['px'],d['py'],s&1)
@@ -110,15 +116,13 @@ for t,s,d78,d7c in samples:
 
 print("\nVDMA S2MM after  :", vdma_s2mm(vdma))
 
-# ── frame readback + non-zero count ──────────────────────────────────────────
+# ── frame readback (the allocated buffer is the DMA target) ───────────────────
+frame_buf.invalidate()
+nz = int(np.count_nonzero(frame_buf[:, :, :3].reshape(-1, 3).any(axis=1)))
+print(f"\nframe buffer: {nz}/{IMG_W*IMG_H} non-black pixels")
 try:
-    fr = vdma.writechannel.readframe()
-    nz = int(np.count_nonzero(fr[:, :, :3].reshape(-1, 3).any(axis=1)))
-    print(f"\nframe readback: {nz}/{IMG_W*IMG_H} non-black pixels")
     import PIL.Image
-    PIL.Image.fromarray(fr[:, :, [2,1,0]], 'RGB').save('/tmp/diag_render.png')
+    PIL.Image.fromarray(np.array(frame_buf[:, :, [2,1,0]]), 'RGB').save('/tmp/diag_render.png')
     print("saved /tmp/diag_render.png")
 except Exception as e:
-    print("\nframe readback FAILED:", e)
-
-vdma.writechannel.stop()
+    print("png save skipped:", e)
