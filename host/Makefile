@@ -23,7 +23,7 @@ PY_FILES  := svo_builder.py display_frame.py main_phase1.py main.py camera.py hd
 upload:
 	cp "$(BIT_SRC)" svo_system.bit
 	cp "$(HWH_SRC)" svo_system.hwh
-	scp svo_system.bit svo_system.hwh $(PY_FILES) display_frame.ipynb $(PYNQ):$(PYNQ_DIR)/
+	scp svo_system.bit svo_system.hwh $(PY_FILES) display_frame.ipynb world.vox $(PYNQ):$(PYNQ_DIR)/
 
 # Same as upload, but pulls the bitstream + HWH from the HDMI project (project_hdmi)
 upload-hdmi:
@@ -35,8 +35,8 @@ upload-hdmi:
 upload-multi:
 	cp "$(BIT_SRC_MULTI)" svo_system.bit
 	cp "$(HWH_SRC_MULTI)" svo_system.hwh
-	scp svo_system.bit svo_system.hwh $(PY_FILES) display_frame.ipynb $(PYNQ):$(PYNQ_DIR)/
+	scp svo_system.bit svo_system.hwh $(PY_FILES) display_frame.ipynb world.vox $(PYNQ):$(PYNQ_DIR)/
 
 # Upload only Python/notebook files (no new bitstream needed)
 upload-py:
-	scp $(PY_FILES) display_frame.ipynb $(PYNQ):$(PYNQ_DIR)/
+	scp $(PY_FILES) display_frame.ipynb world.vox $(PYNQ):$(PYNQ_DIR)/

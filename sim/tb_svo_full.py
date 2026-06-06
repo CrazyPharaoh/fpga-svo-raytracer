@@ -14,6 +14,7 @@ from PIL import Image
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'host'))
 sys.path.insert(0, os.path.dirname(__file__))
 import svo_builder
+import vox_loader
 from sim_profiling import state_profiler, write_state_profile
 
 # Fast-sim crop: RENDER_DIV downscales the render (same FOV) to gate ~DIV^2 faster.
@@ -25,14 +26,10 @@ CLK_PERIOD_NS  = 10
 _LM = math.sqrt(1.0**2 + 2.0**2 + 1.5**2)
 LIGHT_DIR = (1.0/_LM, 2.0/_LM, 1.5/_LM)
 
-LUT = [
-    (0,   0,   0),    # 0 air
-    (120, 120, 120),  # 1 stone
-    (60,  160,  40),  # 2 grass
-    (255,   0,   0),  # 3 glowing (HW animates; static here for the oracle)
-    (194, 178, 128),  # 4 sand
-    (235, 240, 250),  # 5 snow
-]
+# MagicaVoxel world: 64^3 block_id grid + 16 packed LUT words
+# (each word [31:24]=material flag, [23:0]=RGB) loaded from host/world.vox.
+WORLD_VOX = os.path.join(os.path.dirname(__file__), '..', 'host', 'world.vox')
+GRID, LUT_WORDS = vox_loader.load_world(WORLD_VOX)
 
 SKY_COLOR   = (135, 206, 235)
 FOG_COLOR   = (180, 200, 220)
@@ -74,8 +71,7 @@ def cross(a, b):
 
 
 def build_svo_words():
-    grid  = svo_builder.build_world()
-    root  = svo_builder.build_svo(grid)
+    root  = svo_builder.build_svo(GRID)
     nodes = svo_builder.flatten_svo(root)
     return svo_builder.serialise_nodes(nodes)
 
@@ -392,12 +388,9 @@ async def test_render_frame_shaded(dut):
     dut.light_dir_y.value = to_q16(LIGHT_DIR[1])
     dut.light_dir_z.value = to_q16(LIGHT_DIR[2])
 
-    dut.lut_0.value = pack_rgb(*LUT[0])
-    dut.lut_1.value = pack_rgb(*LUT[1])
-    dut.lut_2.value = pack_rgb(*LUT[2])
-    dut.lut_3.value = pack_rgb(*LUT[3])
-    dut.lut_4.value = pack_rgb(*LUT[4])
-    dut.lut_5.value = pack_rgb(*LUT[5])
+    for i in range(16):
+        getattr(dut, f"lut_{i}").value = LUT_WORDS[i]
+    dut.time_phase.value = 0   # static frame in sim (matches gen_reference_shaded TIME_PHASE)
 
     await RisingEdge(dut.clk)
 

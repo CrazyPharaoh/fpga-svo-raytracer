@@ -36,7 +36,8 @@ module shading_pipeline (
     input  logic [23:0] fog_color,
     input  logic signed [31:0] fog_start,
     input  logic signed [31:0] shadow_bias,
-    input  logic [31:0] lut [0:5],      // packed RGB colour table
+    input  logic [31:0] lut [0:15],     // packed: [31:24]=material flag, [23:0]=RGB
+    input  logic [31:0] time_phase,     // per-frame animation counter (raw bits)
 
     // Shadow traversal interface
     // When shadow_start pulses, the shadow traversal FSM begins.
@@ -109,10 +110,34 @@ module shading_pipeline (
     // hit coordinate (Q16.16 bit 16) XORed — one gate + shift, free in hardware.
     // Mirrored in gen_reference_shaded.py so the reference PNG matches.
     wire        tex_dark = ~(hit_px[16] ^ hit_py[16] ^ hit_pz[16]);
-    wire [23:0] base_lut = lut[(block_id > 5) ? 5 : block_id][23:0];
+    wire [23:0] base_lut = lut[(block_id > 5'd15) ? 5'd15 : block_id][23:0];
     wire [23:0] base_tex = {base_lut[23:16] - (base_lut[23:16] >> 3),
                             base_lut[15:8]  - (base_lut[15:8]  >> 3),
                             base_lut[7:0]   - (base_lut[7:0]   >> 3)};
+
+    // ---- Animated materials (flag in lut[idx][31:24]) ----
+    wire [7:0]  mat_flag = lut[(block_id > 5'd15) ? 5'd15 : block_id][31:24];
+    // Water: diagonal bright bands that scroll with time -> "flowing" + a sparkle.
+    wire [4:0]  w_band  = hit_px[20:16] + hit_pz[20:16] + time_phase[8:4];
+    wire        w_brt   = (w_band[2:1] == 2'b10);                 // ~scrolling stripe
+    wire [7:0]  w_spk   = hit_px[18:16] * 8'd37 + hit_pz[18:16] * 8'd101 + time_phase[7:0];
+    wire        w_spark = (w_spk[7:5] == 3'b111);                 // sparse glints
+    // Lava: bright cracks that crawl the opposite way.
+    wire [4:0]  l_band  = hit_px[20:16] - hit_pz[20:16] + time_phase[7:3];
+    wire        l_brt   = (l_band[3:2] == 2'b11);
+
+    // brighten toward white by ~50% (add half of (255-c)) — cheap, saturating not needed
+    function automatic logic [7:0] lighten(input logic [7:0] c);
+        lighten = c + ((8'd255 - c) >> 1);
+    endfunction
+    wire [23:0] base_water = (w_brt || w_spark)
+        ? {lighten(base_lut[23:16]), lighten(base_lut[15:8]), lighten(base_lut[7:0])}
+        : base_lut;
+    wire [23:0] base_lava  = l_brt
+        ? {lighten(base_lut[23:16]), lighten(base_lut[15:8]), lighten(base_lut[7:0])}
+        : {base_lut[23:16] - (base_lut[23:16] >> 2),   // darker crust between cracks
+           base_lut[15:8]  - (base_lut[15:8]  >> 2),
+           base_lut[7:0]   - (base_lut[7:0]   >> 2)};
 
     // Pipelined S_DIFFSPEC / S_FOG intermediates (registered between stages)
     logic signed [31:0] dnl;                 // dot(normal, light) — reused for diffuse + reflect
@@ -181,8 +206,12 @@ module shading_pipeline (
                     2'd2: nz <= hit_face_sign ? -32'sh0001_0000 : 32'sh0001_0000;
                     default: nx <= 32'sh0001_0000;
                 endcase
-                // Look up base colour (clamped to LUT range [0,5]) + XOR checkerboard texture.
-                base_color <= tex_dark ? base_tex : base_lut;
+                // base colour: animated materials override the XOR texture
+                unique case (mat_flag)
+                    8'd1:    base_color <= base_water;
+                    8'd2:    base_color <= base_lava;
+                    default: base_color <= tex_dark ? base_tex : base_lut;  // 0 static, 3 glow (host-driven LUT)
+                endcase
                 state <= S_DS_A;
             end
 

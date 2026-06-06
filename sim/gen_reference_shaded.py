@@ -11,6 +11,7 @@ from PIL import Image
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'host'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'hardware_ref'))
 import svo_builder
+import vox_loader
 import fpga_svo_raytracer as ref
 
 # Fast-sim crop: must match tb_svo_full.py / the -GIMG_W shade build (Makefile.shade).
@@ -28,14 +29,19 @@ LIGHT_DIR = (1.0/_LM, 2.0/_LM, 1.5/_LM)
 SKY_COLOR  = (135, 206, 235)
 FOG_COLOR  = (180, 200, 220)
 
-LUT = [
-    (0,   0,   0),    # 0 air
-    (120, 120, 120),  # 1 stone
-    (60,  160,  40),  # 2 grass
-    (255,   0,   0),  # 3 glowing (animated rainbow on HW; static here)
-    (194, 178, 128),  # 4 sand
-    (235, 240, 250),  # 5 snow
-]
+# MagicaVoxel world: 16 packed LUT words mirror the hardware LUT.
+WORLD_VOX = os.path.join(os.path.dirname(__file__), '..', 'host', 'world.vox')
+_GRID, _LUT_WORDS = vox_loader.load_world(WORLD_VOX)
+LUT = [((w >> 16) & 0xFF, (w >> 8) & 0xFF, w & 0xFF) for w in _LUT_WORDS]  # RGB only
+MAT = [(w >> 24) & 0xFF for w in _LUT_WORDS]                              # material flag per block_id
+
+# Per-frame animation phase — set to match the tb when comparing animated frames.
+TIME_PHASE = 0
+
+
+def _lighten(c):
+    return c + ((255 - c) >> 1)
+
 
 SHADOW_BIAS = 0.5    # matches tb_svo_full.py
 # Shadows ON (DSP budget freed by the shared multiplier banks).
@@ -80,12 +86,27 @@ def shade_pixel(t_hit, hit_pos, face_axis, face_sign, block_id,
     normal = [0.0, 0.0, 0.0]
     normal[face_axis] = float(face_sign)   # face_sign from traversal: ±1 integer
 
-    base = LUT[min(block_id, 5)]
-    # XOR checkerboard texture (matches shading_pipeline.sv): 0.75x base on alternating
-    # unit cells. pattern = LSB of each integer hit coord XORed (HW uses Q16.16 bit 16).
+    base = LUT[min(block_id, 15)]
+    # Animated materials (flag in LUT word [31:24]) override the XOR texture; mirror
+    # shading_pipeline.sv Task 10. flag 0=static (XOR tex), 1=water, 2=lava, 3=glow.
+    mat = MAT[min(block_id, 15)]
     ix, iy, iz = int(hit_pos[0]), int(hit_pos[1]), int(hit_pos[2])
-    if ((ix ^ iy ^ iz) & 1) == 0:
-        base = tuple(c - (c >> 3) for c in base)   # subtle ~12% darken
+    if mat == vox_loader.MAT_WATER:
+        w_band = ((ix >> 0) + (iz >> 0) + (TIME_PHASE >> 4)) & 0x1F
+        w_spk  = ((ix & 7) * 37 + (iz & 7) * 101 + (TIME_PHASE & 0xFF)) & 0xFF
+        if ((w_band >> 1) & 3) == 2 or (w_spk >> 5) == 7:
+            base = tuple(_lighten(c) for c in base)
+    elif mat == vox_loader.MAT_LAVA:
+        l_band = ((ix) - (iz) + (TIME_PHASE >> 3)) & 0x1F
+        if ((l_band >> 2) & 3) == 3:
+            base = tuple(_lighten(c) for c in base)
+        else:
+            base = tuple(c - (c >> 2) for c in base)
+    else:
+        # XOR checkerboard texture (matches shading_pipeline.sv): 0.75x base on alternating
+        # unit cells. pattern = LSB of each integer hit coord XORed (HW uses Q16.16 bit 16).
+        if ((ix ^ iy ^ iz) & 1) == 0:
+            base = tuple(c - (c >> 3) for c in base)   # subtle ~12% darken
 
     # ── S_DIFFSPEC ────────────────────────────────────────────────────────────
     d = dot(normal, LIGHT_DIR)
@@ -136,8 +157,7 @@ def shade_pixel(t_hit, hit_pos, face_axis, face_sign, block_id,
 
 def main():
     print("Building SVO …")
-    grid  = svo_builder.build_world()
-    root  = svo_builder.build_svo(grid)
+    root  = svo_builder.build_svo(_GRID)
     nodes = svo_builder.flatten_svo(root)
     print(f"  {len(nodes)} nodes")
 

@@ -11,7 +11,7 @@ Covers:
 """
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, ClockCycles
+from cocotb.triggers import RisingEdge, ClockCycles, Timer
 
 CLK_NS = 10
 
@@ -122,30 +122,23 @@ async def test_light_dir_registers(dut):
 
 
 @cocotb.test()
-async def test_ctrl_trigger_auto_clears(dut):
-    """ctrl_trigger must pulse for exactly one cycle then auto-clear.
-    We use a background monitor to catch the single-cycle pulse because
-    axi_write() returns after the full BRESP handshake, by which time
-    the trigger has already been cleared by the slave's auto-clear logic.
+async def test_ctrl_trigger_pulses_then_clears(dut):
+    """Writing 0x00 bit0 arms a multi-cycle ctrl_trigger pulse that then auto-clears.
+
+    The design uses a 32-cycle pulse (trig_cnt <= 6'd32 in axi_lite_slave.sv) so the
+    trigger survives the traversal FSM's multicycle path; sample a wide window and
+    assert it goes high for a stretch and returns low on its own.
     """
     await reset(dut)
-
-    pulse_seen = []
-
-    async def monitor():
-        while True:
-            await RisingEdge(dut.S_AXI_ACLK)
-            if int(dut.ctrl_trigger.value) == 1:
-                pulse_seen.append(True)
-
-    mon = cocotb.start_soon(monitor())
     await axi_write(dut, 0x00, 1)
-    mon.cancel()
 
-    assert pulse_seen, "ctrl_trigger never pulsed high during the write"
-    # After the transaction the trigger must be cleared
-    await RisingEdge(dut.S_AXI_ACLK)
-    assert int(dut.ctrl_trigger.value) == 0, "ctrl_trigger did not auto-clear"
+    samples = []
+    for _ in range(80):
+        await RisingEdge(dut.S_AXI_ACLK)
+        samples.append(int(dut.ctrl_trigger.value))
+
+    assert 1 in samples, "ctrl_trigger never pulsed high after write to 0x00"
+    assert samples[-1] == 0, "ctrl_trigger never auto-cleared (stuck high)"
 
 
 @cocotb.test()
@@ -186,16 +179,36 @@ async def test_svo_data_auto_increments_addr(dut):
 
 
 @cocotb.test()
-async def test_lut_registers(dut):
-    """Writing LUT[0..5] updates all six colour entries."""
+async def test_lut_autoinc(dut):
+    """LUT upload via the auto-incrementing register pair: 0x50=index, 0x54=data(++).
+
+    Covers all 16 entries, a mid-stream index reset, and the material-flag byte
+    [31:24] surviving (the LUT word is now [31:24]=flag, [23:0]=RGB)."""
     await reset(dut)
-    lut_values = [0x00_80_80, 0x00_FF_00, 0x00_00_FF,
-                  0xFF_FF_00, 0xFF_00_FF, 0x00_FF_FF]
-    for i, val in enumerate(lut_values):
-        await axi_write(dut, 0x50 + i * 4, val)
-    for i, expected in enumerate(lut_values):
+    # full 0..15 stream from index 0
+    words = [(0x01_00_00_00 | (i << 16) | (i << 8) | i) for i in range(16)]
+    await axi_write(dut, 0x50, 0)                 # lut_index = 0
+    for w in words:
+        await axi_write(dut, 0x54, w)             # write + auto-increment
+    for i, expected in enumerate(words):
         got = int(dut.lut[i].value)
         assert got == expected, f"lut[{i}]=0x{got:08X}, expected 0x{expected:08X}"
+    # mid-stream index reset: point at 3, write two -> lut[3], lut[4]
+    await axi_write(dut, 0x50, 3)
+    await axi_write(dut, 0x54, 0x02_AA_BB_CC)     # lut[3], index -> 4
+    await axi_write(dut, 0x54, 0x03_DD_EE_FF)     # lut[4], index -> 5
+    await Timer(20, units="ns")
+    assert int(dut.lut[3].value) == 0x02_AA_BB_CC
+    assert int(dut.lut[4].value) == 0x03_DD_EE_FF
+
+
+@cocotb.test()
+async def test_time_phase_register(dut):
+    """0x84 (word 6'h21) latches the per-frame animation counter."""
+    await reset(dut)
+    await axi_write(dut, 0x84, 0xDEAD_BEEF)
+    await Timer(20, units="ns")
+    assert int(dut.time_phase.value) == 0xDEAD_BEEF
 
 
 @cocotb.test()

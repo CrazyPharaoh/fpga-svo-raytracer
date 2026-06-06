@@ -8,10 +8,10 @@
 # whether the VDMA write channel is armed/erroring.
 #   Run on the PYNQ: sudo /usr/local/share/pynq-venv/bin/python3 fpga_diag.py
 
-import time, math, sys
+import os, time, math, sys
 import numpy as np
 from pynq import Overlay, MMIO, allocate
-import svo_builder
+import svo_builder, vox_loader
 
 BITSTREAM = '/home/xilinx/jupyter_notebooks/svo_system.bit'
 IMG_W, IMG_H = 320, 240
@@ -71,14 +71,21 @@ vdma.write(0xA0, IMG_H)                      # VSIZE last = arm
 print("VDMA S2MM after arm:", vdma_s2mm(vdma))
 
 # ── SVO + scene + camera (identical to display_frame.py) ─────────────────────
-grid = svo_builder.build_world(); root = svo_builder.build_svo(grid)
+grid, lut_words = vox_loader.load_world(
+    os.path.join(os.path.dirname(__file__), 'world.vox'))
+root = svo_builder.build_svo(grid)
 words = svo_builder.serialise_nodes(svo_builder.flatten_svo(root))
 print(f"SVO: {len(words)} words")
 ip.write(0x48, 0)
 for w in words: ip.write(0x4C, w)
-for off, c in [(0x50,(0,0,0)),(0x54,(128,128,128)),(0x58,(60,160,40)),
-               (0x5C,(255,220,80)),(0x60,(194,178,128)),(0x64,(235,240,250)),  # 4 sand, 5 snow
-               (0x68,(135,206,235)),(0x6C,(180,200,220))]:
+# LUT (16 entries) via the auto-incrementing register pair. Diagnostic path: no G/B
+# swap — write straight pack_rgb(r,g,b) and preserve the [31:24] material flag byte.
+ip.write(0x50, 0)                        # lut_index = 0
+for w in lut_words:
+    flag = (w >> 24) & 0xFF
+    r, g, b = (w >> 16) & 0xFF, (w >> 8) & 0xFF, w & 0xFF
+    ip.write(0x54, (flag << 24) | pack_rgb(r, g, b))   # auto-increments
+for off, c in [(0x68,(135,206,235)),(0x6C,(180,200,220))]:
     ip.write(off, pack_rgb(*c))
 ip.write(0x70, to_q16(15.0)); ip.write(0x74, to_q16(0.5))   # shadow_bias 0.5 (matches gen_reference_shaded.py; 0.01 self-shadows)
 pos=[32.0,40.0,-20.0]; fwd=normalise([32-pos[0],4-pos[1],32-pos[2]])

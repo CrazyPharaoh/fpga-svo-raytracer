@@ -15,7 +15,7 @@
 import os, glob, struct, select, fcntl, sys, time, math
 import numpy as np
 from pynq import Overlay, MMIO, allocate, Clocks
-import svo_builder, fly_camera
+import svo_builder, fly_camera, vox_loader
 
 # ── unified actions (both input backends emit these) ──────────────────────────
 #   fwd back left right up down  pitchU pitchD yawL yawR  zoomIn zoomOut  quit
@@ -124,12 +124,14 @@ class Renderer:
         self.bufs = [allocate(shape=(IMG_H, IMG_W, BPP), dtype=np.uint8) for _ in range(2)]
         self.phys = [b.physical_address for b in self.bufs]
         self.front = 0                       # buffer currently scanned out to HDMI
+        self.grid, self.lut_words = vox_loader.load_world(
+            os.path.join(os.path.dirname(__file__), 'world.vox'))
         self._upload_svo(); self._shading()
         self._arm_s2mm(1 - self.front)       # first render targets the back buffer
         self._arm_mm2s()
     def _upload_svo(self):
         words = svo_builder.serialise_nodes(
-            svo_builder.flatten_svo(svo_builder.build_svo(svo_builder.build_world())))
+            svo_builder.flatten_svo(svo_builder.build_svo(self.grid)))
         self.ip.write(0x48, 0)
         for w in words: self.ip.write(0x4C, w)
     def _shading(self):
@@ -140,19 +142,27 @@ class Renderer:
         def cc(r, g, b): return pack_rgb(r, b, g)
         lm = math.sqrt(1 + 4 + 2.25); ld = (1/lm, 2/lm, 1.5/lm)
         self.ip.write(0x3C, to_q16(ld[0])); self.ip.write(0x40, to_q16(ld[1])); self.ip.write(0x44, to_q16(ld[2]))
-        # LUT: 0 air, 1 stone, 2 grass, 3 glowing (overwritten per-frame, see set_glow),
-        #      4 sand (low/beaches), 5 snow (high peaks).
-        for i, (r, g, b) in enumerate([(0,0,0),(120,120,120),(60,160,40),(255,0,0),(194,178,128),(235,240,250)]):
-            self.ip.write(0x50 + i*4, cc(r, g, b))
+        # LUT (16 entries) uploaded via the auto-incrementing register pair from the
+        # loaded MagicaVoxel scene. G<->B HDMI pre-swap kept: write (R,B,G) but preserve
+        # the [31:24] material flag byte.
+        self.ip.write(0x50, 0)                       # lut_index = 0
+        for w in self.lut_words:
+            flag = (w >> 24) & 0xFF
+            r, g, b = (w >> 16) & 0xFF, (w >> 8) & 0xFF, w & 0xFF
+            self.ip.write(0x54, (flag << 24) | pack_rgb(r, b, g))   # auto-increments
         self.ip.write(0x68, cc(135,206,235)); self.ip.write(0x6C, cc(180,200,220))
         self.ip.write(0x70, to_q16(15.0)); self.ip.write(0x74, to_q16(0.5))
     def set_glow(self, phase):
-        # Animate the glowing block (LUT[3]) through a rainbow so it looks alive.
-        # phase is a float; full hue cycle every 2*pi. Same G<->B HDMI pre-swap as _shading.
-        r = int(127.5 * (1 + math.sin(phase)))
-        g = int(127.5 * (1 + math.sin(phase + 2.0943951)))   # +120 deg
-        b = int(127.5 * (1 + math.sin(phase + 4.1887902)))   # +240 deg
-        self.ip.write(0x5C, pack_rgb(r, b, g))               # LUT[3] = 0x50 + 3*4
+        # Animate whichever block_id is flagged MAT_GLOW through a rainbow so it looks
+        # alive. phase is a float; full hue cycle every 2*pi. Same G<->B HDMI pre-swap.
+        for bid, w in enumerate(self.lut_words):
+            if ((w >> 24) & 0xFF) != vox_loader.MAT_GLOW:
+                continue
+            r = int(127.5 * (1 + math.sin(phase)))
+            g = int(127.5 * (1 + math.sin(phase + 2.0943951)))   # +120 deg
+            b = int(127.5 * (1 + math.sin(phase + 4.1887902)))   # +240 deg
+            self.ip.write(0x50, bid)                          # lut_index = bid
+            self.ip.write(0x54, (vox_loader.MAT_GLOW << 24) | pack_rgb(r, b, g))
     def _arm_s2mm(self, idx):
         # arm the render-write channel to write the frame into buffer `idx`
         self.vdma.write(0x30, 0x4)
@@ -242,6 +252,7 @@ def main(use_evdev=False, device=None):
                       f"(rsqrt seed y0={1.5-(1+u_edge**2+v_edge**2)/2:.3f}; "
                       f"{'OK' if 1.5-(1+u_edge**2+v_edge**2)/2 > 0.2 else 'TOO LOW -> distortion'})\n")
             rnd.set_glow(frames * 0.15)      # animate the glowing block (rainbow)
+            rnd.ip.write(0x84, frames & 0xFFFFFFFF)   # time_phase: animates water/lava in HW
             rnd.set_camera(cam)
             if not rnd.render():
                 print('  (render timeout)')

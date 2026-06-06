@@ -29,9 +29,12 @@ module svo_full_tb #(
     // Light direction (Q16.16, normalised)
     input  logic signed [31:0] light_dir_x, light_dir_y, light_dir_z,
 
-    // Colour LUT: 6 entries, RGB packed [23:16]=R [15:8]=G [7:0]=B
-    // lut_0..5 map to block_id 0..5 in shading_pipeline
-    input  logic [23:0] lut_0, lut_1, lut_2, lut_3, lut_4, lut_5,
+    // Per-frame animation counter (raw bits)
+    input  logic [31:0] time_phase,
+
+    // lut_0..15 map to block_id 0..15 in shading_pipeline ([31:24]=mat flag,[23:0]=RGB)
+    input  logic [31:0] lut_0, lut_1, lut_2, lut_3, lut_4, lut_5, lut_6, lut_7,
+    input  logic [31:0] lut_8, lut_9, lut_10, lut_11, lut_12, lut_13, lut_14, lut_15,
 
     // SVO BRAM read ports — two independent ports (Python bram_model drives data).
     // Primary reads port B; shadow reads port A.
@@ -102,13 +105,13 @@ module svo_full_tb #(
     // -------------------------------------------------------------------------
     // LUT: individual ports → unpacked array for shading_pipeline
     // -------------------------------------------------------------------------
-    logic [31:0] lut_arr [0:5];
-    assign lut_arr[0] = lut_0;
-    assign lut_arr[1] = lut_1;
-    assign lut_arr[2] = lut_2;
-    assign lut_arr[3] = lut_3;
-    assign lut_arr[4] = lut_4;
-    assign lut_arr[5] = lut_5;
+    logic [31:0] lut_arr [0:15];
+    assign lut_arr[0]=lut_0; assign lut_arr[1]=lut_1; assign lut_arr[2]=lut_2;
+    assign lut_arr[3]=lut_3; assign lut_arr[4]=lut_4; assign lut_arr[5]=lut_5;
+    assign lut_arr[6]=lut_6; assign lut_arr[7]=lut_7; assign lut_arr[8]=lut_8;
+    assign lut_arr[9]=lut_9; assign lut_arr[10]=lut_10; assign lut_arr[11]=lut_11;
+    assign lut_arr[12]=lut_12; assign lut_arr[13]=lut_13; assign lut_arr[14]=lut_14;
+    assign lut_arr[15]=lut_15;
 
     // -------------------------------------------------------------------------
     // Primary traversal — SHADE_MODE=1, SHADOW_MODE=0
@@ -159,6 +162,7 @@ module svo_full_tb #(
             .sky_color(sky_color),     .fog_color(fog_color),
             .fog_start(fog_start),     .shadow_bias(shadow_bias),
             .lut(lut_arr),
+            .time_phase(time_phase),
             .shadow_start(shadow_start[L]),
             .shadow_ro_x(shadow_ro_x[L]), .shadow_ro_y(shadow_ro_y[L]), .shadow_ro_z(shadow_ro_z[L]),
             .shadow_rd_x(shadow_rd_x[L]), .shadow_rd_y(shadow_rd_y[L]), .shadow_rd_z(shadow_rd_z[L]),

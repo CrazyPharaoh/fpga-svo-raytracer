@@ -46,12 +46,13 @@ module axi_lite_slave #(
     output logic [31:0] svo_wr_data,
     output logic        svo_wr_en,
 
-    // Colour registers (packed RGB: bits [23:16]=R, [15:8]=G, [7:0]=B)
-    output logic [31:0] lut [0:5],
+    // Colour registers (packed: [31:24]=material flag, [23:0]=RGB R<<16|G<<8|B)
+    output logic [31:0] lut [0:15],
     output logic [31:0] sky_color,
     output logic [31:0] fog_color,
     output logic signed [31:0] fog_start,
     output logic signed [31:0] shadow_bias,
+    output logic [31:0] time_phase,
 
     // Debug inputs from traversal FSM (read-only)
     input  logic [3:0]  dbg_state,
@@ -69,6 +70,9 @@ module axi_lite_slave #(
     // visible to the traversal FSM even across the 16-cycle multicycle path.
     logic [5:0] trig_cnt;
 
+    // Auto-incrementing LUT write pointer (0..15)
+    logic [3:0] lut_index;
+
     // -------------------------------------------------------------------------
     // Write channel
     // -------------------------------------------------------------------------
@@ -82,6 +86,8 @@ module axi_lite_slave #(
             trig_cnt      <= '0;
             svo_wr_en     <= '0;
             svo_wr_addr   <= '0;
+            lut_index     <= '0;
+            time_phase    <= '0;
         end else begin
             // ctrl_trigger: pulse for 32 cycles after AXI write to 0x00
             if (trig_cnt != '0) begin
@@ -131,16 +137,16 @@ module axi_lite_slave #(
                                svo_wr_en   <= 1'b1;
                                svo_wr_addr <= svo_wr_addr + 1'b1;
                            end
-                    6'h14: lut[0]       <= S_AXI_WDATA; //colour look up table
-                    6'h15: lut[1]       <= S_AXI_WDATA;
-                    6'h16: lut[2]       <= S_AXI_WDATA;
-                    6'h17: lut[3]       <= S_AXI_WDATA;
-                    6'h18: lut[4]       <= S_AXI_WDATA;
-                    6'h19: lut[5]       <= S_AXI_WDATA;
+                    6'h14: lut_index <= S_AXI_WDATA[3:0];   // set LUT write pointer
+                    6'h15: begin                            // write + auto-increment
+                               lut[lut_index] <= S_AXI_WDATA;
+                               lut_index      <= lut_index + 1'b1;
+                           end
                     6'h1A: sky_color    <= S_AXI_WDATA;
                     6'h1B: fog_color    <= S_AXI_WDATA;
                     6'h1C: fog_start    <= S_AXI_WDATA;
                     6'h1D: shadow_bias  <= S_AXI_WDATA;
+                    6'h21: time_phase   <= S_AXI_WDATA;     // 0x84: per-frame animation counter
                     default: ;
                 endcase
             end
