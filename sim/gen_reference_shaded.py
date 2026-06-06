@@ -32,9 +32,9 @@ LUT = [
     (0,   0,   0),    # 0 air
     (120, 120, 120),  # 1 stone
     (60,  160,  40),  # 2 grass
-    (255,   0,   0),  # 3 glowing
-    (0,   0,   0),    # 4 unused
-    (0,   0,   0),    # 5 unused
+    (255,   0,   0),  # 3 glowing (animated rainbow on HW; static here)
+    (194, 178, 128),  # 4 sand
+    (235, 240, 250),  # 5 snow
 ]
 
 SHADOW_BIAS = 0.5    # matches tb_svo_full.py
@@ -81,6 +81,11 @@ def shade_pixel(t_hit, hit_pos, face_axis, face_sign, block_id,
     normal[face_axis] = float(face_sign)   # face_sign from traversal: ±1 integer
 
     base = LUT[min(block_id, 5)]
+    # XOR checkerboard texture (matches shading_pipeline.sv): 0.75x base on alternating
+    # unit cells. pattern = LSB of each integer hit coord XORed (HW uses Q16.16 bit 16).
+    ix, iy, iz = int(hit_pos[0]), int(hit_pos[1]), int(hit_pos[2])
+    if ((ix ^ iy ^ iz) & 1) == 0:
+        base = tuple(c - (c >> 3) for c in base)   # subtle ~12% darken
 
     # ── S_DIFFSPEC ────────────────────────────────────────────────────────────
     d = dot(normal, LIGHT_DIR)
@@ -136,12 +141,11 @@ def main():
     nodes = svo_builder.flatten_svo(root)
     print(f"  {len(nodes)} nodes")
 
-    # Camera — identical to tb_svo_full.py
-    #pos   = [40.0, 60.0, 10.0]
-    pos = [30, 15, 0]
-    fwd   = normalise_list([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
-    right = normalise_list(cross(fwd, [0, 1, 0]))
-    up    = cross(right, fwd)
+    # Camera — MUST stay identical to tb_svo_full.py for the PNG comparison to mean anything.
+    pos   = [48.0095, 16.7627, 27.9686]
+    fwd   = [-0.9094, -0.337, 0.2437]
+    right = [-0.2588, 0.0, -0.9659]
+    up    = [-0.3255, 0.9415, 0.0872]
     fov_scale = math.tan(math.radians(60) / 2) / (IMG_W / 2)
 
     print("Rendering shaded reference frame …")

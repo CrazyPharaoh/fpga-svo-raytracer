@@ -16,6 +16,7 @@
 //                    Ignores camera registers; uses cam_pos/fwd as ray origin/dir.
 //   SHADE_MODE  = 0  Phase 1: hit → white, miss → sky_color (no shading pipeline).
 //   SHADE_MODE  = 1  Phase 2: hit → trigger shading pipeline, await shade_done.
+//edit test
 `timescale 1ns/1ps
 module svo_traversal_mr #(
     parameter int RAY_POOL_N  = 1,   // M1: 1 = single-ray (bit-identical); >1 = interleaved pool (unused this revision)
@@ -24,7 +25,9 @@ module svo_traversal_mr #(
     parameter int STACK_DEPTH = 12,
     parameter int WORLD_SIZE  = 64,
     parameter bit SHADOW_MODE = 0,   // 1 = shadow-ray instance
-    parameter bit SHADE_MODE  = 0    // 1 = hand off to shading_pipeline
+    parameter bit SHADE_MODE  = 0,   // 1 = hand off to shading_pipeline
+    parameter int SHADE_LANES = 2    // # of parallel shading pipelines (SHADE_MODE=1).
+                                     // =1 is bit-identical to the old single-lane shader.
 )(
     input  logic        clk,
     input  logic        rst,
@@ -42,9 +45,9 @@ module svo_traversal_mr #(
     input  logic [23:0] sky_color,
 
     // SVO BRAM read port
-    output logic [14:0] svo_rd_addr,
-    input  logic [31:0] svo_rd_data,
-    output logic        svo_rd_en,
+    output logic [11:0]  svo_rd_node,   // node index (M2 wide read)
+    input  logic [255:0] svo_rd_wide,   // whole node {w7..w0} returned in one cycle
+    output logic         svo_rd_en,
 
     // Framebuffer write port (legacy — undriven when AXI-Stream path is active)
     output logic [16:0] fb_wr_addr,
@@ -58,17 +61,21 @@ module svo_traversal_mr #(
     output logic [0:0]  axis_tuser,   // high on first pixel of frame (px==0, py==0)
     input  logic        axis_tready,
 
-    // Shading pipeline handoff (SHADE_MODE=1 only)
-    output logic        shade_start,
-    output logic        shade_is_miss,
-    output logic [1:0]  shade_hit_face,
-    output logic        shade_hit_face_sign,
-    output logic [7:0]  shade_block_id,
-    output logic signed [31:0] shade_t_hit,
-    output logic signed [31:0] shade_ray_dx,  shade_ray_dy,  shade_ray_dz,
-    output logic signed [31:0] shade_hit_px,  shade_hit_py,  shade_hit_pz,
-    input  logic        shade_done,
-    input  logic [23:0] shade_pixel_color,
+    // Shading pipeline handoff (SHADE_MODE=1 only) — one bundle per shading lane.
+    output logic        shade_start         [0:SHADE_LANES-1],
+    output logic        shade_is_miss       [0:SHADE_LANES-1],
+    output logic [1:0]  shade_hit_face      [0:SHADE_LANES-1],
+    output logic        shade_hit_face_sign [0:SHADE_LANES-1],
+    output logic [7:0]  shade_block_id      [0:SHADE_LANES-1],
+    output logic signed [31:0] shade_t_hit  [0:SHADE_LANES-1],
+    output logic signed [31:0] shade_ray_dx [0:SHADE_LANES-1],
+    output logic signed [31:0] shade_ray_dy [0:SHADE_LANES-1],
+    output logic signed [31:0] shade_ray_dz [0:SHADE_LANES-1],
+    output logic signed [31:0] shade_hit_px [0:SHADE_LANES-1],
+    output logic signed [31:0] shade_hit_py [0:SHADE_LANES-1],
+    output logic signed [31:0] shade_hit_pz [0:SHADE_LANES-1],
+    input  logic        shade_done          [0:SHADE_LANES-1],
+    input  logic [23:0] shade_pixel_color   [0:SHADE_LANES-1],
 
     // Status
     output logic        busy,
@@ -82,7 +89,14 @@ module svo_traversal_mr #(
     output logic [7:0]  dbg_py,       // current pixel Y
     output logic        dbg_tvalid,   // axis_tvalid: IP is outputting a pixel
     output logic        dbg_tready,   // axis_tready: VDMA is accepting the pixel
-    output logic [31:0] dbg_mr        // multi-ray internals (see packing below)
+    output logic [31:0] dbg_mr,       // multi-ray internals (see packing below)
+    // --- ILA probes (marked mark_debug in top.sv) -------------------------------
+    // Expose the executing slot + two of ITS per-slot ray values, so an ILA capture
+    // can show whether slot N is running with slot M's data (cross-slot corruption,
+    // the suspected N>1 hardware bug). 2-bit slot covers RAY_POOL_N up to 4.
+    output logic [1:0]  dbg_cur_slot, // currently-executing slot
+    output logic [31:0] dbg_d0,       // {node_idx[15:0], r_bitmask[15:0]} — node read by HW
+    output logic [31:0] dbg_d1        // {0, sp, cidx, cx, cy, cz} — traversal position
 );
 
     // -------------------------------------------------------------------------
@@ -165,8 +179,8 @@ module svo_traversal_mr #(
     // drives the shade_* outputs from that slot's stored hit info, asserts
     // shade_start, and on shade_done writes the owner's pixel + frees the shader.
     // Pattern mirrors bram_busy/bram_owner. Inert when SHADE_MODE=0 (Phase 1).
-    logic                  shade_busy;            // shading pipeline in use
-    logic [SLOT_W-1:0]     shade_owner;           // slot currently being shaded
+    logic                  shade_busy  [0:SHADE_LANES-1];  // each lane's shading pipeline in use
+    logic [SLOT_W-1:0]     shade_owner [0:SHADE_LANES-1];  // slot each lane is shading
     logic                  shade_pending [0:RAY_POOL_N-1];  // slot wants shading
     logic                  shade_is_miss_r [0:RAY_POOL_N-1]; // per-slot: hit(0)/miss(1)
 
@@ -174,15 +188,12 @@ module svo_traversal_mr #(
     always_comb begin
         for (int s = 0; s < RAY_POOL_N; s++) begin
             ready[s] = (state[s] != S_IDLE) && (state[s] != S_WAIT_SHADE) && !blocked[s];
-            // Atomic BRAM read. The 8-word sequential node read advances svo_rd_addr
-            // ONE cycle ahead of the registered BRAM output, so it is only correct if
-            // the owning slot runs on CONSECUTIVE cycles. While a read is in progress
-            // (bram_busy) no OTHER slot may run — the owner keeps the turn until it
-            // releases the port at bram_field==6. This costs no throughput (one slot
-            // advances per cycle regardless; other slots' compute interleaves around
-            // reads, not during them) and subsumes the "can't START a read while
-            // another owns the port" rule. Without it, descheduling the owner mid-read
-            // desyncs addr vs the BRAM's auto-advancing output -> corrupt node data.
+            // Atomic BRAM read. The wide read presents one node address for its 1-cycle
+            // latency, so the owning slot keeps the read port (bram_busy) until it latches
+            // the whole node. While a read is in progress no OTHER slot may run; the owner
+            // keeps the turn until it releases the port. (Task 2a releases at exit, holding
+            // the port through the geometry — cycle-identical; Task 2b will release right
+            // after the latch so other slots' reads overlap this slot's geometry.)
             if (bram_busy && (s[SLOT_W-1:0] != bram_owner))
                 ready[s] = 1'b0;
         end
@@ -205,7 +216,26 @@ module svo_traversal_mr #(
         end
     endgenerate
 
-    assign cur_slot = grant_slot;
+    // -------------------------------------------------------------------------
+    // REGISTERED scheduler grant. cur_slot is now a REGISTER (not the combinational
+    // grant), so every per-slot RAM read starts from a register at t=0 instead of the
+    // ~6 ns state->ready->grant->fanout(fo=2848) decode that was gating the whole
+    // datapath (the timing wall). The scheduler's own state->ready->grant->register
+    // path becomes a self-contained reg-to-reg path that fits in 10 ns.
+    //
+    // BRAM-read atomicity: the wide node read needs the owner to hold the turn for its
+    // 1-2 read cycles. bram_busy is registered (lags the S_ENTER_NODE that sets it by a
+    // cycle), so cover both edges:
+    //   mid-read (bram_busy)                 -> stick with bram_owner
+    //   read about to start (in S_ENTER_NODE) -> stick with the same slot
+    //   otherwise                            -> take the scheduler's grant
+    logic              cur_valid;   // cur_slot holds a slot worth executing this cycle
+    wire starting_read = cur_valid && (state[cur_slot] == S_ENTER_NODE);
+    wire [SLOT_W-1:0] next_slot  = bram_busy     ? bram_owner
+                                 : starting_read ? cur_slot
+                                 :                 grant_slot;
+    wire              next_valid = bram_busy || starting_read || grant_valid;
+
     // World box upper boundary in Q16.16 (WORLD_SIZE.0). Used by S_ROOT_SLAB.
     localparam logic signed [31:0] WORLD_Q = WORLD_SIZE << 16;
     // Screen-centre in Q16.16: (IMG_W/2, IMG_H/2). (IMG/2)<<16 == IMG<<15.
@@ -221,6 +251,19 @@ module svo_traversal_mr #(
     assign dbg_py      = py[cur_slot];
     assign dbg_tvalid  = axis_tvalid;
     assign dbg_tready  = axis_tready;
+    // ILA probes: executing slot + the NODE DATA it's reading (to catch terrain nodes
+    // being read as empty at N>1).  d0 = {node_idx[15:0], bitmask[15:0]} — compare the
+    // read bitmask against the known SVO; d1 = stack/child position.
+    assign dbg_cur_slot = 2'(cur_slot);
+    assign dbg_d0       = {node_idx[cur_slot], r_bitmask[cur_slot]};
+    // d1 now probes the DDA step direction vs the true ray-dir sign, to confirm the
+    // step-sign corruption: bits[15:13]=rd sign(x,y,z), [12:10]=step sign(x,y,z),
+    // [9:6]=sp, [5:3]=cidx, [2:0]=cell(x,y,z). If step sign != rd sign -> step is wrong.
+    assign dbg_d1       = {16'd0,
+                           rd_x[cur_slot][31],  rd_y[cur_slot][31],  rd_z[cur_slot][31],
+                           step_x[cur_slot][2], step_y[cur_slot][2], step_z[cur_slot][2],
+                           sp[cur_slot], cidx[cur_slot],
+                           cx[cur_slot][0], cy[cur_slot][0], cz[cur_slot][0]};
 
     // Debug word (read via AXI 0x80) to localise hangs:
     //   [15:0]  state[0..3]  (4 bits each; only first RAY_POOL_N valid)
@@ -237,10 +280,10 @@ module svo_traversal_mr #(
         for (int s = 0; s < RAY_POOL_N; s++) dbg_mr_c[s*4 +: 4] = 4'(state[s]);
         dbg_mr_c[16] = grant_valid;
         dbg_mr_c[17] = bram_busy;
-        dbg_mr_c[18] = shade_busy;
+        dbg_mr_c[18] = shade_busy[0];   // lane 0 (debug)
         for (int s = 0; s < RAY_POOL_N; s++) dbg_mr_c[20 + s] = ready[s];
         dbg_mr_c[24 +: SLOT_W] = bram_owner;
-        dbg_mr_c[26 +: SLOT_W] = shade_owner;
+        dbg_mr_c[26 +: SLOT_W] = shade_owner[0];
     end
     always_ff @(posedge clk) dbg_mr <= dbg_mr_c;
 
@@ -318,8 +361,24 @@ module svo_traversal_mr #(
     // happens in the consuming cycle (geometry capture / solid hit). This splits the old
     // single-cycle multiply+wide-add path (which failed timing) into two short stages.
     logic signed [31:0] te_x [0:RAY_POOL_N-1], te_y [0:RAY_POOL_N-1], te_z [0:RAY_POOL_N-1];          // registered t_min*rd (one DSP cycle)
-    logic signed [31:0] bw_c_ex, bw_c_ey, bw_c_ez;  // = ro + te_* (combinational add)
-    // S_BRAM_WAIT field=6 combinational geometry (all from the entry point bw_c_e*).
+    // Entry-point multiply te_* = t_min*rd. Computed PER-SLOT in parallel (one dedicated DSP
+    // set per slot, 3*N total) rather than once for cur_slot through the shared bank, because:
+    //  (a) te_* must stay 1-cycle latency — S_EMPTY sets t_min, S_CHECK_CHILD, then S_SOLID
+    //      reads ro+te_x[cur_slot] only 2 cycles later, so an extra pipeline stage would feed
+    //      S_SOLID the pre-step entry point (the streaked/stretched-hit corruption); and
+    //  (b) the multi-ray slot mux made the shared form (cur_slot decode ~6 ns -> dist-RAM read
+    //      -> 32x32 DSP -> RAM write) a ~14 ns path, the N=4 timing-closure blocker.
+    // Per-slot, each te_x[s] <= qmul(t_min[s], rd_x[s]) is FF -> DSP -> FF with NO cur_slot
+    // decode in front. Bit-identical: consumers only ever read te_*[cur_slot], which was already
+    // refreshed every cycle the slot was active; updating all slots changes no observed value.
+    // Cost +9 DSPs (3*N vs 3), trivial at 60/220.
+    logic signed [31:0] bw_c_ex, bw_c_ey, bw_c_ez;  // = ro + te_* (combinational add); used at S_SOLID hit pos
+    // Registered entry point (geom_phase 0). The index/exrel logic below reads THESE, not the
+    // live add, so the 32-bit ro+te add no longer chains into the cell-index path (was the
+    // worst route-bound setup path -> bw_c*_r). bw_c_e* is stable across the read, so registering
+    // it one geom phase earlier is value-identical.
+    logic signed [31:0] bw_c_ex_r [0:RAY_POOL_N-1], bw_c_ey_r [0:RAY_POOL_N-1], bw_c_ez_r [0:RAY_POOL_N-1];
+    // S_BRAM_WAIT field=6 combinational geometry (all from the registered entry point bw_c_e*_r).
     logic [6:0]         bw_c_icx, bw_c_icy, bw_c_icz;
     logic [5:0]         bw_c_cx,  bw_c_cy,  bw_c_cz;
     logic signed [31:0] bw_c_nhq;
@@ -342,6 +401,12 @@ module svo_traversal_mr #(
     logic [7:0]  r_block [0:RAY_POOL_N-1][0:7];
     logic [15:0] r_bitmask [0:RAY_POOL_N-1];
     logic [2:0]  bram_field [0:RAY_POOL_N-1];
+    // DDA-step geometry pipeline phase, DECOUPLED from bram_field (M2 Task 1). The node-read
+    // (bram_field) and the entry-geometry (cx/dist/dt/t_next) now run on independent counters
+    // during S_BRAM_WAIT. In Task 1 they advance in lockstep (slot owns 8 consecutive cycles)
+    // so timing is cycle-identical to the old piggybacked version; Task 2 compacts the read
+    // alone, leaving this ~7-phase pipeline as the per-node geometry floor.
+    logic [2:0]  geom_phase [0:RAY_POOL_N-1];
 
     // Hit info
     logic [7:0]  block_id_hit [0:RAY_POOL_N-1];
@@ -470,24 +535,30 @@ module svo_traversal_mr #(
         q_iss_v = 1'b0;
         q_tv[0] = 1'b0; q_tv[1] = 1'b0; q_tv[2] = 1'b0;
         bram_busy = 1'b0; bram_owner = '0; last_grant = '0;
-        shade_busy = 1'b0; shade_owner = '0;
+        for (int L = 0; L < SHADE_LANES; L++) begin shade_busy[L] = 1'b0; shade_owner[L] = '0; end
     end
 
     // -------------------------------------------------------------------------
     // Shading arbiter (combinational): pick one pending slot when the shader is
     // free. Gated by SHADE_MODE, so inert in Phase 1.
     // -------------------------------------------------------------------------
-    logic              shade_grant;
-    logic [SLOT_W-1:0] shade_grant_slot;
+    // Grant up to SHADE_LANES pending slots per cycle — one per FREE lane, each a DISTINCT
+    // pending slot (the `taken` mask prevents two lanes grabbing the same slot).
+    logic              shade_grant      [0:SHADE_LANES-1];
+    logic [SLOT_W-1:0] shade_grant_slot [0:SHADE_LANES-1];
     always_comb begin
-        shade_grant = 1'b0;
-        shade_grant_slot = '0;
-        if (SHADE_MODE && !shade_busy) begin
-            for (int s = 0; s < RAY_POOL_N; s++)
-                if (!shade_grant && shade_pending[s]) begin
-                    shade_grant = 1'b1;
-                    shade_grant_slot = s[SLOT_W-1:0];
-                end
+        automatic logic [RAY_POOL_N-1:0] taken = '0;
+        for (int L = 0; L < SHADE_LANES; L++) begin
+            shade_grant[L]      = 1'b0;
+            shade_grant_slot[L] = '0;
+            if (SHADE_MODE && !shade_busy[L]) begin
+                for (int s = 0; s < RAY_POOL_N; s++)
+                    if (!shade_grant[L] && shade_pending[s] && !taken[s]) begin
+                        shade_grant[L]      = 1'b1;
+                        shade_grant_slot[L] = s[SLOT_W-1:0];
+                        taken[s]            = 1'b1;
+                    end
+            end
         end
     end
 
@@ -498,20 +569,22 @@ module svo_traversal_mr #(
     // freshly-granted slot on the grant cycle (before shade_owner is registered).
     // shade_start is the 1-cycle grant pulse. These outputs are combinational (no
     // <= anywhere); the always_ff drives only the grant register + collector.
-    wire [SLOT_W-1:0] shade_active = shade_busy ? shade_owner : shade_grant_slot;
     always_comb begin
-        shade_start         = shade_grant;
-        shade_is_miss       = shade_is_miss_r[shade_active];
-        shade_hit_face      = hit_face[shade_active];
-        shade_hit_face_sign = hit_face_sign_r[shade_active];
-        shade_block_id      = block_id_hit[shade_active];
-        shade_t_hit         = t_hit[shade_active];
-        shade_ray_dx        = rd_x[shade_active];
-        shade_ray_dy        = rd_y[shade_active];
-        shade_ray_dz        = rd_z[shade_active];
-        shade_hit_px        = hit_px_r[shade_active];
-        shade_hit_py        = hit_py_r[shade_active];
-        shade_hit_pz        = hit_pz_r[shade_active];
+        for (int L = 0; L < SHADE_LANES; L++) begin
+            automatic logic [SLOT_W-1:0] sa = shade_busy[L] ? shade_owner[L] : shade_grant_slot[L];
+            shade_start[L]         = shade_grant[L];
+            shade_is_miss[L]       = shade_is_miss_r[sa];
+            shade_hit_face[L]      = hit_face[sa];
+            shade_hit_face_sign[L] = hit_face_sign_r[sa];
+            shade_block_id[L]      = block_id_hit[sa];
+            shade_t_hit[L]         = t_hit[sa];
+            shade_ray_dx[L]        = rd_x[sa];
+            shade_ray_dy[L]        = rd_y[sa];
+            shade_ray_dz[L]        = rd_z[sa];
+            shade_hit_px[L]        = hit_px_r[sa];
+            shade_hit_py[L]        = hit_py_r[sa];
+            shade_hit_pz[L]        = hit_pz_r[sa];
+        end
     end
 
     // -------------------------------------------------------------------------
@@ -534,19 +607,20 @@ module svo_traversal_mr #(
     // -------------------------------------------------------------------------
     always_comb begin
         bw_c_nhq = $signed(32'(node_half[cur_slot])) << 16;
-        // child cell index within this node, clamped on underflow/negative
-        bw_c_icx = ($signed(bw_c_ex) < 0) ? 7'd0 : bw_c_ex[22:16];
-        bw_c_icy = ($signed(bw_c_ey) < 0) ? 7'd0 : bw_c_ey[22:16];
-        bw_c_icz = ($signed(bw_c_ez) < 0) ? 7'd0 : bw_c_ez[22:16];
+        // child cell index within this node, clamped on underflow/negative.
+        // Reads the REGISTERED entry point (bw_c_e*_r) so the ro+te add is off this path.
+        bw_c_icx = ($signed(bw_c_ex_r[cur_slot]) < 0) ? 7'd0 : bw_c_ex_r[cur_slot][22:16];
+        bw_c_icy = ($signed(bw_c_ey_r[cur_slot]) < 0) ? 7'd0 : bw_c_ey_r[cur_slot][22:16];
+        bw_c_icz = ($signed(bw_c_ez_r[cur_slot]) < 0) ? 7'd0 : bw_c_ez_r[cur_slot][22:16];
         bw_c_icx = (bw_c_icx >= node_origin_x[cur_slot]) ? bw_c_icx - node_origin_x[cur_slot] : 7'd0;
         bw_c_icy = (bw_c_icy >= node_origin_y[cur_slot]) ? bw_c_icy - node_origin_y[cur_slot] : 7'd0;
         bw_c_icz = (bw_c_icz >= node_origin_z[cur_slot]) ? bw_c_icz - node_origin_z[cur_slot] : 7'd0;
         bw_c_cx  = (bw_c_icx >= node_half[cur_slot]) ? 6'd1 : 6'd0;
         bw_c_cy  = (bw_c_icy >= node_half[cur_slot]) ? 6'd1 : 6'd0;
         bw_c_cz  = (bw_c_icz >= node_half[cur_slot]) ? 6'd1 : 6'd0;
-        bw_c_exrel = bw_c_ex - ($signed(32'(node_origin_x[cur_slot])) << 16);
-        bw_c_eyrel = bw_c_ey - ($signed(32'(node_origin_y[cur_slot])) << 16);
-        bw_c_ezrel = bw_c_ez - ($signed(32'(node_origin_z[cur_slot])) << 16);
+        bw_c_exrel = bw_c_ex_r[cur_slot] - ($signed(32'(node_origin_x[cur_slot])) << 16);
+        bw_c_eyrel = bw_c_ey_r[cur_slot] - ($signed(32'(node_origin_y[cur_slot])) << 16);
+        bw_c_ezrel = bw_c_ez_r[cur_slot] - ($signed(32'(node_origin_z[cur_slot])) << 16);
         // dist / dt / t_next are pipelined across bram_field 3->6 (see S_BRAM_WAIT).
     end
 
@@ -563,21 +637,28 @@ module svo_traversal_mr #(
                 rs_wait[s] <= '0; post_pop[s] <= '0; q_phase[s] <= '0;
                 blocked[s] <= 1'b0;
                 shade_pending[s] <= 1'b0;
+                bram_field[s] <= 3'd2; geom_phase[s] <= 3'd0;
             end
             q_iss_v <= 1'b0;
             q_tv[0] <= 1'b0; q_tv[1] <= 1'b0; q_tv[2] <= 1'b0;
             bram_busy <= 1'b0; bram_owner <= '0; last_grant <= '0;
-            shade_busy <= 1'b0; shade_owner <= '0;
+            cur_slot <= '0; cur_valid <= 1'b0;
+            for (int L = 0; L < SHADE_LANES; L++) begin shade_busy[L] <= 1'b0; shade_owner[L] <= '0; end
         end else begin
+            // Advance the registered scheduler grant every cycle (see next_slot decl).
+            cur_slot  <= next_slot;
+            cur_valid <= next_valid;
             // Force pulse signals low every cycle before state case
             fb_wr_en    <= '0;
             pr_done_valid <= 1'b0;
-            // Register the entry-point multiply t_min*rd every cycle (the +ro add is
-            // done combinationally by consumers next cycle). Splits the multiply and the
-            // add into separate clock cycles so neither path exceeds the 10 ns budget.
-            te_x[cur_slot] <= qmul(t_min[cur_slot], rd_x[cur_slot]);
-            te_y[cur_slot] <= qmul(t_min[cur_slot], rd_y[cur_slot]);
-            te_z[cur_slot] <= qmul(t_min[cur_slot], rd_z[cur_slot]);
+            // Entry-point multiply t_min*rd, registered per-slot in parallel (see te_x decl).
+            // One DSP set per slot, no cur_slot decode in front -> short FF->DSP->FF path and
+            // 1-cycle latency preserved. Consumers read ro+te_*[cur_slot] (bw_c_e*) next cycle.
+            for (int s = 0; s < RAY_POOL_N; s++) begin
+                te_x[s] <= qmul(t_min[s], rd_x[s]);
+                te_y[s] <= qmul(t_min[s], rd_y[s]);
+                te_z[s] <= qmul(t_min[s], rd_z[s]);
+            end
 
             // Tag pipe: default no issue this cycle (an issuing stage overrides
             // q_iss_v<=1'b1 below — both non-blocking, the case body wins). Shift
@@ -618,16 +699,17 @@ module svo_traversal_mr #(
                     DST_GPROD: begin bw_prodx_r[cs]<=q_p0; bw_prody_r[cs]<=q_p1; bw_prodz_r[cs]<=q_p2; end
                     default: ;
                 endcase
-                // unblock the slot, EXCEPT DST_RS1A and DST_SLAB0 which are the first
-                // of a 2-issue pair (slot stays "running" to issue the second; it
-                // blocks on the second). DST_GDT/DST_GPROD are the S_BRAM_WAIT geometry
-                // multiplies, which never block the slot (it keeps streaming the read),
-                // so there is nothing to unblock.
-                if (cd != DST_RS1A && cd != DST_SLAB0 && cd != DST_GDT && cd != DST_GPROD) blocked[cs] <= 1'b0;
+                // unblock the slot, EXCEPT the FIRST of a 2-issue pair which keeps the slot
+                // running to issue the second (it blocks on the second):
+                //   DST_RS1A  -> blocks on DST_RS1B
+                //   DST_SLAB0 -> blocks on DST_SLAB1
+                //   DST_GDT   -> the geometry's first multiply; the slot blocks on DST_GPROD
+                // So DST_GPROD (Task 2c) DOES unblock — it's the geometry's blocking multiply.
+                if (cd != DST_RS1A && cd != DST_SLAB0 && cd != DST_GDT) blocked[cs] <= 1'b0;
             end
 
             // Register the round-robin scheduler's last grant (rotates priority).
-            if (grant_valid) last_grant <= grant_slot;
+            if (cur_valid) last_grant <= cur_slot;   // rotate round-robin past the executed slot
 
             // -----------------------------------------------------------------
             // Launch-init: runs EVERY cycle OUTSIDE the grant gate, keyed on
@@ -656,20 +738,26 @@ module svo_traversal_mr #(
             // no conflict writing shade_busy. Inert when SHADE_MODE=0 (shade_grant
             // gated off, shade_pending never set, shade_done path is shadow-only).
             // -----------------------------------------------------------------
-            if (shade_grant) begin
-                // take the shader for the granted slot
-                shade_busy                      <= 1'b1;
-                shade_owner                     <= shade_grant_slot;
-                shade_pending[shade_grant_slot] <= 1'b0;
-            end
-            if (SHADE_MODE && shade_done) begin
-                // shading finished -> write the owner's pixel + free the shader
-                pixel_color[shade_owner] <= shade_pixel_color;
-                state[shade_owner]       <= S_WRITE_PIXEL;
-                shade_busy               <= 1'b0;
+            for (int L = 0; L < SHADE_LANES; L++) begin
+                if (shade_grant[L]) begin
+                    // take lane L for its granted slot (slots are distinct across lanes)
+                    shade_busy[L]                      <= 1'b1;
+                    shade_owner[L]                     <= shade_grant_slot[L];
+                    shade_pending[shade_grant_slot[L]] <= 1'b0;
+                end
+                if (SHADE_MODE && shade_done[L]) begin
+                    // lane L finished -> write its owner's pixel + free the lane
+                    pixel_color[shade_owner[L]] <= shade_pixel_color[L];
+                    state[shade_owner[L]]       <= S_WRITE_PIXEL;
+                    shade_busy[L]               <= 1'b0;
+                end
             end
 
-            if (grant_valid) begin
+            // Execute the registered active slot. Guard with !blocked: the grant was
+            // registered a cycle before execution, so a slot that issued a blocking
+            // multiply last cycle (blocked now set) must NOT run — skip it (the scheduler's
+            // ready[] already excludes blocked slots, so this only catches that 1-cycle stale grant).
+            if (cur_valid && !blocked[cur_slot]) begin
             unique case (state[cur_slot])
 
             // -----------------------------------------------------------------
@@ -743,9 +831,11 @@ module svo_traversal_mr #(
                             blocked[cur_slot] <= 1'b1;
                             rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
                         end
-                        4'd4: begin
+                        4'd4: begin  // len2 = dx2+dy2+dz2 (3-way add only). The NR seed
+                            // y0 = 1.5 - len2/2 is deferred to stage 5 so this cycle holds just
+                            // ONE 32-bit op behind the cur_slot RAM read (was add+subtract -> the
+                            // worst setup path). rslen2 is read again at stage 6, unchanged.
                             rslen2[cur_slot]   <= rs_s3_dx2[cur_slot] + rs_s3_dy2[cur_slot] + rs_s3_dz2[cur_slot];
-                            rs_s4_y0[cur_slot] <= 32'sh0001_8000 - ((rs_s3_dx2[cur_slot] + rs_s3_dy2[cur_slot] + rs_s3_dz2[cur_slot]) >>> 1);
                             rs_wait[cur_slot]  <= rs_wait[cur_slot] + 1'b1;
                         end
                         // ---- Fast inverse square root: inv_len = 1 / |raw_dir| ----
@@ -757,8 +847,13 @@ module svo_traversal_mr #(
                         // Stage 8 then normalizes: nd = raw_dir * inv_len. Each multiply is
                         // issued on the shared bank (q_phase==0) and collected QCOL cycles
                         // later (q_phase==1). 1.5_Q16.16 = 0001_8000.
-                        4'd5: begin  // rsqrt: y0sq = y0^2
-                            q_a0 <= rs_s4_y0[cur_slot]; q_b0 <= rs_s4_y0[cur_slot];
+                        4'd5: begin  // NR seed y0 = 1.5 - len2/2 (from registered rslen2), then rsqrt: y0sq = y0^2
+                            // rs_s4_y0 (needed again at stage 7) is produced here now; the
+                            // subtract sits on a fresh RAM->sub->RAM path, not bundled with the
+                            // stage-4 3-way add. Value-identical to the old stage-4 computation.
+                            rs_s4_y0[cur_slot] <= 32'sh0001_8000 - (rslen2[cur_slot] >>> 1);
+                            q_a0 <= 32'sh0001_8000 - (rslen2[cur_slot] >>> 1);
+                            q_b0 <= 32'sh0001_8000 - (rslen2[cur_slot] >>> 1);
                             q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_RS5};
                             blocked[cur_slot] <= 1'b1;
                             rs_wait[cur_slot] <= rs_wait[cur_slot] + 1'b1;
@@ -917,9 +1012,10 @@ module svo_traversal_mr #(
                 // of the single BRAM read port for the duration of this 8-cycle read.
                 bram_busy   <= 1'b1;
                 bram_owner  <= cur_slot;
-                bram_field[cur_slot]  <= 3'd7;   // sentinel: first S_BRAM_WAIT cycle absorbs BRAM latency
+                bram_field[cur_slot]  <= 3'd1;   // wide read: 1=latency wait, 0=latch, 2=done
+                geom_phase[cur_slot]  <= 3'd0;   // start the (decoupled) geometry pipeline
                 svo_rd_en   <= 1'b1;
-                svo_rd_addr <= {node_idx[cur_slot][11:0], 3'd0};
+                svo_rd_node <= node_idx[cur_slot][11:0];
                 state[cur_slot]       <= S_BRAM_WAIT;
             end
 
@@ -929,86 +1025,100 @@ module svo_traversal_mr #(
             // sets svo_rd_addr.  bram_field=7 is a pure wait that absorbs this
             // extra cycle; fields 0-6 then read words 0-6 with correct alignment.
             S_BRAM_WAIT: begin
+                // ===== READ pipeline (bram_field): wide whole-node fetch (M2 Task 2) =====
+                // svo_bram_wide returns the whole 8-word node on svo_rd_wide with 1-cycle
+                // latency: 1 = absorb the latency, 0 = latch all 8 words at once, 2 = done.
+                // svo_rd_wide[w*32 +: 32] == node word w (w0=bitmask, w1-4=child pairs,
+                // w5-6=block bytes, w7=unused).
                 unique case (bram_field[cur_slot])
-                    3'd7: begin   // wait: word-0 addr issued in S_ENTER_NODE, data ready next cycle
-                        svo_rd_addr <= {node_idx[cur_slot][11:0], 3'd1};
-                        bram_field[cur_slot]  <= 3'd0;
-                        // geometry stage 0: capture child cell + entry-rel + node_half.
-                        // te_* (hence bw_c_e*) and node_* are valid on this first BRAM-wait cycle, so
-                        // dt/prod can be issued early enough (field 0/1) to hide the shared
-                        // bank latency (QCOL=4) entirely inside the 8-cycle read window.
+                    3'd1: bram_field[cur_slot] <= 3'd0;   // wait: data ready next cycle
+                    3'd0: begin                            // latch the whole node in one cycle
+                        r_bitmask[cur_slot] <= svo_rd_wide[15:0];
+                        r_child[cur_slot][0] <= svo_rd_wide[ 32 +: 16]; r_child[cur_slot][1] <= svo_rd_wide[ 48 +: 16];
+                        r_child[cur_slot][2] <= svo_rd_wide[ 64 +: 16]; r_child[cur_slot][3] <= svo_rd_wide[ 80 +: 16];
+                        r_child[cur_slot][4] <= svo_rd_wide[ 96 +: 16]; r_child[cur_slot][5] <= svo_rd_wide[112 +: 16];
+                        r_child[cur_slot][6] <= svo_rd_wide[128 +: 16]; r_child[cur_slot][7] <= svo_rd_wide[144 +: 16];
+                        r_block[cur_slot][0] <= svo_rd_wide[160 +: 8];  r_block[cur_slot][1] <= svo_rd_wide[168 +: 8];
+                        r_block[cur_slot][2] <= svo_rd_wide[176 +: 8];  r_block[cur_slot][3] <= svo_rd_wide[184 +: 8];
+                        r_block[cur_slot][4] <= svo_rd_wide[192 +: 8];  r_block[cur_slot][5] <= svo_rd_wide[200 +: 8];
+                        r_block[cur_slot][6] <= svo_rd_wide[208 +: 8];  r_block[cur_slot][7] <= svo_rd_wide[216 +: 8];
+                        svo_rd_en <= 1'b0;
+                        bram_busy <= 1'b0;              // Task 2b: release the read port the instant the
+                        bram_field[cur_slot] <= 3'd2;   // node is latched, so OTHER slots can read while
+                        // this slot finishes its (port-free) geometry — the overlap that wins throughput.
+                        // Safe: while this slot owns the port no other slot can START a read (gated below),
+                        // so svo_rd_node/svo_rd_en hold and the wide data is stable; and the geometry never
+                        // touches the port.
+                    end
+                    default: ;   // 3'd2: done — port already released; just finishing geometry
+                endcase
+
+                // ===== GEOMETRY pipeline (geom_phase): DDA-step setup, INDEPENDENT of the read =====
+                // Phase map (decoupled; value-identical to the pre-pipeline geometry):
+                //   0 register entry pt | 1 capture cell+exrel | 2 dist + issue GDT |
+                //   3 issue GPROD (block) | 4 commit (after GPROD collector unblocks)
+                // te_* (hence bw_c_e*) and node_* are valid on phase 0, so dt/prod still issue
+                // early enough to hide the shared bank latency (QCOL=4) before the commit.
+                unique case (geom_phase[cur_slot])
+                    3'd0: begin   // geom stage 0: register the entry point (ro+te) so the 32-bit
+                        // add is OFF the cell-index path. bw_c_e* is stable across the read, so
+                        // the index/exrel computed from bw_c_e*_r at phase 1 is value-identical.
+                        bw_c_ex_r[cur_slot] <= bw_c_ex;
+                        bw_c_ey_r[cur_slot] <= bw_c_ey;
+                        bw_c_ez_r[cur_slot] <= bw_c_ez;
+                        geom_phase[cur_slot] <= 3'd1;
+                    end
+                    3'd1: begin   // geom stage 1: capture child cell + entry-rel + node_half (from registered entry pt)
                         bw_cx_r[cur_slot]    <= bw_c_cx;    bw_cy_r[cur_slot]    <= bw_c_cy;    bw_cz_r[cur_slot]    <= bw_c_cz;
                         bw_exrel_r[cur_slot] <= bw_c_exrel; bw_eyrel_r[cur_slot] <= bw_c_eyrel; bw_ezrel_r[cur_slot] <= bw_c_ezrel;
                         bw_nhq_r[cur_slot]   <= bw_c_nhq;
+                        geom_phase[cur_slot] <= 3'd2;
                     end
-                    3'd0: begin   // read word 0 = bitmask
-                        r_bitmask[cur_slot] <= svo_rd_data[15:0];
-                        svo_rd_addr <= {node_idx[cur_slot][11:0], 3'd2};
-                        bram_field[cur_slot]  <= 3'd1;
-                        // geometry stage 1: dist to next midplane (conditional, no qmul)
-                        bw_distx_r[cur_slot] <= (!step_x[cur_slot][2]) ? (bw_cx_r[cur_slot][0] ? ((bw_nhq_r[cur_slot]<<<1)-bw_exrel_r[cur_slot]) : (bw_nhq_r[cur_slot]-bw_exrel_r[cur_slot]))
+                    3'd2: begin   // geom stage 2: dist to next midplane (no qmul) + issue dt=node_half*|inv|
+                        // Use rd_*[31] (ray-dir sign), NOT step_*[2]: step reads inverted on
+                        // silicon at N>1 (confirmed by ILA: step sign != rd sign), which corrupted
+                        // these DDA boundary distances -> wrong t_next -> holes/shifts. rd is the
+                        // reliable sign. !step_*[2] == !rd_*[31] by construction (sim unchanged).
+                        bw_distx_r[cur_slot] <= (!rd_x[cur_slot][31]) ? (bw_cx_r[cur_slot][0] ? ((bw_nhq_r[cur_slot]<<<1)-bw_exrel_r[cur_slot]) : (bw_nhq_r[cur_slot]-bw_exrel_r[cur_slot]))
                                                    : (bw_cx_r[cur_slot][0] ? (bw_exrel_r[cur_slot]-bw_nhq_r[cur_slot]) : bw_exrel_r[cur_slot]);
-                        bw_disty_r[cur_slot] <= (!step_y[cur_slot][2]) ? (bw_cy_r[cur_slot][0] ? ((bw_nhq_r[cur_slot]<<<1)-bw_eyrel_r[cur_slot]) : (bw_nhq_r[cur_slot]-bw_eyrel_r[cur_slot]))
+                        bw_disty_r[cur_slot] <= (!rd_y[cur_slot][31]) ? (bw_cy_r[cur_slot][0] ? ((bw_nhq_r[cur_slot]<<<1)-bw_eyrel_r[cur_slot]) : (bw_nhq_r[cur_slot]-bw_eyrel_r[cur_slot]))
                                                    : (bw_cy_r[cur_slot][0] ? (bw_eyrel_r[cur_slot]-bw_nhq_r[cur_slot]) : bw_eyrel_r[cur_slot]);
-                        bw_distz_r[cur_slot] <= (!step_z[cur_slot][2]) ? (bw_cz_r[cur_slot][0] ? ((bw_nhq_r[cur_slot]<<<1)-bw_ezrel_r[cur_slot]) : (bw_nhq_r[cur_slot]-bw_ezrel_r[cur_slot]))
+                        bw_distz_r[cur_slot] <= (!rd_z[cur_slot][31]) ? (bw_cz_r[cur_slot][0] ? ((bw_nhq_r[cur_slot]<<<1)-bw_ezrel_r[cur_slot]) : (bw_nhq_r[cur_slot]-bw_ezrel_r[cur_slot]))
                                                    : (bw_cz_r[cur_slot][0] ? (bw_ezrel_r[cur_slot]-bw_nhq_r[cur_slot]) : bw_ezrel_r[cur_slot]);
-                        // issue dt = node_half*|inv| onto the shared bank (collect @ field 4).
-                        // Tagged so the collector writes bw_dt*_r when the product arrives;
-                        // the slot does NOT block (it keeps streaming the BRAM read).
                         q_a0 <= bw_nhq_r[cur_slot]; q_b0 <= qabs(inv_x[cur_slot]);
                         q_a1 <= bw_nhq_r[cur_slot]; q_b1 <= qabs(inv_y[cur_slot]);
                         q_a2 <= bw_nhq_r[cur_slot]; q_b2 <= qabs(inv_z[cur_slot]);
                         q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_GDT};
+                        geom_phase[cur_slot] <= 3'd3;
                     end
-                    3'd1: begin   // read word 1 = child ptrs 0-1
-                        r_child[cur_slot][0]<=svo_rd_data[15:0]; r_child[cur_slot][1]<=svo_rd_data[31:16];
-                        svo_rd_addr <= {node_idx[cur_slot][11:0], 3'd3};
-                        bram_field[cur_slot]  <= 3'd2;
-                        // issue prod = dist*|inv| onto the shared bank (collect @ field 5).
-                        // Tagged; the slot does NOT block (it keeps streaming the BRAM read).
+                    3'd3: begin   // geom stage 3: issue prod = dist*|inv|, then BLOCK on it
                         q_a0 <= bw_distx_r[cur_slot]; q_b0 <= qabs(inv_x[cur_slot]);
                         q_a1 <= bw_disty_r[cur_slot]; q_b1 <= qabs(inv_y[cur_slot]);
                         q_a2 <= bw_distz_r[cur_slot]; q_b2 <= qabs(inv_z[cur_slot]);
                         q_iss_v <= 1'b1; q_iss_t <= {cur_slot, DST_GPROD};
+                        // Task 2c: deschedule the slot for the QCOL=4 multiply latency instead of
+                        // spinning in S_BRAM_WAIT. The GPROD collector writes bw_prod_* AND clears
+                        // blocked ~4 cycles later, when the slot resumes at phase 4 (the commit).
+                        // GDT (issued phase 2) lands one cycle earlier and does NOT unblock. Other
+                        // rays run during the wait — the whole point of the wide read.
+                        blocked[cur_slot] <= 1'b1;
+                        geom_phase[cur_slot] <= 3'd4;
                     end
-                    3'd2: begin   // read word 2 = child ptrs 2-3
-                        r_child[cur_slot][2]<=svo_rd_data[15:0]; r_child[cur_slot][3]<=svo_rd_data[31:16];
-                        svo_rd_addr <= {node_idx[cur_slot][11:0], 3'd4};
-                        bram_field[cur_slot]  <= 3'd3;
-                    end
-                    3'd3: begin   // read word 3 = child ptrs 4-5
-                        r_child[cur_slot][4]<=svo_rd_data[15:0]; r_child[cur_slot][5]<=svo_rd_data[31:16];
-                        svo_rd_addr <= {node_idx[cur_slot][11:0], 3'd5};
-                        bram_field[cur_slot]  <= 3'd4;
-                    end
-                    3'd4: begin   // read word 4 = child ptrs 6-7
-                        r_child[cur_slot][6]<=svo_rd_data[15:0]; r_child[cur_slot][7]<=svo_rd_data[31:16];
-                        svo_rd_addr <= {node_idx[cur_slot][11:0], 3'd6};
-                        bram_field[cur_slot]  <= 3'd5;
-                        // dt (issued @ field 0) is now written by the tagged collector
-                        // (DST_GDT), which fires this same cycle (QCOL=4 after field 0).
-                    end
-                    3'd5: begin   // read word 5 = block IDs 0-3; word-6 addr already issued
-                        r_block[cur_slot][0]<=svo_rd_data[7:0];   r_block[cur_slot][1]<=svo_rd_data[15:8];
-                        r_block[cur_slot][2]<=svo_rd_data[23:16]; r_block[cur_slot][3]<=svo_rd_data[31:24];
-                        svo_rd_en  <= '0;
-                        bram_field[cur_slot] <= 3'd6;
-                        // prod (issued @ field 1) is now written by the tagged collector
-                        // (DST_GPROD), which fires this same cycle (QCOL=4 after field 1).
-                    end
-                    3'd6: begin   // read word 6 = block IDs 4-7; done
-                        r_block[cur_slot][4]<=svo_rd_data[7:0];   r_block[cur_slot][5]<=svo_rd_data[15:8];
-                        r_block[cur_slot][6]<=svo_rd_data[23:16]; r_block[cur_slot][7]<=svo_rd_data[31:24];
-                    end
-                    default: ;
+                    default: ;   // phase 4 = commit (exit block); only reached once GPROD unblocks
                 endcase
-                if (bram_field[cur_slot] == 3'd6) begin
-                    svo_rd_en <= '0;
-                    bram_busy <= 1'b0;   // release the read port (read complete)
+
+                // ===== EXIT / COMMIT: read done AND geometry done =====
+                // Read done = bram_field==2 (latched). Geometry done = geom_phase==4, which the
+                // slot only reaches after the GPROD collector unblocks it (Task 2c) — so by here
+                // bw_dt_*/bw_prod_* are both written. The ~4-cycle multiply wait was spent blocked
+                // (other rays ran), not spinning in S_BRAM_WAIT.
+                if (bram_field[cur_slot] == 3'd2 && geom_phase[cur_slot] == 3'd4) begin
+                    // NOTE: the read port (bram_busy/svo_rd_en) was already released at the latch
+                    // (Task 2b). Do NOT touch them here — by now another slot may own the port, and
+                    // clobbering its bram_busy/svo_rd_en would corrupt its in-flight read.
                     bitmask[cur_slot]   <= r_bitmask[cur_slot];
-                    // dt comes from the pipelined qmul (stage 1); correct in BOTH the
-                    // fresh-descend and post-pop cases (bw_nhq_r captured the restored
-                    // node_half).
+                    // dt comes from the pipelined qmul; correct in BOTH the fresh-descend and
+                    // post-pop cases (bw_nhq_r captured the restored node_half).
                     dt_x[cur_slot] <= bw_dtx_r[cur_slot]; dt_y[cur_slot] <= bw_dty_r[cur_slot]; dt_z[cur_slot] <= bw_dtz_r[cur_slot];
                     if (post_pop[cur_slot]) begin
                         // r_child[]/r_block[] now hold the parent node's data.
@@ -1018,7 +1128,7 @@ module svo_traversal_mr #(
                         state[cur_slot]    <= S_EMPTY;
                     end else begin
                         cx[cur_slot]       <= bw_cx_r[cur_slot]; cy[cur_slot] <= bw_cy_r[cur_slot]; cz[cur_slot] <= bw_cz_r[cur_slot];
-                        t_next_x[cur_slot] <= t_min[cur_slot] + bw_prodx_r[cur_slot];   // geometry stage 3: t_min + dist*|inv|
+                        t_next_x[cur_slot] <= t_min[cur_slot] + bw_prodx_r[cur_slot];   // geometry stage: t_min + dist*|inv|
                         t_next_y[cur_slot] <= t_min[cur_slot] + bw_prody_r[cur_slot];
                         t_next_z[cur_slot] <= t_min[cur_slot] + bw_prodz_r[cur_slot];
                         state[cur_slot]    <= S_CHECK_CHILD;
@@ -1039,21 +1149,33 @@ module svo_traversal_mr #(
 
             // -----------------------------------------------------------------
             S_EMPTY: begin
+                // A DDA step inside a 2x2x2 node moves to the ADJACENT cell, i.e. it
+                // flips the cell bit (0<->1). Using ~c[0] instead of c+/-1 keeps cx/cy/cz
+                // STRICTLY 0/1 by construction — the old c+step could momentarily hold 2,
+                // and a stray 2 defeats the bit-0 bounds check (step[2]^c[0]) and makes the
+                // cell run away (cy -> 3,4,6...) on silicon at N>1. The pop branch's flipped
+                // value is don't-care (S_POP_STACK restores it from the stack).
+                // Value-identical to c+step whenever c is in range (sim unchanged).
+                // Pop-vs-continue uses the ray-direction sign DIRECTLY (rd_*[31]) rather than
+                // step_*[2]. They are equal by construction (step = rd[31]?-1:+1), but rd is the
+                // signal proven correct on silicon (descent reaches the right nodes), whereas the
+                // step register read here was inverted at N>1 -> rays popped out of a node instead
+                // of stepping to the adjacent (solid) cell. Value-identical in sim.
                 if (t_next_x[cur_slot] <= t_next_y[cur_slot] && t_next_x[cur_slot] <= t_next_z[cur_slot]) begin
-                    cx[cur_slot]       <= cx[cur_slot] + {{3{step_x[cur_slot][2]}}, step_x[cur_slot]};  // sign-extend 3-bit step
+                    cx[cur_slot]       <= {5'd0, ~cx[cur_slot][0]};
                     t_min[cur_slot]    <= t_next_x[cur_slot]; t_next_x[cur_slot] <= t_next_x[cur_slot] + dt_x[cur_slot];
-                    em_face  = 2'd0; em_fsign = ~step_x[cur_slot][2];     // outward normal = opposite of ray dir
-                    state[cur_slot]    <= (step_x[cur_slot][2] ^ cx[cur_slot][0]) ? S_POP_STACK : S_CHECK_CHILD;
+                    em_face  = 2'd0; em_fsign = ~rd_x[cur_slot][31];     // outward normal = opposite of ray dir
+                    state[cur_slot]    <= (rd_x[cur_slot][31] ^ cx[cur_slot][0]) ? S_POP_STACK : S_CHECK_CHILD;
                 end else if (t_next_y[cur_slot] <= t_next_z[cur_slot]) begin
-                    cy[cur_slot]       <= cy[cur_slot] + {{3{step_y[cur_slot][2]}}, step_y[cur_slot]};
+                    cy[cur_slot]       <= {5'd0, ~cy[cur_slot][0]};
                     t_min[cur_slot]    <= t_next_y[cur_slot]; t_next_y[cur_slot] <= t_next_y[cur_slot] + dt_y[cur_slot];
-                    em_face  = 2'd1; em_fsign = ~step_y[cur_slot][2];
-                    state[cur_slot]    <= (step_y[cur_slot][2] ^ cy[cur_slot][0]) ? S_POP_STACK : S_CHECK_CHILD;
+                    em_face  = 2'd1; em_fsign = ~rd_y[cur_slot][31];
+                    state[cur_slot]    <= (rd_y[cur_slot][31] ^ cy[cur_slot][0]) ? S_POP_STACK : S_CHECK_CHILD;
                 end else begin
-                    cz[cur_slot]       <= cz[cur_slot] + {{3{step_z[cur_slot][2]}}, step_z[cur_slot]};
+                    cz[cur_slot]       <= {5'd0, ~cz[cur_slot][0]};
                     t_min[cur_slot]    <= t_next_z[cur_slot]; t_next_z[cur_slot] <= t_next_z[cur_slot] + dt_z[cur_slot];
-                    em_face  = 2'd2; em_fsign = ~step_z[cur_slot][2];
-                    state[cur_slot]    <= (step_z[cur_slot][2] ^ cz[cur_slot][0]) ? S_POP_STACK : S_CHECK_CHILD;
+                    em_face  = 2'd2; em_fsign = ~rd_z[cur_slot][31];
+                    state[cur_slot]    <= (rd_z[cur_slot][31] ^ cz[cur_slot][0]) ? S_POP_STACK : S_CHECK_CHILD;
                 end
                 hit_face[cur_slot]        <= em_face;
                 hit_face_sign_r[cur_slot] <= em_fsign;
@@ -1173,7 +1295,7 @@ module svo_traversal_mr #(
             S_NEXT_PIXEL: ;
 
             endcase
-            end  // if (grant_valid)
+            end  // if (cur_valid)
         end
     end
 

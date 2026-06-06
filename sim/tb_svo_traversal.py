@@ -66,25 +66,35 @@ _CHILD_TYPES = {0: 'EMPTY', 1: 'MIXED', 2: 'UNDEF(10)', 3: 'SOLID'}
 
 
 async def shade_stub(dut, latency=5):
-    """Minimal shading stub for SHADE_MODE=1 simulation.
+    """Minimal per-lane shading stub for SHADE_MODE=1 simulation.
 
-    Watches shade_start; after 'latency' cycles responds with shade_done=1
-    and a pixel colour: white (0xFFFFFF) for hits, sky blue for misses.
+    The core's shade_* ports are now per-lane unpacked arrays [0:SHADE_LANES-1].
+    One watcher per lane: after 'latency' cycles of its shade_start, respond with
+    shade_done=1 and a colour (white for hits, sky for misses).
     Harmless under SHADE_MODE=0 because shade_start is never asserted.
     """
     SKY = (135 << 16) | (206 << 8) | 235
-    dut.shade_done.value        = 0
-    dut.shade_pixel_color.value = 0
+    nlanes = len(dut.shade_done)
+    for L in range(nlanes):
+        dut.shade_done[L].value        = 0
+        dut.shade_pixel_color[L].value = 0
+
+    async def lane(L):
+        while True:
+            await RisingEdge(dut.clk)
+            if int(dut.shade_start[L].value):
+                is_miss = int(dut.shade_is_miss[L].value)
+                for _ in range(latency - 1):
+                    await RisingEdge(dut.clk)
+                dut.shade_pixel_color[L].value = SKY if is_miss else 0xFFFFFF
+                dut.shade_done[L].value        = 1
+                await RisingEdge(dut.clk)
+                dut.shade_done[L].value        = 0
+
+    for L in range(nlanes):
+        cocotb.start_soon(lane(L))
     while True:
         await RisingEdge(dut.clk)
-        if int(dut.shade_start.value):
-            is_miss = int(dut.shade_is_miss.value)
-            for _ in range(latency - 1):
-                await RisingEdge(dut.clk)
-            dut.shade_pixel_color.value = SKY if is_miss else 0xFFFFFF
-            dut.shade_done.value        = 1
-            await RisingEdge(dut.clk)
-            dut.shade_done.value        = 0
 
 
 def build_svo_words():
@@ -95,24 +105,26 @@ def build_svo_words():
 
 
 async def bram_model(dut, words):
-    """1-cycle registered BRAM model matching svo_bram.sv behaviour.
+    """1-cycle registered wide BRAM model matching svo_bram_wide.sv (M2).
 
-    svo_bram uses 'always @(posedge clk) if (en) dout <= mem[addr]'.
-    Address committed after edge E is sampled by the BRAM at edge E+1 and
-    data is valid after E+1 — the FSM reads it at edge E+2.  The pending_data
-    pipeline delivers this: sample address this cycle, drive data next cycle.
-    Timer(1) waits past the NBA region so committed NB values are visible.
+    Port B returns the WHOLE node (8x 32-bit words) packed into 256 bits, word w
+    at bits [w*32 +: 32], addressed by node index. Same 2-edge latency as before:
+    node addr committed after edge E -> sampled at E+1 -> FSM latches at E+2.
     """
+    def rd(a):
+        return int(words[a]) if a < len(words) else 0
     pending_data = None
-    dut.svo_rd_data.value = 0
+    dut.svo_rd_wide.value = 0
     while True:
         await RisingEdge(dut.clk)
         await Timer(1, unit='ns')
         if pending_data is not None:
-            dut.svo_rd_data.value = pending_data
+            dut.svo_rd_wide.value = pending_data
         if int(dut.svo_rd_en.value):
-            addr = int(dut.svo_rd_addr.value)
-            pending_data = int(words[addr]) if addr < len(words) else 0
+            node = int(dut.svo_rd_node.value)
+            pending_data = 0
+            for w in range(8):
+                pending_data |= rd(node * 8 + w) << (w * 32)
         else:
             pending_data = None
 

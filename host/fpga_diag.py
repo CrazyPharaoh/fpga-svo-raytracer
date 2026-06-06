@@ -8,7 +8,7 @@
 # whether the VDMA write channel is armed/erroring.
 #   Run on the PYNQ: sudo /usr/local/share/pynq-venv/bin/python3 fpga_diag.py
 
-import time, math
+import time, math, sys
 import numpy as np
 from pynq import Overlay, MMIO, allocate
 import svo_builder
@@ -77,7 +77,7 @@ print(f"SVO: {len(words)} words")
 ip.write(0x48, 0)
 for w in words: ip.write(0x4C, w)
 for off, c in [(0x50,(0,0,0)),(0x54,(128,128,128)),(0x58,(60,160,40)),
-               (0x5C,(255,220,80)),(0x60,(0,0,0)),(0x64,(0,0,0)),
+               (0x5C,(255,220,80)),(0x60,(194,178,128)),(0x64,(235,240,250)),  # 4 sand, 5 snow
                (0x68,(135,206,235)),(0x6C,(180,200,220))]:
     ip.write(off, pack_rgb(*c))
 ip.write(0x70, to_q16(15.0)); ip.write(0x74, to_q16(0.5))   # shadow_bias 0.5 (matches gen_reference_shaded.py; 0.01 self-shadows)
@@ -148,3 +148,72 @@ try:
     print("saved /tmp/diag_render.png")
 except Exception as e:
     print("png save skipped:", e)
+
+# ── TEST SUMMARY: validate the multi-ray (M2) core ───────────────────────────
+# Asserts the new pieces actually engaged on hardware (not just "didn't hang"):
+# the ray pool interleaves (>1 slot in flight), the shading lanes run, the read
+# engine runs, the VDMA write channel is clean, and the frame is non-trivial.
+print("\n" + "=" * 62)
+print("  TEST SUMMARY — multi-ray (M2) core")
+print("=" * 62)
+
+results = []
+def check(name, ok, detail=""):
+    results.append(bool(ok))
+    print(f"  [{'PASS' if ok else 'FAIL'}] {name}" + (f"   ({detail})" if detail else ""))
+
+# Aggregate the per-slot / arbiter flags across ALL polls.
+slots_seen, max_concurrent = set(), 0
+grant_ever = shade_ever = bram_ever = False
+for (_t, _s, _d78, _d7c, d80) in samples:
+    m = decode_mr(d80)
+    active = [i for i, st in enumerate((m['s0'], m['s1'], m['s2'], m['s3'])) if st != 0]
+    slots_seen.update(active)
+    max_concurrent = max(max_concurrent, len(active))
+    grant_ever |= bool(m['grant_valid'])
+    shade_ever |= bool(m['shade_busy'])
+    bram_ever  |= bool(m['bram_busy'])
+
+# 1. Render completed cleanly (started, then busy dropped — no hang/timeout).
+final_status = samples[-1][1]
+completed = ever_busy and (final_status & 1) == 0
+check("render completed (busy returned to 0, no hang)", completed,
+      f"frame_done={(final_status >> 1) & 1}, ever_busy={ever_busy}")
+
+# 2. Render time + FPS (the whole point of M2 — report it, sanity-bound it).
+if t_first_busy is not None and last_busy_t is not None and last_busy_t > t_first_busy:
+    render_s = last_busy_t - t_first_busy
+    fps = 1.0 / render_s
+    check("render time measured", True, f"{render_s*1000:.1f} ms  ->  {fps:.2f} FPS")
+else:
+    check("render time measured", False, "never observed a busy interval")
+
+# 3. VDMA S2MM write channel healthy (no error bits).
+v = vdma_s2mm(vdma)
+check("VDMA S2MM no error", v['Err'] == 0, f"SR={v['SR']} Err={v['Err']}")
+
+# 4. Frame is non-trivial (sky + terrain should fill most of 320x240).
+nz_ratio = nz / (IMG_W * IMG_H)
+check("frame non-black ratio plausible (>40%)", nz_ratio > 0.40,
+      f"{nz_ratio*100:.1f}% non-black")
+
+# 5. Multi-ray pool ACTUALLY interleaving: >=2 distinct slots seen in flight.
+#    If only slot 0 ever runs, the pool/scheduler is effectively single-ray.
+check("multi-ray interleaving (>=2 slots in flight)", len(slots_seen) >= 2,
+      f"slots used={sorted(slots_seen)}, max concurrent={max_concurrent}")
+
+# 6. Shading lanes engaged (this is a SHADE_MODE=1 build).
+check("shading pipeline active (shade_busy seen)", shade_ever)
+
+# 7. Wide-read BRAM engine active.
+check("BRAM read engine active (bram_busy seen)", bram_ever)
+
+# 8. Scheduler granting work.
+check("scheduler granting (grant_valid seen)", grant_ever)
+
+print("-" * 62)
+ok_n = sum(results)
+print(f"  OVERALL: {'ALL PASS' if ok_n == len(results) else 'SOME FAILED'}"
+      f"   ({ok_n}/{len(results)})")
+print("=" * 62)
+sys.exit(0 if ok_n == len(results) else 1)

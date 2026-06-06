@@ -23,7 +23,7 @@ import svo_builder, fly_camera
 # ── backend A: terminal stdin (default; no board USB) ─────────────────────────
 import termios, tty
 CHAR_ACTION = {'w':'fwd','s':'back','a':'left','d':'right',
-               ' ':'up','c':'down','-':'zoomOut','=':'zoomIn','q':'quit'}
+               ' ':'up','c':'down','-':'zoomOut','=':'zoomIn','q':'quit','p':'dump'}
 ARROW_ACTION = {0x41:'pitchU', 0x42:'pitchD', 0x44:'yawL', 0x43:'yawR'}  # ESC [ A/B/D/C
 
 class StdinKeyboard:
@@ -140,10 +140,19 @@ class Renderer:
         def cc(r, g, b): return pack_rgb(r, b, g)
         lm = math.sqrt(1 + 4 + 2.25); ld = (1/lm, 2/lm, 1.5/lm)
         self.ip.write(0x3C, to_q16(ld[0])); self.ip.write(0x40, to_q16(ld[1])); self.ip.write(0x44, to_q16(ld[2]))
-        for i, (r, g, b) in enumerate([(0,0,0),(120,120,120),(60,160,40),(255,0,0),(0,0,0),(0,0,0)]):
+        # LUT: 0 air, 1 stone, 2 grass, 3 glowing (overwritten per-frame, see set_glow),
+        #      4 sand (low/beaches), 5 snow (high peaks).
+        for i, (r, g, b) in enumerate([(0,0,0),(120,120,120),(60,160,40),(255,0,0),(194,178,128),(235,240,250)]):
             self.ip.write(0x50 + i*4, cc(r, g, b))
         self.ip.write(0x68, cc(135,206,235)); self.ip.write(0x6C, cc(180,200,220))
         self.ip.write(0x70, to_q16(15.0)); self.ip.write(0x74, to_q16(0.5))
+    def set_glow(self, phase):
+        # Animate the glowing block (LUT[3]) through a rainbow so it looks alive.
+        # phase is a float; full hue cycle every 2*pi. Same G<->B HDMI pre-swap as _shading.
+        r = int(127.5 * (1 + math.sin(phase)))
+        g = int(127.5 * (1 + math.sin(phase + 2.0943951)))   # +120 deg
+        b = int(127.5 * (1 + math.sin(phase + 4.1887902)))   # +240 deg
+        self.ip.write(0x5C, pack_rgb(r, b, g))               # LUT[3] = 0x50 + 3*4
     def _arm_s2mm(self, idx):
         # arm the render-write channel to write the frame into buffer `idx`
         self.vdma.write(0x30, 0x4)
@@ -217,6 +226,22 @@ def main(use_evdev=False, device=None):
                 cam.look(TURN*dyaw, TURN*dpit)
             if 'zoomOut' in h: cam.scale *= ZOOM
             if 'zoomIn'  in h: cam.scale /= ZOOM
+            if 'dump' in h:
+                fwd, right, up = cam.vectors()
+                # u_edge = (IMG_W/2)*scale = tan(fov/2); len2_corner = 1+u_edge^2+(v_edge)^2
+                u_edge = (IMG_W/2)*cam.scale
+                v_edge = (IMG_H/2)*cam.scale
+                print(f"\n# --- camera dump (paste into the sim to reproduce) ---")
+                print(f"pos   = {[round(x,4) for x in cam.pos]}")
+                print(f"fwd   = {[round(x,4) for x in fwd]}")
+                print(f"right = {[round(x,4) for x in right]}")
+                print(f"up    = {[round(x,4) for x in up]}")
+                print(f"yaw={cam.yaw:.4f} pitch={cam.pitch:.4f} scale={cam.scale:.6f}")
+                print(f"u_edge={u_edge:.3f} v_edge={v_edge:.3f}  "
+                      f"len2_corner={1+u_edge**2+v_edge**2:.3f}  "
+                      f"(rsqrt seed y0={1.5-(1+u_edge**2+v_edge**2)/2:.3f}; "
+                      f"{'OK' if 1.5-(1+u_edge**2+v_edge**2)/2 > 0.2 else 'TOO LOW -> distortion'})\n")
+            rnd.set_glow(frames * 0.15)      # animate the glowing block (rainbow)
             rnd.set_camera(cam)
             if not rnd.render():
                 print('  (render timeout)')

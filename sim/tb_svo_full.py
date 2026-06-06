@@ -26,12 +26,12 @@ _LM = math.sqrt(1.0**2 + 2.0**2 + 1.5**2)
 LIGHT_DIR = (1.0/_LM, 2.0/_LM, 1.5/_LM)
 
 LUT = [
-    (0,   0,   0),
-    (120, 120, 120),
-    (60,  160,  40),
-    (255,   0,   0),
-    (0,   0,   0),
-    (0,   0,   0),
+    (0,   0,   0),    # 0 air
+    (120, 120, 120),  # 1 stone
+    (60,  160,  40),  # 2 grass
+    (255,   0,   0),  # 3 glowing (HW animates; static here for the oracle)
+    (194, 178, 128),  # 4 sand
+    (235, 240, 250),  # 5 snow
 ]
 
 SKY_COLOR   = (135, 206, 235)
@@ -95,27 +95,41 @@ _FACE_NAMES  = {0: 'X', 1: 'Y', 2: 'Z'}
 # ─── BRAM model ───────────────────────────────────────────────────────────────
 
 async def bram_model(dut, words):
-    """Dual-port 1-cycle registered BRAM model.
-    Port B (primary, gated on en) -> svo_rd_data_prim.
-    Port A (shadow, always reads addr) -> svo_rd_data_shad."""
+    """1-cycle registered BRAM model.
+    Primary (port B wide, gated on en) -> svo_rd_wide_prim: whole node = 8 words packed
+        into 256 bits, word w at bits [w*32 +: 32]. Addressed by node index.
+    Two shadow lanes (always read addr) -> svo_rd_data_shad / svo_rd_data_shad1: 32-bit
+        word at {node,word} (matches the dual-port svo_bram_shadow on HW; w5-w7 are
+        unused by the shadow so serving the real word vs 0 gives the same shadow result)."""
     def rd(addr):
         a = int(addr)
         return int(words[a]) if a < len(words) else 0
+    def rd_node(node):
+        n = int(node)
+        v = 0
+        for w in range(8):
+            v |= rd(n * 8 + w) << (w * 32)
+        return v
     pend_prim = None
     pend_shad = None
-    dut.svo_rd_data_prim.value = 0
+    pend_shad1 = None
+    dut.svo_rd_wide_prim.value = 0
     dut.svo_rd_data_shad.value = 0
+    dut.svo_rd_data_shad1.value = 0
     while True:
         await RisingEdge(dut.clk)
         await Timer(1, unit='ns')
         if pend_prim is not None:
-            dut.svo_rd_data_prim.value = pend_prim
+            dut.svo_rd_wide_prim.value = pend_prim
         if pend_shad is not None:
             dut.svo_rd_data_shad.value = pend_shad
-        # primary: port B, gated on en (matches dout_b <= mem[addr_b] if en_b)
-        pend_prim = rd(dut.svo_rd_addr_prim.value) if int(dut.svo_rd_en_prim.value) else None
-        # shadow: port A, always reads addr (matches dout_a <= mem[addr_a])
-        pend_shad = rd(dut.svo_rd_addr_shad.value)
+        if pend_shad1 is not None:
+            dut.svo_rd_data_shad1.value = pend_shad1
+        # primary: port B wide, gated on en (matches dout_b_wide <= mem[node] if en_b)
+        pend_prim = rd_node(dut.svo_rd_node_prim.value) if int(dut.svo_rd_en_prim.value) else None
+        # shadow lanes: always read addr (matches dout_a/dout_b <= mem[addr])
+        pend_shad  = rd(dut.svo_rd_addr_shad.value)
+        pend_shad1 = rd(dut.svo_rd_addr_shad1.value)
 
 
 # ─── Pixel collector ──────────────────────────────────────────────────────────
@@ -345,10 +359,21 @@ async def test_render_frame_shaded(dut):
 
     # Camera (identical to tb_svo_traversal.py)
     #pos   = [40.0, 60.0, 10.0]
-    pos = [30, 15, 0]
-    fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
-    right = normalise(cross(fwd, [0, 1, 0]))
-    up    = cross(right, fwd)
+    # pos = [30, 15, 0]
+    # fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
+    # right = normalise(cross(fwd, [0, 1, 0]))
+    # up    = cross(right, fwd)
+
+    # #test 1
+    # pos   = [47.0, 8.857, -0.512]
+    # fwd   = [0.0, -1.0, 0.018]
+    # right = [-1.0, 0.0, 0.0]
+    # up    = [0.0, 0.018, 1.0]
+    #test 2
+    pos   = [48.0095, 16.7627, 27.9686]
+    fwd   = [-0.9094, -0.337, 0.2437]
+    right = [-0.2588, 0.0, -0.9659]
+    up    = [-0.3255, 0.9415, 0.0872]
     # scale = tan(fov/2)/(IMG_W/2): same FOV at any RENDER_DIV. At 320 -> /160.0.
     fov_scale = math.tan(math.radians(60) / 2) / (IMG_W / 2)
 

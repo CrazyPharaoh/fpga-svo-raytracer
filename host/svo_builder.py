@@ -23,6 +23,11 @@ BLOCK_AIR     = 0
 BLOCK_STONE   = 1
 BLOCK_GRASS   = 2
 BLOCK_GLOWING = 3
+BLOCK_SAND    = 4   # low terrain (beaches)
+BLOCK_SNOW    = 5   # high peaks
+# NOTE: block_id 0..5 only — shading LUT is 6 entries and the LUT index is clamped to 5
+# in shading_pipeline.sv (and gen_reference_shaded.py). Adding a 7th colour needs the LUT
+# array + register map extended (see CLAUDE.md / the LUT plumbing in axi_lite_slave.sv).
 
 
 @dataclass
@@ -50,7 +55,9 @@ def build_world() -> np.ndarray:
             h = max(1, min(6, 1 + int(2 * (math.sin(0.4 * x) + math.cos(0.35 * z) + 2))))
             for y in range(h):
                 grid[x, y, z] = BLOCK_STONE
-            grid[x, h - 1, z] = BLOCK_GRASS
+            # Height-based surface colour: sand low, grass mid, snow on peaks.
+            top = BLOCK_SNOW if h >= 5 else (BLOCK_SAND if h <= 2 else BLOCK_GRASS)
+            grid[x, h - 1, z] = top
     # Glowing cluster at world centre
     cx, cz = WORLD_SIZE // 2, WORLD_SIZE // 2
     peak = max(1, min(6, 1 + int(2 * (math.sin(0.4 * cx) + math.cos(0.35 * cz) + 2))))

@@ -104,6 +104,16 @@ module shading_pipeline (
     logic [23:0] combined;
     logic        shadowed;
 
+    // ---- XOR checkerboard texture (procedural surface variation) ----
+    // 0.75x the base colour on alternating unit cells. pattern = LSB of each integer
+    // hit coordinate (Q16.16 bit 16) XORed — one gate + shift, free in hardware.
+    // Mirrored in gen_reference_shaded.py so the reference PNG matches.
+    wire        tex_dark = ~(hit_px[16] ^ hit_py[16] ^ hit_pz[16]);
+    wire [23:0] base_lut = lut[(block_id > 5) ? 5 : block_id][23:0];
+    wire [23:0] base_tex = {base_lut[23:16] - (base_lut[23:16] >> 3),
+                            base_lut[15:8]  - (base_lut[15:8]  >> 3),
+                            base_lut[7:0]   - (base_lut[7:0]   >> 3)};
+
     // Pipelined S_DIFFSPEC / S_FOG intermediates (registered between stages)
     logic signed [31:0] dnl;                 // dot(normal, light) — reused for diffuse + reflect
     logic signed [31:0] m_nx, m_ny, m_nz;    // reflect numerator  = dnl * normal
@@ -171,8 +181,8 @@ module shading_pipeline (
                     2'd2: nz <= hit_face_sign ? -32'sh0001_0000 : 32'sh0001_0000;
                     default: nx <= 32'sh0001_0000;
                 endcase
-                // Look up base colour; clamp block_id to LUT range [0,5]
-                base_color <= lut[(block_id > 5) ? 5 : block_id][23:0];
+                // Look up base colour (clamped to LUT range [0,5]) + XOR checkerboard texture.
+                base_color <= tex_dark ? base_tex : base_lut;
                 state <= S_DS_A;
             end
 
