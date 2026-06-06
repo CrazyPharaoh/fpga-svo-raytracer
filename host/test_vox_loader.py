@@ -48,12 +48,12 @@ def test_material_flags_default_rules():
     vox = vox_loader.parse_vox(VOX)
     remap = vox_loader.build_colour_remap(vox)
     flags = vox_loader.build_material_flags(vox, remap)
-    # idx24 orange -> lava(2); idx181 cyan & idx199 blue -> water(1); idx4 yellow -> glow(3)
+    # idx24 orange -> lava(2); idx181 cyan & idx199 blue -> water(1)
     assert flags[remap[24]] == vox_loader.MAT_LAVA
     assert flags[remap[181]] == vox_loader.MAT_WATER
     assert flags[remap[199]] == vox_loader.MAT_WATER
-    assert flags[remap[4]] == vox_loader.MAT_GLOW
-    # a terrain grey is static
+    # idx4 (255,255,102) is SAND -> static (not glow); a terrain grey is also static
+    assert flags[remap[4]] == vox_loader.MAT_STATIC
     assert flags[remap[251]] == vox_loader.MAT_STATIC
 
 

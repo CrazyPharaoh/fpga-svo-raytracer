@@ -30,11 +30,12 @@ class NodeBudgetError(Exception):
 
 
 # Designate animation materials by exact RGB. Edit to match the colours you paint with.
+# (255,255,102) pale-yellow is SAND -> static, NOT glow. To make a block glow, add its
+# RGB here with MAT_GLOW.
 DEFAULT_MATERIAL_RULES = {
     (0, 255, 255): MAT_WATER,   # cyan
     (0, 102, 255): MAT_WATER,   # blue
     (255, 102, 0): MAT_LAVA,    # orange
-    (255, 255, 102): MAT_GLOW,  # yellow
 }
 
 
