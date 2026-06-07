@@ -11,6 +11,17 @@ reset_run synth_1
 # kept giving the old netlist no matter what the RTL said. Keep this OFF while iterating.
 catch { reset_incremental_synthesis [get_runs synth_1] }
 
+# Clear the IP cache. CRITICAL: cached IP netlists are keyed by the .xci
+# customization, NOT the HDL content — so raw edits to ipshared/*.sv (or the IP
+# catalog source) are INVISIBLE to a build that hits the cache. This is exactly
+# how the axis_upscale_2x SOF-lock fix got silently dropped from a bitstream
+# (Bug 14 retest: routed design had no 'synced' register, b1a4 never compiled).
+config_ip_cache -clear_output_repo
+
+# Force packaged IPs to re-copy their sources from the IP catalog (FYP/ip) and
+# regenerate output products. Without the reset, up-to-date products are reused.
+catch { reset_target all [get_ips svo_system_axis_upscale_2x_0_0] }
+
 # Regenerate the block-design wrapper so IP / parameter changes propagate to synth,
 # and refresh the ipshared copies of the RTL from the IP source.
 generate_target all [get_files -filter {FILE_TYPE == "Block Designs"}]

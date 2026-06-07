@@ -97,7 +97,7 @@ def shade_pixel(t_hit, hit_pos, face_axis, face_sign, block_id,
         if ((w_band >> 1) & 3) == 2 or (w_spk >> 5) == 7:
             base = tuple(_lighten(c) for c in base)
     elif mat == vox_loader.MAT_LAVA:
-        l_band = ((ix) - (iz) + (TIME_PHASE >> 3)) & 0x1F
+        l_band = ((iy) + (TIME_PHASE >> 3)) & 0x1F   # vertical: lavafall flows downward
         if ((l_band >> 2) & 3) == 3:
             base = tuple(_lighten(c) for c in base)
         else:

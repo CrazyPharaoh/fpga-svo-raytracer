@@ -12,7 +12,7 @@
 # Software-only: writes the existing camera registers + triggers render; the HDMI MM2S
 # is parked on frame_phys, so each render updates the monitor by itself. ~3 FPS.
 
-import os, glob, struct, select, fcntl, sys, time, math
+import os, glob, struct, select, fcntl, sys, time, math, json
 import numpy as np
 from pynq import Overlay, MMIO, allocate, Clocks
 import svo_builder, fly_camera, vox_loader
@@ -114,8 +114,34 @@ HSIZE = STRIDE = IMG_W * BPP
 def to_q16(f):       return int(f * 65536) & 0xFFFFFFFF
 def pack_rgb(r,g,b): return ((int(r)&0xFF)<<16)|((int(g)&0xFF)<<8)|(int(b)&0xFF)
 
+# ── scene config (demo parameters, no rebuild needed) ─────────────────────────
+# All values live in a JSON next to this script (default scene.json; pass another
+# on the CLI: `python3 fly.py beach.json`). Missing keys fall back to these.
+DEFAULT_SCENE = {
+    "world": "world.vox",
+    "sky_color": [135, 206, 235],
+    "fog_color": [180, 200, 220],
+    "fog_start": 15.0,
+    "shadow_bias": 0.5,
+    "light_dir": [1.0, 2.0, 1.5],
+    "anim_speed": 1.0,
+    "materials": None,   # None -> vox_loader.DEFAULT_MATERIAL_RULES
+}
+
+def load_scene(path=None):
+    scene = dict(DEFAULT_SCENE)
+    if path is None:
+        cand = os.path.join(os.path.dirname(__file__), 'scene.json')
+        path = cand if os.path.exists(cand) else None
+    if path is not None:
+        with open(path) as f:
+            scene.update(json.load(f))
+        print(f'Scene: {path}  (world={scene["world"]})')
+    return scene
+
 class Renderer:
-    def __init__(self):
+    def __init__(self, scene=None):
+        self.scene = scene if scene is not None else load_scene()
         Clocks.fclk0_mhz = 100
         self.ol = Overlay(BITSTREAM); self.ip = self.ol.top_0
         base = self.ol.ip_dict['axi_vdma_0']['phys_addr']
@@ -124,8 +150,10 @@ class Renderer:
         self.bufs = [allocate(shape=(IMG_H, IMG_W, BPP), dtype=np.uint8) for _ in range(2)]
         self.phys = [b.physical_address for b in self.bufs]
         self.front = 0                       # buffer currently scanned out to HDMI
+        rules = (vox_loader.rules_from_materials(self.scene['materials'])
+                 if self.scene['materials'] else None)
         self.grid, self.lut_words = vox_loader.load_world(
-            os.path.join(os.path.dirname(__file__), 'world.vox'))
+            os.path.join(os.path.dirname(__file__), self.scene['world']), rules)
         self._upload_svo(); self._shading()
         self._arm_s2mm(1 - self.front)       # first render targets the back buffer
         self._arm_mm2s()
@@ -140,7 +168,9 @@ class Renderer:
         # cancels out and the monitor shows correct colours. (Proper fix = add a color_swap
         # block in Vivado, then drop this swap.)  cc(r,g,b) writes (r, b, g).
         def cc(r, g, b): return pack_rgb(r, b, g)
-        lm = math.sqrt(1 + 4 + 2.25); ld = (1/lm, 2/lm, 1.5/lm)
+        s = self.scene
+        lx, ly, lz = s['light_dir']
+        lm = math.sqrt(lx*lx + ly*ly + lz*lz); ld = (lx/lm, ly/lm, lz/lm)
         self.ip.write(0x3C, to_q16(ld[0])); self.ip.write(0x40, to_q16(ld[1])); self.ip.write(0x44, to_q16(ld[2]))
         # LUT (16 entries) uploaded via the auto-incrementing register pair from the
         # loaded MagicaVoxel scene. G<->B HDMI pre-swap kept: write (R,B,G) but preserve
@@ -150,8 +180,8 @@ class Renderer:
             flag = (w >> 24) & 0xFF
             r, g, b = (w >> 16) & 0xFF, (w >> 8) & 0xFF, w & 0xFF
             self.ip.write(0x54, (flag << 24) | pack_rgb(r, b, g))   # auto-increments
-        self.ip.write(0x68, cc(135,206,235)); self.ip.write(0x6C, cc(180,200,220))
-        self.ip.write(0x70, to_q16(15.0)); self.ip.write(0x74, to_q16(0.5))
+        self.ip.write(0x68, cc(*s['sky_color'])); self.ip.write(0x6C, cc(*s['fog_color']))
+        self.ip.write(0x70, to_q16(s['fog_start'])); self.ip.write(0x74, to_q16(s['shadow_bias']))
     def set_glow(self, phase):
         # Animate whichever block_id is flagged MAT_GLOW through a rainbow so it looks
         # alive. phase is a float; full hue cycle every 2*pi. Same G<->B HDMI pre-swap.
@@ -209,10 +239,10 @@ MOVE = 1.5                   # world-units per frame
 TURN = math.radians(5)       # radians per frame
 ZOOM = 1.05                  # FOV scale multiplier per frame
 
-def main(use_evdev=False, device=None):
+def main(use_evdev=False, device=None, scene_path=None):
     fov = math.tan(math.radians(60)/2) / (IMG_W/2)
     cam = fly_camera.Camera.looking_at([32, 40, -20], [32, 4, 32], scale=fov)
-    rnd = Renderer()
+    rnd = Renderer(load_scene(scene_path))
     if use_evdev:
         kb = EvdevKeyboard(find_keyboard(device))
         print('evdev: type on the BOARD keyboard. WASD move, arrows look, Space/Shift up-down, Q/E zoom, Esc quit')
@@ -252,7 +282,7 @@ def main(use_evdev=False, device=None):
                       f"(rsqrt seed y0={1.5-(1+u_edge**2+v_edge**2)/2:.3f}; "
                       f"{'OK' if 1.5-(1+u_edge**2+v_edge**2)/2 > 0.2 else 'TOO LOW -> distortion'})\n")
             rnd.set_glow(frames * 0.15)      # animate the glowing block (rainbow)
-            rnd.ip.write(0x84, frames & 0xFFFFFFFF)   # time_phase: animates water/lava in HW
+            rnd.ip.write(0x84, int(frames * rnd.scene['anim_speed']) & 0xFFFFFFFF)   # time_phase: water/lava anim
             rnd.set_camera(cam)
             if not rnd.render():
                 print('  (render timeout)')
@@ -268,4 +298,6 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     use_evdev = '--evdev' in args
     args = [a for a in args if a != '--evdev']
-    main(use_evdev, args[0] if args else None)
+    scene_path = next((a for a in args if a.endswith('.json')), None)
+    args = [a for a in args if not a.endswith('.json')]
+    main(use_evdev, args[0] if args else None, scene_path)

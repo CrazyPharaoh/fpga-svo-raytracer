@@ -122,8 +122,9 @@ module shading_pipeline (
     wire        w_brt   = (w_band[2:1] == 2'b10);                 // ~scrolling stripe
     wire [7:0]  w_spk   = hit_px[18:16] * 8'd37 + hit_pz[18:16] * 8'd101 + time_phase[7:0];
     wire        w_spark = (w_spk[7:5] == 3'b111);                 // sparse glints
-    // Lava: bright cracks that crawl the opposite way.
-    wire [4:0]  l_band  = hit_px[20:16] - hit_pz[20:16] + time_phase[7:3];
+    // Lava: bright bands that flow DOWNWARD (lavafall) — keyed off the vertical
+    // coord so (y + t) bands march toward -y as time advances.
+    wire [4:0]  l_band  = hit_py[20:16] + time_phase[7:3];
     wire        l_brt   = (l_band[3:2] == 2'b11);
 
     // brighten toward white by ~50% (add half of (255-c)) — cheap, saturating not needed

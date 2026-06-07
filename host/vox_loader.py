@@ -39,6 +39,19 @@ DEFAULT_MATERIAL_RULES = {
 }
 
 
+def rules_from_materials(materials: dict) -> dict:
+    """Build a {(r,g,b): flag} rules dict from a scene-config "materials" section:
+    {"water": [[r,g,b], ...], "lava": [...], "glow": [...]}. Unknown material
+    names raise (loud beats silent)."""
+    name_to_flag = {"water": MAT_WATER, "lava": MAT_LAVA, "glow": MAT_GLOW}
+    rules = {}
+    for name, colours in (materials or {}).items():
+        flag = name_to_flag[name]
+        for rgb in colours:
+            rules[tuple(rgb)] = flag
+    return rules
+
+
 @dataclass
 class Vox:
     size: Tuple[int, int, int]
