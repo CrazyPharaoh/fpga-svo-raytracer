@@ -133,22 +133,38 @@ def pack_lut_word(rgb, flag) -> int:
     return ((flag & 0xFF) << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF)
 
 
+def embed_grid(vox: "Vox", remap: dict) -> np.ndarray:
+    """Place a .vox model (any size up to 64^3) into the fixed 64^3 engine grid.
+
+    The hardware always traverses 64^3; a smaller model just occupies a sub-region
+    (empty octants collapse to air and rays pass through). Placement: floor-aligned
+    in Y (sits on the ground) and centred in X/Z so the default camera frames it.
+    MagicaVoxel is Z-up, the engine is Y-up: (vx,vy,vz) -> grid[x=vx, y=vz, z=vy],
+    so MagicaVoxel size = (X, Y, Z) maps to engine extents (X, Z=height, Y).
+    """
+    sx, sy, sz = vox.size
+    if max(sx, sy, sz) > WORLD_SIZE:
+        raise ValueError(
+            f"world {vox.size} exceeds {WORLD_SIZE}^3 — downscale in MagicaVoxel "
+            f"or rebuild with a larger WORLD_SIZE")
+    ox = (WORLD_SIZE - sx) // 2     # centre engine-X
+    oz = (WORLD_SIZE - sy) // 2     # centre engine-Z (= MagicaVoxel Y)
+    grid = np.zeros((WORLD_SIZE, WORLD_SIZE, WORLD_SIZE), dtype=np.uint8)
+    for (vx, vy, vz, ci) in vox.voxels:
+        grid[vx + ox, vz, vy + oz] = remap[ci]   # Y floor-aligned (offset 0)
+    return grid
+
+
 def load_world(path: str, rules=None):
     """Parse a .vox into (grid[64,64,64] uint8 block_ids, lut_words[16]).
 
-    MagicaVoxel is Z-up, the engine is Y-up: map (vx,vy,vz) -> grid[vx, vz, vy].
+    Worlds up to 64^3 are embedded (floor-aligned, X/Z-centred); see embed_grid.
     Raises NodeBudgetError if the built SVO exceeds MAX_NODES.
     """
     vox = parse_vox(path)
-    if vox.size != (WORLD_SIZE, WORLD_SIZE, WORLD_SIZE):
-        raise ValueError(f"{path}: size {vox.size}, expected 64^3")
     remap = build_colour_remap(vox)
     flags = build_material_flags(vox, remap, rules)
-
-    grid = np.zeros((WORLD_SIZE, WORLD_SIZE, WORLD_SIZE), dtype=np.uint8)
-    for (vx, vy, vz, ci) in vox.voxels:
-        # MagicaVoxel Z-up -> engine Y-up: y = vz, z = vy
-        grid[vx, vz, vy] = remap[ci]
+    grid = embed_grid(vox, remap)
 
     lut_words = [0] * 16
     for ci, bid in remap.items():

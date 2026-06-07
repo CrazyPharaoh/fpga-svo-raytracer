@@ -79,3 +79,35 @@ def test_load_world_fits_node_budget():
     import svo_builder
     nodes = svo_builder.flatten_svo(svo_builder.build_svo(grid))
     assert len(nodes) <= 4096
+
+
+# ---- smaller-world embedding (no rebuild; hardware stays 64^3) ----
+
+def _mk_vox(size, voxels):
+    pal = [(0, 0, 0, 255)] * 256
+    pal[6] = (10, 20, 30, 255)   # colourIndex 7 -> palette[6]
+    return vox_loader.Vox(size=size, voxels=voxels, palette=pal)
+
+def test_embed_small_world_centred_and_floor_aligned():
+    # a single voxel at MagicaVoxel origin (0,0,0) in a 16^3 model
+    vox = _mk_vox((16, 16, 16), [(0, 0, 0, 7)])
+    remap = vox_loader.build_colour_remap(vox)
+    grid = vox_loader.embed_grid(vox, remap)
+    assert grid.shape == (64, 64, 64)
+    off = (64 - 16) // 2   # 24
+    # X,Z centred by `off`; Y (height) floor-aligned at 0
+    assert grid[off, 0, off] == remap[7]
+    assert int(grid.sum() > 0) == 1 and int((grid != 0).sum()) == 1
+
+def test_embed_64_world_unchanged():
+    # a 64^3 model must still land at the origin (offset 0) — backward compatible
+    vox = _mk_vox((64, 64, 64), [(1, 2, 3, 7)])
+    remap = vox_loader.build_colour_remap(vox)
+    grid = vox_loader.embed_grid(vox, remap)
+    assert grid[1, 3, 2] == remap[7]   # (vx,vy,vz)->[vx, vz, vy]
+
+def test_world_larger_than_64_errors():
+    vox = _mk_vox((96, 16, 16), [(0, 0, 0, 7)])
+    remap = vox_loader.build_colour_remap(vox)
+    with pytest.raises(ValueError):
+        vox_loader.embed_grid(vox, remap)
