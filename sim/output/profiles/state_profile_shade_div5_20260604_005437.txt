@@ -1,0 +1,25 @@
+========================================================
+FSM STATE CYCLE PROFILE  [shade]
+  date   : 2026-06-04 00:54:37
+  git    : 949cbdd-dirty
+  render : RENDER_DIV=5  (64x48)
+  frame  : 800,417 busy cycles
+========================================================
+state                     cycles     percent
+--------------------------------------------------------
+S_BRAM_WAIT              443,544      55.41%
+S_CHECK_CHILD             65,154       8.14%
+S_ENTER_NODE              55,443       6.93%
+S_RAY_SETUP               52,600       6.57%
+S_EMPTY                   52,346       6.54%
+S_IDLE                    37,192       4.65%
+S_MIXED                   31,512       3.94%
+S_POP_STACK               21,776       2.72%
+S_WAIT_SHADE              18,885       2.36%
+S_ROOT_SLAB               15,821       1.98%
+S_WRITE_PIXEL              3,072       0.38%
+S_SOLID                    2,155       0.27%
+S_MISS                       917       0.11%
+--------------------------------------------------------
+TOTAL                    800,417     100.00%
+N = 4 multi ray but broken output (closer to being fixed)

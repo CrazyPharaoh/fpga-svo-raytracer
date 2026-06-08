@@ -1,0 +1,25 @@
+========================================================
+FSM STATE CYCLE PROFILE  [shade]
+  date   : 2026-06-04 20:16:35
+  git    : d624fdd-dirty
+  render : RENDER_DIV=5  (64x48)
+  frame  : 766,550 busy cycles
+========================================================
+state                     cycles     percent
+--------------------------------------------------------
+S_BRAM_WAIT              261,495      34.11%
+S_WAIT_SHADE             169,436      22.10%
+S_RAY_SETUP               75,161       9.81%
+S_CHECK_CHILD             65,154       8.50%
+S_ENTER_NODE              55,443       7.23%
+S_EMPTY                   52,346       6.83%
+S_MIXED                   31,512       4.11%
+S_POP_STACK               21,776       2.84%
+S_ROOT_SLAB               17,933       2.34%
+S_IDLE                    10,150       1.32%
+S_WRITE_PIXEL              3,072       0.40%
+S_SOLID                    2,155       0.28%
+S_MISS                       917       0.12%
+--------------------------------------------------------
+TOTAL                    766,550     100.00%
+before extra shade lanes
