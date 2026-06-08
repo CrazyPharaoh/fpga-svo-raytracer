@@ -23,7 +23,8 @@ import svo_builder, fly_camera, vox_loader
 # ── backend A: terminal stdin (default; no board USB) ─────────────────────────
 import termios, tty
 CHAR_ACTION = {'w':'fwd','s':'back','a':'left','d':'right',
-               ' ':'up','c':'down','-':'zoomOut','=':'zoomIn','q':'quit','p':'dump'}
+               ' ':'up','c':'down','-':'zoomOut','=':'zoomIn','q':'quit','p':'dump',
+               'i':'sunUp','k':'sunDown','j':'sunLeft','l':'sunRight','o':'sunOrbit'}
 ARROW_ACTION = {0x41:'pitchU', 0x42:'pitchD', 0x44:'yawL', 0x43:'yawR'}  # ESC [ A/B/D/C
 
 class StdinKeyboard:
@@ -60,7 +61,8 @@ EVENT_SIZE = struct.calcsize(EVENT_FMT)          # 16 on 32-bit PYNQ, 24 on 64-b
 EVIOCGRAB  = 0x40044590
 EVDEV_ACTION = {17:'fwd', 31:'back', 30:'left', 32:'right', 57:'up', 42:'down',
                 103:'pitchU', 108:'pitchD', 105:'yawL', 106:'yawR',
-                16:'zoomOut', 18:'zoomIn', 1:'quit'}
+                16:'zoomOut', 18:'zoomIn', 1:'quit',
+                23:'sunUp', 37:'sunDown', 36:'sunLeft', 38:'sunRight', 24:'sunOrbit'}  # I/K/J/L/O
 
 def find_keyboard(override=None, wait=20.0):
     if override:
@@ -208,6 +210,14 @@ class Renderer:
         self.mm2s.write(0x28, self.front)        # PARK_PTR_REG [4:0] = MM2S park frame store
         self.mm2s.write(0x58, STRIDE); self.mm2s.write(0x54, HSIZE)
         self.mm2s.write(0x00, 0x1); self.mm2s.write(0x50, IMG_H)
+    def set_sun(self, az, el):
+        # Live sun: az = azimuth around the up(Y) axis, el = elevation above horizon.
+        # light_dir points FROM surfaces TOWARD the sun, already unit-length (no swap;
+        # this is a direction vector, not a colour). Shadows follow it automatically.
+        ce = math.cos(el)
+        self.ip.write(0x3C, to_q16(ce * math.sin(az)))
+        self.ip.write(0x40, to_q16(math.sin(el)))
+        self.ip.write(0x44, to_q16(ce * math.cos(az)))
     def set_camera(self, cam):
         fwd, right, up = cam.vectors()
         self.ip.write(0x08, to_q16(cam.pos[0])); self.ip.write(0x0C, to_q16(cam.pos[1])); self.ip.write(0x10, to_q16(cam.pos[2]))
@@ -249,12 +259,35 @@ def main(use_evdev=False, device=None, scene_path=None):
     else:
         kb = StdinKeyboard()
         print('Type IN THIS TERMINAL: WASD move, arrows look, Space/C up-down, -/= zoom, Q or Ctrl-C quit')
+    print('  Sun: I/K raise/lower, J/L swing, O toggle auto-orbit.')
+
+    # ── live sun (Feature 2): seed azimuth/elevation from the scene light_dir ──
+    lx, ly, lz = rnd.scene['light_dir']
+    ln = math.sqrt(lx*lx + ly*ly + lz*lz) or 1.0
+    sun_el = math.asin(max(-1.0, min(1.0, ly / ln)))   # elevation above horizon
+    sun_az = math.atan2(lx, lz)                          # azimuth around up axis
+    SUN_STEP   = math.radians(4)     # per-frame nudge while a key is held
+    ORBIT_STEP = math.radians(2)     # per-frame auto-orbit speed
+    sun_orbit = False
+    prev_orbit_key = False
+
     frames = 0; t0 = time.time()
+    fps_t = t0; fps_n = 0
     try:
         while True:
             h = kb.poll()
             if 'quit' in h:
                 break
+            # ── sun controls ──────────────────────────────────────────────────
+            sun_el += SUN_STEP * (('sunUp' in h) - ('sunDown' in h))
+            sun_el  = max(math.radians(-89), min(math.radians(89), sun_el))
+            sun_az += SUN_STEP * (('sunRight' in h) - ('sunLeft' in h))
+            orbit_key = 'sunOrbit' in h
+            if orbit_key and not prev_orbit_key:        # toggle on key-down edge only
+                sun_orbit = not sun_orbit
+            prev_orbit_key = orbit_key
+            if sun_orbit:
+                sun_az += ORBIT_STEP
             fwd  = ('fwd' in h)  - ('back' in h)
             strf = ('right' in h) - ('left' in h)
             vert = ('up' in h)   - ('down' in h)
@@ -282,11 +315,22 @@ def main(use_evdev=False, device=None, scene_path=None):
                       f"(rsqrt seed y0={1.5-(1+u_edge**2+v_edge**2)/2:.3f}; "
                       f"{'OK' if 1.5-(1+u_edge**2+v_edge**2)/2 > 0.2 else 'TOO LOW -> distortion'})\n")
             rnd.set_glow(frames * 0.15)      # animate the glowing block (rainbow)
+            rnd.set_sun(sun_az, sun_el)      # live sun -> light_dir registers
             rnd.ip.write(0x84, int(frames * rnd.scene['anim_speed']) & 0xFFFFFFFF)   # time_phase: water/lava anim
             rnd.set_camera(cam)
             if not rnd.render():
                 print('  (render timeout)')
             frames += 1
+
+            # ── live FPS + sun readout (refresh ~1 Hz, overwrite one line) ─────
+            fps_n += 1
+            now = time.time()
+            if now - fps_t >= 1.0:
+                sys.stdout.write(
+                    f"\r{fps_n/(now-fps_t):5.1f} FPS  |  sun az={math.degrees(sun_az)%360:3.0f} "
+                    f"el={math.degrees(sun_el):+3.0f}{'  ORBIT' if sun_orbit else '       '}   ")
+                sys.stdout.flush()
+                fps_t = now; fps_n = 0
     except KeyboardInterrupt:
         pass
     finally:
