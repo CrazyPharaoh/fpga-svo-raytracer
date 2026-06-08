@@ -31,6 +31,8 @@ module svo_full_tb #(
 
     // Per-frame animation counter (raw bits)
     input  logic [31:0] time_phase,
+    input  logic        shadow_on,
+    input  logic [3:0]  max_depth,
 
     // lut_0..15 map to block_id 0..15 in shading_pipeline ([31:24]=mat flag,[23:0]=RGB)
     input  logic [31:0] lut_0, lut_1, lut_2, lut_3, lut_4, lut_5, lut_6, lut_7,
@@ -124,6 +126,7 @@ module svo_full_tb #(
         .cam_fwd_x(cam_fwd_x),     .cam_fwd_y(cam_fwd_y),     .cam_fwd_z(cam_fwd_z),
         .cam_scale(cam_scale),
         .sky_color(sky_color),
+        .max_depth(max_depth),
         .svo_rd_node(svo_rd_node_prim), .svo_rd_wide(svo_rd_wide_prim), .svo_rd_en(svo_rd_en_prim),
         .fb_wr_addr(), .fb_wr_data(), .fb_wr_en(),
         .axis_tvalid(axis_tvalid), .axis_tdata(axis_tdata),
@@ -163,6 +166,7 @@ module svo_full_tb #(
             .fog_start(fog_start),     .shadow_bias(shadow_bias),
             .lut(lut_arr),
             .time_phase(time_phase),
+            .shadow_on(shadow_on),
             .shadow_start(shadow_start[L]),
             .shadow_ro_x(shadow_ro_x[L]), .shadow_ro_y(shadow_ro_y[L]), .shadow_ro_z(shadow_ro_z[L]),
             .shadow_rd_x(shadow_rd_x[L]), .shadow_rd_y(shadow_rd_y[L]), .shadow_rd_z(shadow_rd_z[L]),

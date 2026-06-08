@@ -38,6 +38,7 @@ module shading_pipeline (
     input  logic signed [31:0] shadow_bias,
     input  logic [31:0] lut [0:15],     // packed: [31:24]=material flag, [23:0]=RGB
     input  logic [31:0] time_phase,     // per-frame animation counter (raw bits)
+    input  logic        shadow_on,      // 1=cast shadow ray, 0=skip (lit, faster)
 
     // Shadow traversal interface
     // When shadow_start pulses, the shadow traversal FSM begins.
@@ -320,7 +321,13 @@ module shading_pipeline (
                     q_phase <= QCOL[2:0];
                 end else if (q_phase == 1) begin
                     spec <= q_p0;
-                    q_phase <= '0; state <= S_SHADOW;
+                    q_phase <= '0;
+                    if (shadow_on) begin
+                        state <= S_SHADOW;
+                    end else begin
+                        shadowed <= 1'b0;          // no shadow ray -> fully lit
+                        state    <= S_COMBINE;
+                    end
                 end else q_phase <= q_phase - 1'b1;
             end
 

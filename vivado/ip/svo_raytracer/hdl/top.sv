@@ -83,6 +83,8 @@ module top #(
     logic [31:0] sky_color_reg, fog_color_reg;
     logic signed [31:0] fog_start_reg, shadow_bias_reg;
     logic [31:0] time_phase;
+    logic        shadow_on;
+    logic [3:0]  max_depth;
 
     // -------------------------------------------------------------------------
     // SVO BRAM — true dual-port. Primary traversal reads port B; shadow
@@ -157,6 +159,7 @@ module top #(
         .sky_color(sky_color_reg), .fog_color(fog_color_reg),
         .fog_start(fog_start_reg), .shadow_bias(shadow_bias_reg),
         .time_phase(time_phase),
+        .shadow_on(shadow_on), .max_depth(max_depth),
         .dbg_state(dbg_state_w), .dbg_rs_wait(dbg_rs_wait_w),
         .dbg_px(dbg_px_w), .dbg_py(dbg_py_w),
         .dbg_tvalid(dbg_tvalid_w), .dbg_tready(dbg_tready_w),
@@ -186,6 +189,7 @@ module top #(
         .cam_fwd_x(cam_fwd_x),   .cam_fwd_y(cam_fwd_y),   .cam_fwd_z(cam_fwd_z),
         .cam_scale(cam_scale),
         .sky_color(sky_color_reg[23:0]),
+        .max_depth(max_depth),
         .svo_rd_node(svo_rd_node_prim), .svo_rd_wide(svo_rd_wide_prim),
         .svo_rd_en(svo_rd_en_prim),
         .fb_wr_addr(), .fb_wr_data(), .fb_wr_en(),   // legacy — unconnected
@@ -245,6 +249,7 @@ module top #(
                 .fog_start(fog_start_reg), .shadow_bias(shadow_bias_reg),
                 .lut(lut),   // block_id N -> lut[N]
                 .time_phase(time_phase),
+                .shadow_on(shadow_on),
                 .shadow_start(shadow_start[L]),
                 .shadow_ro_x(shadow_ro_x[L]), .shadow_ro_y(shadow_ro_y[L]), .shadow_ro_z(shadow_ro_z[L]),
                 .shadow_rd_x(shadow_rd_x[L]), .shadow_rd_y(shadow_rd_y[L]), .shadow_rd_z(shadow_rd_z[L]),

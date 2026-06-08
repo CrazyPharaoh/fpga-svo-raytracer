@@ -391,6 +391,8 @@ async def test_render_frame_shaded(dut):
     for i in range(16):
         getattr(dut, f"lut_{i}").value = LUT_WORDS[i]
     dut.time_phase.value = 0   # static frame in sim (matches gen_reference_shaded TIME_PHASE)
+    dut.shadow_on.value = 1     # shadows on (matches gen_reference SHADOWS_ENABLED)
+    dut.max_depth.value = 6     # full detail (no LOD cap) -> pixel-identical to today
 
     await RisingEdge(dut.clk)
 

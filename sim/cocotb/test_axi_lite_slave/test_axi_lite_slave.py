@@ -212,6 +212,26 @@ async def test_time_phase_register(dut):
 
 
 @cocotb.test()
+async def test_shadow_on_register(dut):
+    """0x88 latches shadow_on; resets to 1."""
+    await reset(dut)
+    assert int(dut.shadow_on.value) == 1            # default on
+    await axi_write(dut, 0x88, 0)
+    await Timer(20, units="ns")
+    assert int(dut.shadow_on.value) == 0
+
+
+@cocotb.test()
+async def test_max_depth_register(dut):
+    """0x8C latches max_depth; resets to 6."""
+    await reset(dut)
+    assert int(dut.max_depth.value) == 6            # default full depth
+    await axi_write(dut, 0x8C, 2)
+    await Timer(20, units="ns")
+    assert int(dut.max_depth.value) == 2
+
+
+@cocotb.test()
 async def test_sky_fog_colour_registers(dut):
     """Writing SKY_COLOR and FOG_COLOR updates those output ports."""
     await reset(dut)

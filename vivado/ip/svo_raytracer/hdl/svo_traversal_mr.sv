@@ -44,6 +44,9 @@ module svo_traversal_mr #(
     // Sky colour (Phase 1 miss path)
     input  logic [23:0] sky_color,
 
+    // Runtime traversal depth cap; MIXED-at-cap -> solid (LOD)
+    input  logic [3:0]  max_depth,
+
     // SVO BRAM read port
     output logic [11:0]  svo_rd_node,   // node index (M2 wide read)
     input  logic [255:0] svo_rd_wide,   // whole node {w7..w0} returned in one cycle
@@ -410,10 +413,20 @@ module svo_traversal_mr #(
 
     // Hit info
     logic [7:0]  block_id_hit [0:RAY_POOL_N-1];
+    logic        lod_cap [0:RAY_POOL_N-1];   // this hit was a depth-capped MIXED node
     logic signed [31:0] t_hit [0:RAY_POOL_N-1];
     logic [1:0]  hit_face [0:RAY_POOL_N-1];
     logic        hit_face_sign_r [0:RAY_POOL_N-1];
     logic signed [31:0] hit_px_r [0:RAY_POOL_N-1], hit_py_r [0:RAY_POOL_N-1], hit_pz_r [0:RAY_POOL_N-1];
+
+    // Representative block-id for a depth-capped MIXED node: lowest-index non-empty
+    // child block-id of the current slot's node (the "surrounding blocks"), fallback 1.
+    logic [7:0] rep_block_w;
+    always_comb begin
+        rep_block_w = 8'd1;                       // fallback if every child is MIXED/air
+        for (int i = 7; i >= 0; i--)
+            if (r_block[cur_slot][i] != 8'd0) rep_block_w = r_block[cur_slot][i];
+    end
 
     // -------------------------------------------------------------------------
     // Stack
@@ -634,6 +647,7 @@ module svo_traversal_mr #(
             pr_done_valid <= 1'b0;
             for (int s = 0; s < RAY_POOL_N; s++) begin
                 state[s] <= S_IDLE; px[s] <= '0; py[s] <= '0; sp[s] <= '0;
+                lod_cap[s] <= 1'b0;
                 rs_wait[s] <= '0; post_pop[s] <= '0; q_phase[s] <= '0;
                 blocked[s] <= 1'b0;
                 shade_pending[s] <= 1'b0;
@@ -1142,7 +1156,11 @@ module svo_traversal_mr #(
                 unique case (2'((r_bitmask[cur_slot] >> ({cz[cur_slot][0],cy[cur_slot][0],cx[cur_slot][0]} * 2)) & 16'h0003))
                     2'b00:   state[cur_slot] <= S_EMPTY;
                     2'b11:   state[cur_slot] <= S_SOLID;
-                    2'b01:   state[cur_slot] <= S_MIXED;
+                    2'b01:   if (sp[cur_slot] >= max_depth) begin
+                                 lod_cap[cur_slot] <= 1'b1;       // force solid at this level
+                                 state[cur_slot]   <= S_SOLID;
+                             end else
+                                 state[cur_slot]   <= S_MIXED;
                     default: state[cur_slot] <= S_EMPTY;
                 endcase
             end
@@ -1184,7 +1202,9 @@ module svo_traversal_mr #(
             // -----------------------------------------------------------------
             S_SOLID: begin
                 t_hit[cur_slot]        <= t_min[cur_slot];
-                block_id_hit[cur_slot] <= r_block[cur_slot][cidx[cur_slot]];
+                block_id_hit[cur_slot] <= lod_cap[cur_slot] ? rep_block_w
+                                                            : r_block[cur_slot][cidx[cur_slot]];
+                lod_cap[cur_slot]      <= 1'b0;
                 // Hit point = entry point at the current t_min. Use the *registered*
                 // copy bw_e*_r, not the combinational bw_c_e*: t_min is stable across
                 // S_CHECK_CHILD -> S_SOLID, so bw_e*_r (registered last cycle) holds the

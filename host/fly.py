@@ -24,7 +24,8 @@ import svo_builder, fly_camera, vox_loader
 import termios, tty
 CHAR_ACTION = {'w':'fwd','s':'back','a':'left','d':'right',
                ' ':'up','c':'down','-':'zoomOut','=':'zoomIn','q':'quit','p':'dump',
-               'i':'sunUp','k':'sunDown','j':'sunLeft','l':'sunRight','o':'sunOrbit'}
+               'i':'sunUp','k':'sunDown','j':'sunLeft','l':'sunRight','o':'sunOrbit',
+               't':'shadowTog','[':'depthDown',']':'depthUp'}
 ARROW_ACTION = {0x41:'pitchU', 0x42:'pitchD', 0x44:'yawL', 0x43:'yawR'}  # ESC [ A/B/D/C
 
 class StdinKeyboard:
@@ -62,7 +63,8 @@ EVIOCGRAB  = 0x40044590
 EVDEV_ACTION = {17:'fwd', 31:'back', 30:'left', 32:'right', 57:'up', 42:'down',
                 103:'pitchU', 108:'pitchD', 105:'yawL', 106:'yawR',
                 16:'zoomOut', 18:'zoomIn', 1:'quit',
-                23:'sunUp', 37:'sunDown', 36:'sunLeft', 38:'sunRight', 24:'sunOrbit'}  # I/K/J/L/O
+                23:'sunUp', 37:'sunDown', 36:'sunLeft', 38:'sunRight', 24:'sunOrbit',  # I/K/J/L/O
+                20:'shadowTog', 26:'depthDown', 27:'depthUp'}  # T / [ / ]
 
 def find_keyboard(override=None, wait=20.0):
     if override:
@@ -253,6 +255,7 @@ def main(use_evdev=False, device=None, scene_path=None):
     fov = math.tan(math.radians(60)/2) / (IMG_W/2)
     cam = fly_camera.Camera.looking_at([32, 40, -20], [32, 4, 32], scale=fov)
     rnd = Renderer(load_scene(scene_path))
+    rnd.ip.write(0x88, 1); rnd.ip.write(0x8C, 6)   # demo defaults: shadows on, full depth
     if use_evdev:
         kb = EvdevKeyboard(find_keyboard(device))
         print('evdev: type on the BOARD keyboard. WASD move, arrows look, Space/Shift up-down, Q/E zoom, Esc quit')
@@ -260,6 +263,7 @@ def main(use_evdev=False, device=None, scene_path=None):
         kb = StdinKeyboard()
         print('Type IN THIS TERMINAL: WASD move, arrows look, Space/C up-down, -/= zoom, Q or Ctrl-C quit')
     print('  Sun: I/K raise/lower, J/L swing, O toggle auto-orbit.')
+    print('  Demo: T toggle shadows, [ ] traversal depth.')
 
     # ── live sun (Feature 2): seed azimuth/elevation from the scene light_dir ──
     lx, ly, lz = rnd.scene['light_dir']
@@ -270,6 +274,11 @@ def main(use_evdev=False, device=None, scene_path=None):
     ORBIT_STEP = math.radians(2)     # per-frame auto-orbit speed
     sun_orbit = False
     prev_orbit_key = False
+
+    # ── demo controls (shadow toggle + traversal depth cap) ────────────────────
+    shadows_on = True
+    max_depth  = 6
+    prev_shadow_key = False
 
     frames = 0; t0 = time.time()
     fps_t = t0; fps_n = 0
@@ -288,6 +297,15 @@ def main(use_evdev=False, device=None, scene_path=None):
             prev_orbit_key = orbit_key
             if sun_orbit:
                 sun_az += ORBIT_STEP
+            # ── demo controls: shadow toggle (T) + traversal depth ([ ]) ───────
+            shadow_key = 'shadowTog' in h
+            if shadow_key and not prev_shadow_key:
+                shadows_on = not shadows_on
+                rnd.ip.write(0x88, 1 if shadows_on else 0)
+            prev_shadow_key = shadow_key
+            if 'depthUp' in h or 'depthDown' in h:
+                max_depth = max(1, min(6, max_depth + ('depthUp' in h) - ('depthDown' in h)))
+                rnd.ip.write(0x8C, max_depth)
             fwd  = ('fwd' in h)  - ('back' in h)
             strf = ('right' in h) - ('left' in h)
             vert = ('up' in h)   - ('down' in h)
@@ -328,7 +346,8 @@ def main(use_evdev=False, device=None, scene_path=None):
             if now - fps_t >= 1.0:
                 sys.stdout.write(
                     f"\r{fps_n/(now-fps_t):5.1f} FPS  |  sun az={math.degrees(sun_az)%360:3.0f} "
-                    f"el={math.degrees(sun_el):+3.0f}{'  ORBIT' if sun_orbit else '       '}   ")
+                    f"el={math.degrees(sun_el):+3.0f}{'  ORBIT' if sun_orbit else '       '}"
+                    f"  |  shadows={'ON ' if shadows_on else 'OFF'}  depth={max_depth}   ")
                 sys.stdout.flush()
                 fps_t = now; fps_n = 0
     except KeyboardInterrupt:

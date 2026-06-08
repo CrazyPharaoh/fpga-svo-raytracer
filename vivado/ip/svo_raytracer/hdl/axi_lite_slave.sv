@@ -53,6 +53,8 @@ module axi_lite_slave #(
     output logic signed [31:0] fog_start,
     output logic signed [31:0] shadow_bias,
     output logic [31:0] time_phase,
+    output logic        shadow_on,
+    output logic [3:0]  max_depth,
 
     // Debug inputs from traversal FSM (read-only)
     input  logic [3:0]  dbg_state,
@@ -88,6 +90,8 @@ module axi_lite_slave #(
             svo_wr_addr   <= '0;
             lut_index     <= '0;
             time_phase    <= '0;
+            shadow_on     <= 1'b1;
+            max_depth     <= 4'd6;
         end else begin
             // ctrl_trigger: pulse for 32 cycles after AXI write to 0x00
             if (trig_cnt != '0) begin
@@ -147,6 +151,8 @@ module axi_lite_slave #(
                     6'h1C: fog_start    <= S_AXI_WDATA;
                     6'h1D: shadow_bias  <= S_AXI_WDATA;
                     6'h21: time_phase   <= S_AXI_WDATA;     // 0x84: per-frame animation counter
+                    6'h22: shadow_on    <= S_AXI_WDATA[0];  // 0x88: runtime shadow toggle
+                    6'h23: max_depth    <= S_AXI_WDATA[3:0]; // 0x8C: traversal depth cap
                     default: ;
                 endcase
             end
