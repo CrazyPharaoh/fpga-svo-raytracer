@@ -1,0 +1,11 @@
+# compiled binaries
+rt_desktop
+rt_desktop_omp
+rt_arm
+
+# generated render output
+*.ppm
+*.png
+
+# generated scene blob (reproducible via `make scene`)
+scene/*.blob
