@@ -182,6 +182,7 @@ module svo_full_tb #(
                 .cam_right_x('0), .cam_right_y('0), .cam_right_z('0),
                 .cam_up_x('0),    .cam_up_y('0),    .cam_up_z('0),
                 .cam_scale('0),   .sky_color('0),
+                .max_depth(max_depth),   // shadows follow the depth cap too
                 .svo_rd_addr(svo_rd_addr_shad_a[L]), .svo_rd_data(svo_rd_data_shad_a[L]), .svo_rd_en(svo_rd_en_shad_a[L]),
                 .fb_wr_addr(), .fb_wr_data(), .fb_wr_en(),
                 .axis_tvalid(), .axis_tdata(), .axis_tlast(), .axis_tuser(),

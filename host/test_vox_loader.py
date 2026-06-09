@@ -111,3 +111,18 @@ def test_world_larger_than_64_errors():
     remap = vox_loader.build_colour_remap(vox)
     with pytest.raises(ValueError):
         vox_loader.embed_grid(vox, remap)
+
+
+# ---- depth-cap representative block (word 7) ----
+
+def test_dom_block_serialised_in_word7():
+    import svo_builder
+    grid, _ = vox_loader.load_world(VOX)
+    nodes = svo_builder.flatten_svo(svo_builder.build_svo(grid))
+    words = svo_builder.serialise_nodes(nodes)
+    assert len(words) == len(nodes) * 8
+    # word 7 of every node must now carry a REAL block (1..15), never 0 or the
+    # plain block_id-1 fallback for the whole tree (that was the all-yellow bug).
+    w7 = [words[k * 8 + 7] for k in range(len(nodes))]
+    assert all(v != 0 for v in w7), "some node has dom_block=0 (would fall back to yellow)"
+    assert len(set(w7)) > 3, "dom_block should span multiple terrain colours, not all one"

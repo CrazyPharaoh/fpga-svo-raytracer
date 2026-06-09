@@ -34,6 +34,10 @@ module svo_traversal #(
     // Sky colour (Phase 1 miss path)
     input  logic [23:0] sky_color,
 
+    // Depth cap (shadow LOD): a MIXED child at sp>=max_depth is treated as a solid
+    // occluder. Drive 4'd15 (or any value > tree depth) to disable capping.
+    input  logic [3:0]  max_depth,
+
     // SVO BRAM read port
     output logic [14:0] svo_rd_addr,
     input  logic [31:0] svo_rd_data,
@@ -846,7 +850,9 @@ module svo_traversal #(
                 unique case (2'((r_bitmask >> ({cz[0],cy[0],cx[0]} * 2)) & 16'h0003))
                     2'b00:   state <= S_EMPTY;
                     2'b11:   state <= S_SOLID;
-                    2'b01:   state <= S_MIXED;
+                    // Depth cap: a MIXED child at/under the cap is a coarse occluder
+                    // (shadow mode -> S_SOLID = hit). max_depth=15 disables the cap.
+                    2'b01:   state <= (sp >= max_depth) ? S_SOLID : S_MIXED;
                     default: state <= S_EMPTY;
                 endcase
             end

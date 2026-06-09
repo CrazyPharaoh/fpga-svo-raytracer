@@ -402,6 +402,7 @@ module svo_traversal_mr #(
     logic [2:0]  cidx [0:RAY_POOL_N-1];
     logic [15:0] r_child [0:RAY_POOL_N-1][0:7];
     logic [7:0]  r_block [0:RAY_POOL_N-1][0:7];
+    logic [7:0]  r_dom_block [0:RAY_POOL_N-1];   // node word 7: representative block for depth-cap LOD
     logic [15:0] r_bitmask [0:RAY_POOL_N-1];
     logic [2:0]  bram_field [0:RAY_POOL_N-1];
     // DDA-step geometry pipeline phase, DECOUPLED from bram_field (M2 Task 1). The node-read
@@ -1056,6 +1057,7 @@ module svo_traversal_mr #(
                         r_block[cur_slot][2] <= svo_rd_wide[176 +: 8];  r_block[cur_slot][3] <= svo_rd_wide[184 +: 8];
                         r_block[cur_slot][4] <= svo_rd_wide[192 +: 8];  r_block[cur_slot][5] <= svo_rd_wide[200 +: 8];
                         r_block[cur_slot][6] <= svo_rd_wide[208 +: 8];  r_block[cur_slot][7] <= svo_rd_wide[216 +: 8];
+                        r_dom_block[cur_slot] <= svo_rd_wide[224 +: 8];  // word 7: LOD representative block
                         svo_rd_en <= 1'b0;
                         bram_busy <= 1'b0;              // Task 2b: release the read port the instant the
                         bram_field[cur_slot] <= 3'd2;   // node is latched, so OTHER slots can read while
@@ -1202,8 +1204,12 @@ module svo_traversal_mr #(
             // -----------------------------------------------------------------
             S_SOLID: begin
                 t_hit[cur_slot]        <= t_min[cur_slot];
-                block_id_hit[cur_slot] <= lod_cap[cur_slot] ? rep_block_w
-                                                            : r_block[cur_slot][cidx[cur_slot]];
+                // Depth-cap LOD: colour the forced-solid node with its build-time
+                // representative (word 7, a real leaf colour from deeper in the tree),
+                // falling back to rep_block_w only if word 7 is somehow 0.
+                block_id_hit[cur_slot] <= lod_cap[cur_slot]
+                    ? (r_dom_block[cur_slot] != 8'd0 ? r_dom_block[cur_slot] : rep_block_w)
+                    : r_block[cur_slot][cidx[cur_slot]];
                 lod_cap[cur_slot]      <= 1'b0;
                 // Hit point = entry point at the current t_min. Use the *registered*
                 // copy bw_e*_r, not the combinational bw_c_e*: t_min is stable across

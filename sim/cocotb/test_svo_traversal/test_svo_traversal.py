@@ -15,16 +15,19 @@ are not yet visible to Python when RisingEdge returns.  Two consequences:
 
 --x-initial 0 (Makefile.common) ensures all signals start at 0.
 """
+import os
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, ClockCycles, Timer
 import math
 
 CLK_NS    = 10        # 100 MHz
-IMG_W     = 320
-IMG_H     = 240
-# Allow up to 3 M clock cycles per frame (= 30 ms).  Verilator is fast
-# enough that this timeout is never a concern in practice.
+# Fast-sim crop: RENDER_DIV shrinks the frame (same FOV) so a full render fits
+# well under MAX_CYCLES. MUST match the -GIMG_W/-GIMG_H passed in the Makefile.
+# (Post-SP1 ray-setup is ~60 cyc/ray, so a full 320x240 = 4.6M cyc > MAX_CYCLES.)
+RENDER_DIV = int(os.environ.get('RENDER_DIV', '5'))
+IMG_W     = 320 // RENDER_DIV
+IMG_H     = 240 // RENDER_DIV
 MAX_CYCLES = 3_000_000
 
 STATE_EMPTY = 0b00
@@ -60,6 +63,7 @@ def all_empty_root():
 
 async def reset_dut(dut):
     dut.svo_rd_data.value    = 0
+    dut.max_depth.value      = 15  # disable the depth cap (>= any real tree depth)
     dut.axis_tready.value    = 1   # always accept pixels; FSM hangs in S_WRITE_PIXEL if 0
     dut.shade_done.value     = 0   # tie off shading inputs (unused in SHADE_MODE=0)
     dut.shade_pixel_color.value = 0
@@ -84,8 +88,8 @@ def set_camera_looking_in(dut):
     dut.cam_up_x.value    = to_q16(  0.0)
     dut.cam_up_y.value    = to_q16(  1.0)
     dut.cam_up_z.value    = to_q16(  0.0)
-    # cam_scale = tan(FOV/2) / (IMG_W/2) = tan(30°) / 160
-    dut.cam_scale.value   = to_q16(math.tan(math.radians(30)) / 160)
+    # cam_scale = tan(FOV/2) / (IMG_W/2)  (uses the cropped IMG_W so FOV is unchanged)
+    dut.cam_scale.value   = to_q16(math.tan(math.radians(30)) / (IMG_W / 2))
     dut.sky_color.value   = 0x87CEEB
 
 

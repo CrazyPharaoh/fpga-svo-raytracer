@@ -35,6 +35,7 @@ class SVONode:
     bitmask:  int       = 0
     children: List      = field(default_factory=lambda: [None] * 8)
     block_id: List[int] = field(default_factory=lambda: [0] * 8)
+    dom_block: int      = 0   # representative block for LOD (depth-cap) shading; serialised in word 7
 
 
 def _build_test_world() -> np.ndarray:
@@ -99,6 +100,16 @@ def build_svo(grid: np.ndarray, ox=0, oy=0, oz=0, size=None) -> SVONode:
                 bits = STATE_MIXED
                 node.children[cidx] = child
         node.bitmask |= (bits << (cidx * 2))
+    # Representative block for depth-cap LOD: the first non-air block found among
+    # this node's children (SOLID child -> its block_id; MIXED child -> that child's
+    # dom_block, which recurses to a real leaf colour). Lets hardware shade a
+    # depth-capped MIXED node with a real surrounding colour instead of guessing.
+    for cidx in range(8):
+        st = (node.bitmask >> (cidx * 2)) & 3
+        if st == STATE_SOLID and node.block_id[cidx] != BLOCK_AIR:
+            node.dom_block = node.block_id[cidx]; break
+        if st == STATE_MIXED and node.children[cidx].dom_block != BLOCK_AIR:
+            node.dom_block = node.children[cidx].dom_block; break
     return node
 
 
@@ -156,5 +167,5 @@ def serialise_nodes(nodes: List[SVONode]) -> List[int]:
             for j in range(4):
                 w |= (n.block_id[i + j] & 0xFF) << (j * 8)
             words.append(w)
-        words.append(0)   # padding word 7
+        words.append(n.dom_block & 0xFF)   # word 7: representative block for depth-cap LOD
     return words
