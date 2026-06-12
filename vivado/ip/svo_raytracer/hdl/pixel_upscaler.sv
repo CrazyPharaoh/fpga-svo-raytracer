@@ -1,7 +1,6 @@
-// pixel_upscaler.sv
-// Combinatorial 2× nearest-neighbour upscaler.
-// Maps 640×480 HDMI coordinates to 320×240 framebuffer address.
-// 320 = 256 + 64 — multiply implemented as two shifts and an add, no DSP.
+// pixel_upscaler.sv — legacy, not part of the active render pipeline.
+// Combinational 2× nearest-neighbour: maps 640×480 HDMI coords to 320×240 framebuffer address.
+// fy*320 = fy*256 + fy*64 — two shifts and an add, no DSP.
 `timescale 1ns/1ps
 module pixel_upscaler (
     input  logic [9:0]  hx,       // HDMI pixel x, 0..639
@@ -14,7 +13,6 @@ module pixel_upscaler (
     assign fx = hx[9:1];   // divide by 2 → 0..319
     assign fy = hy[9:1];   // divide by 2 → 0..239
 
-    // fb_addr = fy*320 + fx  =  fy*256 + fy*64 + fx
     assign fb_addr = ({9'd0, fy} << 8) + ({9'd0, fy} << 6) + {8'd0, fx};
 
 endmodule

@@ -29,7 +29,7 @@ endif
 
 .PHONY: scene desktop desktop-omp arm run run-omp upload png clean
 
-# Copy source + prebuilt scene blob to the PYNQ. Then SSH in and `make arm`.
+# Copy source + scene blob to the PYNQ; then SSH in and `make arm`.
 upload: scene
 	ssh $(PYNQ) 'mkdir -p $(PYNQ_DIR)/scene'
 	scp raytracer.c Makefile $(PYNQ):$(PYNQ_DIR)/
@@ -49,7 +49,7 @@ desktop-omp: $(SRC)
 arm: $(SRC)
 	$(CC) -O3 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARN) $(PRECDEF) $(SRC) -o rt_arm $(LDLIBS)
 
-# Thread count for the OpenMP build. Blank = all cores; override e.g. THREADS=4.
+# Blank = all cores; override e.g. THREADS=4
 THREADS  ?=
 FRAMES   ?= 50
 
@@ -61,7 +61,7 @@ run: scene desktop
 run-omp: scene desktop-omp
 	RT_THREADS=$(THREADS) ./rt_desktop_omp scene/world.blob 320 240 $(FRAMES) $(PPM)
 
-# Convert a rendered PPM to PNG (pure stdlib, no PIL — also works on the PYNQ).
+# Convert PPM to PNG (pure stdlib, works on the PYNQ too)
 png:
 	python3 ppm2png.py $(PPM) $(PNG)
 

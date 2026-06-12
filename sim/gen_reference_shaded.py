@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # sim/gen_reference_shaded.py
-# Generate a shaded reference PNG matching the hardware shading_pipeline.sv algorithm.
-# Constants are taken directly from shading_pipeline.sv to match hardware behaviour.
+# Shaded reference renderer — reproduces shading_pipeline.sv in Python.
+# Constants match shading_pipeline.sv; camera matches tb_svo_full.py.
 # Output: sim/output/reference_render_shaded.png
 
 import sys, os, math
@@ -14,7 +14,7 @@ import svo_builder
 import vox_loader
 import fpga_svo_raytracer as ref
 
-# Fast-sim crop: must match tb_svo_full.py / the -GIMG_W shade build (Makefile.shade).
+# RENDER_DIV: must match tb_svo_full.py and the -GIMG_W shade build (Makefile.shade).
 RENDER_DIV   = int(os.environ.get('RENDER_DIV', '1'))
 IMG_W, IMG_H = 320 // RENDER_DIV, 240 // RENDER_DIV
 
@@ -29,7 +29,6 @@ LIGHT_DIR = (1.0/_LM, 2.0/_LM, 1.5/_LM)
 SKY_COLOR  = (135, 206, 235)
 FOG_COLOR  = (180, 200, 220)
 
-# MagicaVoxel world: 16 packed LUT words mirror the hardware LUT.
 # Scene select: must match tb_svo_full.py — WORLD=vox (default) or WORLD=procedural.
 WORLD = os.environ.get('WORLD', 'vox')
 if WORLD == 'procedural':
@@ -39,10 +38,10 @@ if WORLD == 'procedural':
 else:
     WORLD_VOX = os.path.join(os.path.dirname(__file__), '..', 'host', 'world.vox')
     _GRID, _LUT_WORDS = vox_loader.load_world(WORLD_VOX)
-LUT = [((w >> 16) & 0xFF, (w >> 8) & 0xFF, w & 0xFF) for w in _LUT_WORDS]  # RGB only
-MAT = [(w >> 24) & 0xFF for w in _LUT_WORDS]                              # material flag per block_id
+LUT = [((w >> 16) & 0xFF, (w >> 8) & 0xFF, w & 0xFF) for w in _LUT_WORDS]  # RGB
+MAT = [(w >> 24) & 0xFF for w in _LUT_WORDS]                               # material flag
 
-# Per-frame animation phase — set to match the tb when comparing animated frames.
+# Per-frame animation phase — must match tb_svo_full.py when comparing animated frames.
 TIME_PHASE = 0
 
 
@@ -50,8 +49,7 @@ def _lighten(c):
     return c + ((255 - c) >> 1)
 
 
-SHADOW_BIAS = 0.5    # matches tb_svo_full.py
-# Shadows ON (DSP budget freed by the shared multiplier banks).
+SHADOW_BIAS = 0.5    # must match tb_svo_full.py / SHADOW_BIAS register
 # Must match SHADOW_EN in svo_full_tb.sv / top.sv.
 SHADOWS_ENABLED = True
 
@@ -84,19 +82,17 @@ def cross(a, b):
 
 def shade_pixel(t_hit, hit_pos, face_axis, face_sign, block_id,
                 ray_d, svo_nodes, is_miss):
-    """Shading algorithm matching shading_pipeline.sv (post >> 8 fix)."""
+    """Shade one pixel: Lambert diffuse + specular^4 + shadow + fog. Matches shading_pipeline.sv."""
 
     if is_miss:
         return SKY_COLOR
 
     # ── S_NORMAL ──────────────────────────────────────────────────────────────
     normal = [0.0, 0.0, 0.0]
-    normal[face_axis] = float(face_sign)   # face_sign from traversal: ±1 integer
+    normal[face_axis] = float(face_sign)   # face_sign: ±1 integer from traversal
 
     base = LUT[min(block_id, 15)]
-    # Animated materials (flag in LUT word [31:24]) override the XOR texture; mirror
-    # shading_pipeline.sv Task 10. flag 0=static (XOR tex), 1=water, 2=lava, 3=glow.
-    mat = MAT[min(block_id, 15)]
+    mat  = MAT[min(block_id, 15)]          # LUT word [31:24]: 0=static,1=water,2=lava,3=glow
     ix, iy, iz = int(hit_pos[0]), int(hit_pos[1]), int(hit_pos[2])
     if mat == vox_loader.MAT_WATER:
         w_band = ((ix >> 0) + (iz >> 0) + (TIME_PHASE >> 4)) & 0x1F
@@ -104,22 +100,21 @@ def shade_pixel(t_hit, hit_pos, face_axis, face_sign, block_id,
         if ((w_band >> 1) & 3) == 2 or (w_spk >> 5) == 7:
             base = tuple(_lighten(c) for c in base)
     elif mat == vox_loader.MAT_LAVA:
-        l_band = ((iy) + (TIME_PHASE >> 3)) & 0x1F   # vertical: lavafall flows downward
+        l_band = ((iy) + (TIME_PHASE >> 3)) & 0x1F
         if ((l_band >> 2) & 3) == 3:
             base = tuple(_lighten(c) for c in base)
         else:
             base = tuple(c - (c >> 2) for c in base)
     else:
-        # XOR checkerboard texture (matches shading_pipeline.sv): darken alternate unit
-        # cells. Parity uses ONLY the two in-face (tangent) coords; the face-normal axis
-        # is dropped (it sits on an integer plane -> boundary-sensitive parity flips).
+        # XOR checkerboard: parity over the two tangent axes (face-normal axis excluded
+        # to avoid boundary-sensitive flips on integer planes).
         par = ((iy ^ iz) if face_axis == 0 else
                (ix ^ iz) if face_axis == 1 else
                (ix ^ iy)) & 1
         if par == 0:
-            base = tuple(c - (c >> 3) for c in base)   # subtle ~12% darken
+            base = tuple(c - (c >> 3) for c in base)   # ~12% darken
 
-    # ── S_DIFFSPEC ────────────────────────────────────────────────────────────
+    # ── S_DIFFSPEC: Lambert diffuse + Phong specular^4 ───────────────────────
     d = dot(normal, LIGHT_DIR)
     diffuse = clamp01(d)
 
@@ -132,7 +127,7 @@ def shade_pixel(t_hit, hit_pos, face_axis, face_sign, block_id,
     s = s * s          # ^2
     spec = s * s       # ^4  (spec ∈ [0,1])
 
-    # Shadow ray: hit_pos + normal * SHADOW_BIAS → LIGHT_DIR
+    # Shadow ray from hit_pos + bias*normal toward light
     if SHADOWS_ENABLED:
         sx = hit_pos[0] + normal[0] * SHADOW_BIAS
         sy = hit_pos[1] + normal[1] * SHADOW_BIAS
@@ -144,18 +139,16 @@ def shade_pixel(t_hit, hit_pos, face_axis, face_sign, block_id,
         shadow_hit = False
 
     # ── S_COMBINE ─────────────────────────────────────────────────────────────
-    # direct = shadowed ? AMBIENT : clamp(diffuse + AMBIENT)
     direct = AMBIENT if shadow_hit else clamp01(diffuse + AMBIENT)
 
-    # r_ch = base_r * direct  (qmul({16'd0, base_r}, direct) — no >> 8 after fix)
-    # spec_add = spec * 256   (spec >> 8 in hardware: spec Q16.16 / 256)
-    spec_add = spec * 256.0   # spec ∈ [0,1] → spec_add ∈ [0,256]
+    # spec_add ∈ [0,256]: spec (Q16.16 in hw) >> 8 → integer scale factor
+    spec_add = spec * 256.0
     r_ch = clamp255(base[0] * direct + spec_add)
     g_ch = clamp255(base[1] * direct + spec_add)
     b_ch = clamp255(base[2] * direct + spec_add)
     combined = (r_ch, g_ch, b_ch)
 
-    # ── S_FOG ─────────────────────────────────────────────────────────────────
+    # ── S_FOG: linear fog blend beyond FOG_START ─────────────────────────────
     if t_hit > FOG_START:
         blend = clamp01((t_hit - FOG_START) * FOG_INV_RANGE)
         r_f = clamp255(combined[0] + blend * (FOG_COLOR[0] - combined[0]))
@@ -172,23 +165,18 @@ def main():
     nodes = svo_builder.flatten_svo(root)
     print(f"  {len(nodes)} nodes")
 
-    # Camera — MUST stay identical to tb_svo_full.py for the PNG comparison to mean anything.
+    # Camera — must stay identical to tb_svo_full.py.
     if WORLD == 'procedural':
         pos   = [30.0, 15.0, 0.0]
         fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
         right = normalise(cross(fwd, [0, 1, 0]))
         up    = cross(right, fwd)
     else:
-        # pos   = [48.0095, 16.7627, 27.9686]
-        # fwd   = [-0.9094, -0.337, 0.2437]
-        # right = [-0.2588, 0.0, -0.9659]
-        # up    = [-0.3255, 0.9415, 0.0872]
         pos   = [72.5269, 29.4615, 72.5337]
         fwd   = [-0.684, -0.2537, -0.684]
         right = [0.7071, 0.0, -0.7071]
         up    = [-0.1794, 0.9673, -0.1794]
-    #fov_scale = math.tan(math.radians(60) / 2) / (IMG_W / 2)
-    fov_scale = 0.003608
+    fov_scale = 0.003608   # tan(30°) / 160 pre-computed to match tb_svo_full.py
     print("Rendering shaded reference frame …")
     pixels = []
     for py in range(IMG_H):

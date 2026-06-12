@@ -1,12 +1,7 @@
-"""
-Cocotb tests for svo_bram.sv
+"""Cocotb tests for svo_bram.sv.
 
-In the actual hardware (top.sv) both ports use the SAME 100 MHz system clock,
-so we drive clk_a and clk_b from a single Clock instance here.  This avoids
-any cross-domain ordering ambiguity.
-
-A registered BRAM read has 1-cycle latency: present addr at edge N, data
-appears on dout_b at edge N+1.  write_word and read_word both honour this.
+Both ports share the 100 MHz clock (as in top.sv), driven from one coroutine
+to avoid cross-domain ordering ambiguity. Registered read latency = 1 cycle.
 """
 import cocotb
 from cocotb.clock import Clock
@@ -16,7 +11,6 @@ CLK_NS = 10   # 100 MHz
 
 
 async def _drive_both_clocks(dut):
-    """Drive clk_a and clk_b together from one coroutine — zero phase difference."""
     half = CLK_NS // 2
     while True:
         dut.clk_a.value = 0
@@ -28,7 +22,6 @@ async def _drive_both_clocks(dut):
 
 
 async def init(dut):
-    """Drive both BRAM ports from one synchronised clock and de-assert enables."""
     cocotb.start_soon(_drive_both_clocks(dut))
     dut.en_a.value   = 0
     dut.en_b.value   = 0
@@ -39,9 +32,9 @@ async def init(dut):
 
 
 async def write_word(dut, addr: int, data: int):
-    """Write one 32-bit word to port A.  Data is registered on the 2nd posedge."""
+    """Write one 32-bit word to port A (data registered on 2nd posedge)."""
     await RisingEdge(dut.clk_a)
-    await Timer(1, units="ns")     # step past the edge before driving signals
+    await Timer(1, units="ns")
     dut.en_a.value   = 1
     dut.addr_a.value = addr
     dut.din_a.value  = data
@@ -51,9 +44,9 @@ async def write_word(dut, addr: int, data: int):
 
 
 async def read_word(dut, addr: int) -> int:
-    """Read one 32-bit word from port B.  1-cycle registered latency."""
+    """Read one 32-bit word from port B (1-cycle registered latency)."""
     await RisingEdge(dut.clk_b)
-    await Timer(1, units="ns")     # step past the edge
+    await Timer(1, units="ns")
     dut.en_b.value   = 1
     dut.addr_b.value = addr
     await RisingEdge(dut.clk_b)   # data latched here
@@ -75,7 +68,6 @@ async def test_single_write_read(dut):
 async def test_multiple_addresses(dut):
     """Write 16 distinct values (8 words apart = 1 node spacing) then verify each."""
     await init(dut)
-    # Use addresses far from 0 to avoid contamination from test 1
     test_data = {100 + i * 8: (0xB000_0000 | i) for i in range(16)}
     for addr, val in test_data.items():
         await write_word(dut, addr, val)

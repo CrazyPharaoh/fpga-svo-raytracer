@@ -1,15 +1,8 @@
-"""
-Cocotb tests for svo_bram_wide.sv (M2 asymmetric SVO node RAM).
+"""Cocotb tests for svo_bram_wide.sv (asymmetric SVO node RAM).
 
-Proves the asymmetric mapping is functionally correct:
-  - Port A writes 8x 32-bit words to node K at addr {K, 0..7}.
-  - Port B reads node K (addr_b_node=K) and returns all 8 words packed into
-    256 bits, with dout_b_wide[w*32 +: 32] == word w.
-  - Port A 32-bit read (shadow path) returns the same words it wrote.
-
-Both ports share the 100 MHz system clock (as in top.sv), driven from one
-coroutine so there is zero phase difference. Registered reads have 1-cycle
-latency: present addr at edge N, data appears at edge N+1.
+Port A: 32-bit word writes ({node, 0..7}) and reads (shadow path).
+Port B: 256-bit wide node read — dout_b_wide[w*32 +: 32] == word w.
+Both ports share the 100 MHz clock; registered read latency = 1 cycle.
 """
 import cocotb
 from cocotb.clock import Clock
@@ -40,7 +33,7 @@ async def init(dut):
 
 
 async def write_word(dut, addr: int, data: int):
-    """Write one 32-bit word to port A (addr = {node, word}). Registered on next edge."""
+    """Write one 32-bit word to port A. Registered on the next rising edge."""
     await RisingEdge(dut.clk_a)
     await Timer(1, units="ns")
     dut.en_a.value = 1

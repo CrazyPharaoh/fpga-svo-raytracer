@@ -1,4 +1,4 @@
-// hdmi_timing.sv
+// hdmi_timing.sv — legacy, not part of the active render pipeline.
 // 640×480 @ 60 Hz VESA timing generator on a 25.175 MHz pixel clock.
 `timescale 1ns/1ps
 module hdmi_timing (

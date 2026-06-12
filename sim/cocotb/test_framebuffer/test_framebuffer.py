@@ -1,25 +1,13 @@
-"""
-Cocotb tests for framebuffer.sv
-
-wr_clk runs at 100 MHz (ray pipeline).
-rd_clk runs at 25 MHz (pixel clock) — period 4× longer.
-
-After a write on wr_clk we must wait for enough rd_clk cycles for the data to
-cross the clock domain before reading.  We wait using Timer so that both clock
-domains advance independently, then check rd_data after enough rd_clk cycles.
-
-Each test uses a unique address range to prevent result contamination between
-the shared-state tests.
-"""
+"""Cocotb tests for framebuffer.sv (dual-clock: wr_clk=100 MHz, rd_clk=25 MHz)."""
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, ClockCycles, Timer
 
-WR_CLK_NS = 10    # 100 MHz
-RD_CLK_NS = 40    # 25 MHz
-FB_SIZE   = 320 * 240   # 76800 pixels
+WR_CLK_NS = 10
+RD_CLK_NS = 40
+FB_SIZE   = 320 * 240
 
-# Per-test address slots (non-overlapping)
+# Non-overlapping address ranges per test (shared-state BRAM)
 ADDR = {
     "single":    0,
     "last":      FB_SIZE - 1,
@@ -30,9 +18,9 @@ ADDR = {
 
 
 async def write_pixel(dut, addr: int, rgb: int):
-    """Write one pixel via the write port (registered on 2nd posedge)."""
+    """Write one pixel; data is registered on the 2nd posedge."""
     await RisingEdge(dut.wr_clk)
-    await Timer(1, units="ns")    # step past the edge before driving
+    await Timer(1, units="ns")
     dut.wr_en.value   = 1
     dut.wr_addr.value = addr
     dut.wr_data.value = rgb
@@ -42,9 +30,9 @@ async def write_pixel(dut, addr: int, rgb: int):
 
 
 async def read_pixel(dut, addr: int) -> int:
-    """Read with 1-cycle registered latency on rd_clk."""
+    """Read one pixel; 1-cycle registered latency on rd_clk."""
     await RisingEdge(dut.rd_clk)
-    await Timer(1, units="ns")     # step past the edge
+    await Timer(1, units="ns")
     dut.rd_en.value   = 1
     dut.rd_addr.value = addr
     await RisingEdge(dut.rd_clk)  # data latched here
@@ -54,8 +42,8 @@ async def read_pixel(dut, addr: int) -> int:
 
 
 async def cdc_wait(dut):
-    """Wait long enough for a wr_clk write to be visible on rd_clk."""
-    await Timer(RD_CLK_NS * 4, units="ns")   # 4 full rd_clk periods
+    """Wait for a wr_clk write to cross into the rd_clk domain (4 rd_clk periods)."""
+    await Timer(RD_CLK_NS * 4, units="ns")
 
 
 async def start_clocks(dut):
@@ -128,7 +116,6 @@ async def test_rd_en_gates_update(dut):
     await cdc_wait(dut)
     first = await read_pixel(dut, addr)
     assert first == 0x55_66_77, f"First read: expected 0x556677, got 0x{first:06X}"
-    # rd_en is now 0; rd_data should hold the latched value
     await ClockCycles(dut.rd_clk, 3)
     still = int(dut.rd_data.value)
     assert still == 0x55_66_77, (

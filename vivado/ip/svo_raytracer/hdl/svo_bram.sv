@@ -1,18 +1,15 @@
-// svo_bram.sv
-// True dual-port block RAM for SVO node storage.
-// Port A: write-only (AXI-Lite loader)
-// Port B: read-only  (traversal FSM)
-// Depth: 4096 nodes × 8 words/node = 32768 × 32-bit words
+// svo_bram.sv — true dual-port block RAM for SVO node storage.
+// Port A: 32-bit write (AXI-Lite loader).
+// Port B: 32-bit read  (traversal FSM).
+// Depth: 4096 nodes × 8 words/node = 32768 × 32-bit words.
 `timescale 1ns/1ps
 module svo_bram (
-    // Port A — write (AXI loader)
     input  logic        clk_a,
     input  logic        en_a,
     input  logic [14:0] addr_a,
     input  logic [31:0] din_a,
     output logic [31:0] dout_a,
 
-    // Port B — read (traversal FSM)
     input  logic        clk_b,
     input  logic        en_b,
     input  logic [14:0] addr_b,
@@ -21,7 +18,7 @@ module svo_bram (
     (* ram_style = "block" *)
     logic [31:0] mem [0:32767];
 
-    // Initialise to 0 so simulation starts clean (synthesis ignores this).
+    // Zero-init for clean simulation; synthesis ignores initial blocks.
     initial begin
         integer i;
         for (i = 0; i < 32768; i++) mem[i] = '0;
@@ -30,8 +27,8 @@ module svo_bram (
     end
 
     always @(posedge clk_a) begin
-        if (en_a) mem[addr_a] <= din_a;   // write (SVO upload)
-        dout_a <= mem[addr_a];            // read (shadow traversal, during render)
+        if (en_a) mem[addr_a] <= din_a;
+        dout_a <= mem[addr_a];
     end
 
     always @(posedge clk_b)

@@ -33,7 +33,7 @@ endef
 copy:
 	@echo "Pulling reports from $(notdir $(PROJ)) ..."
 	@echo "-- implementation --"
-	@# Final timing summary: prefer the post-route phys_opt version, fall back to routed.
+	@# Prefer post-route phys_opt timing summary; fall back to routed.
 	@if [ -f "$(IMPL)/$(WRAP)_timing_summary_postroute_physopted.rpt" ]; then \
 	    cp -f "$(IMPL)/$(WRAP)_timing_summary_postroute_physopted.rpt" timing_summary.txt; \
 	    printf "  [ok]   %-28s <- %s\n" "timing_summary.txt" "timing_summary_postroute_physopted.rpt"; \
@@ -48,7 +48,7 @@ copy:
 	$(call grab,$(IMPL)/$(WRAP)_drc_routed.rpt,drc_report.txt,drc)
 	$(call grab,$(IMPL)/$(WRAP)_power_routed.rpt,power_report.txt,power)
 	$(call grab,$(IMPL)/$(WRAP)_route_status.rpt,route_status.txt,route status)
-	@# Console timing dump written by commands.tcl (report_timing_summary -file).
+	@# timing_after.txt is written by commands.tcl (report_timing_summary -file).
 	$(call grab,$(FYP)/timing_after.txt,timing_after.txt,console timing)
 	@echo "-- synthesis --"
 	$(call grab,$(SYNTH)/$(WRAP)_utilization_synth.rpt,utilization_synth.txt,synth util)

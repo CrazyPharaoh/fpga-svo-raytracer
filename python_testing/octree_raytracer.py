@@ -1,3 +1,4 @@
+# octree_raytracer.py — early prototype: recursive octree build + stack-based traversal with op-count metrics
 import math
 import os
 import time
@@ -122,21 +123,17 @@ def buildOctree(world, node_min, node_max, depth):
     return {'is_leaf': False, 'children': children, 'min': node_min, 'max': node_max}
 
 def intersect_aabb(ray_origin, ray_direction, node_min, node_max, metrics):
-    """Slab AABB test. Returns (hit, t_near).
-    Each axis: 1 division, 2 subtractions, 2 multiplications.
-    """
+    """Slab AABB test. Returns (hit, t_near). Per axis: 1 div, 2 sub, 2 mul."""
     t_min = -1e30
     t_max = 1e30
 
     for i in range(3):
-        # --- TRACKING: 1 division ---
         metrics['divisions'] += 1
         if ray_direction[i] != 0:
             inv_d = 1.0 / ray_direction[i]
         else:
             inv_d = 1e30
 
-        # --- TRACKING: 2 subtractions, 2 multiplications ---
         metrics['adds_subs'] += 2
         metrics['multiplications'] += 2
         t1 = (node_min[i] - ray_origin[i]) * inv_d
@@ -145,14 +142,12 @@ def intersect_aabb(ray_origin, ray_direction, node_min, node_max, metrics):
         if t1 > t2:
             t1, t2 = t2, t1
 
-        # --- TRACKING: 2 comparisons ---
         metrics['comparisons'] += 2
         if t1 > t_min:
             t_min = t1
         if t2 < t_max:
             t_max = t2
 
-    # --- TRACKING: 2 comparisons ---
     metrics['comparisons'] += 2
     if t_max < t_min or t_max < 0:
         return False, 0.0
@@ -182,11 +177,8 @@ def computeAABBNormal(hit_point, node_min, node_max):
         return (0.0, 0.0, 1.0 if dz > 0 else -1.0)
 
 def intersect_octree(ray_origin, ray_direction, octree, metrics):
-    """Stack-based octree traversal (no recursion, FPGA-realistic).
-    Returns (block_value, normal, hit_point).
-    """
-    # Explicit stack — bounded by tree depth (<=5 for 32^3 world)
-    stack = [octree]
+    """Stack-based octree traversal (no recursion). Returns (block_value, normal, hit_point)."""
+    stack = [octree]  # bounded by tree depth (≤5 for 32³)
 
     best_t = 1e30
     best_node = None
@@ -209,25 +201,21 @@ def intersect_octree(ray_origin, ray_direction, octree, metrics):
             continue
 
         if node['is_leaf']:
-            # --- TRACKING: 1 comparison ---
             metrics['comparisons'] += 1
             if node['block_value'] > 0:
-                # --- TRACKING: 1 comparison ---
                 metrics['comparisons'] += 1
                 if t < best_t:
                     best_t = t
                     best_node = node
-            # --- TRACKING: 1 mem read ---
             metrics['mem_reads'] += 1
         else:
-            # Push children — closest first heuristic not used (FPGA: simple LIFO)
+            # Push children (LIFO — no closest-first sort)
             for child in node['children']:
                 stack.append(child)
 
     if best_node is None:
         return 0, (0, 0, 0), (0, 0, 0)
 
-    # --- TRACKING: 3 mults, 3 adds ---
     metrics['multiplications'] += 3
     metrics['adds_subs'] += 3
     hit_point = add(ray_origin, scalarMult(best_t, ray_direction))

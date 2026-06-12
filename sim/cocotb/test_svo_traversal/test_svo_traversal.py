@@ -1,17 +1,10 @@
-"""
-Cocotb tests for svo_traversal.sv  —  runs with Verilator.
+"""Cocotb tests for svo_traversal.sv — runs with Verilator.
 
-In Verilator the always_ff evaluation happens in the active region BEFORE the
-VPI (cocotb) callback fires, so non-blocking assignment updates from the FSM
-are not yet visible to Python when RisingEdge returns.  Two consequences:
-
-1. svo_rd_data must be driven with a one-cycle pipeline delay to match the
-   real svo_bram.sv registered output.  The bram_model uses a pending_data
-   variable: address committed after edge E → data driven after edge E+1 →
-   sampled by FSM at edge E+2.  This matches the 2-edge latency described
-   in the BRAM timing invariants.
-2. Any signal set by a NB assignment (e.g. busy) should be checked on the
-   FOLLOWING clock cycle, not immediately after the trigger edge.
+Verilator fires VPI callbacks before NBA commits, so NB-assigned signals are not
+yet visible when RisingEdge returns. Two consequences:
+1. bram_model adds a one-cycle pipeline delay (pending_data) to match svo_bram.sv's
+   registered output (address at edge E → data at edge E+1 → FSM reads at E+2).
+2. NB-assigned signals (e.g. busy) must be checked on the FOLLOWING clock cycle.
 
 --x-initial 0 (Makefile.common) ensures all signals start at 0.
 """
@@ -21,10 +14,9 @@ from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, ClockCycles, Timer
 import math
 
-CLK_NS    = 10        # 100 MHz
-# Fast-sim crop: RENDER_DIV shrinks the frame (same FOV) so a full render fits
-# well under MAX_CYCLES. MUST match the -GIMG_W/-GIMG_H passed in the Makefile.
-# (Post-SP1 ray-setup is ~60 cyc/ray, so a full 320x240 = 4.6M cyc > MAX_CYCLES.)
+CLK_NS    = 10
+# RENDER_DIV crops the frame (same FOV) so the sim fits within MAX_CYCLES.
+# Must match -GIMG_W/-GIMG_H in the Makefile.
 RENDER_DIV = int(os.environ.get('RENDER_DIV', '5'))
 IMG_W     = 320 // RENDER_DIV
 IMG_H     = 240 // RENDER_DIV
@@ -64,8 +56,8 @@ def all_empty_root():
 async def reset_dut(dut):
     dut.svo_rd_data.value    = 0
     dut.max_depth.value      = 15  # disable the depth cap (>= any real tree depth)
-    dut.axis_tready.value    = 1   # always accept pixels; FSM hangs in S_WRITE_PIXEL if 0
-    dut.shade_done.value     = 0   # tie off shading inputs (unused in SHADE_MODE=0)
+    dut.axis_tready.value    = 1   # hold high; S_WRITE_PIXEL stalls if 0
+    dut.shade_done.value     = 0   # unused in SHADE_MODE=0
     dut.shade_pixel_color.value = 0
     dut.rst.value   = 1
     dut.start.value = 0
@@ -75,7 +67,7 @@ async def reset_dut(dut):
 
 
 def set_camera_looking_in(dut):
-    """Camera at (32, 32, −5) looking along +Z into the world centre."""
+    """Camera at (32, 32, -5) looking along +Z."""
     dut.cam_pos_x.value   = to_q16( 32.0)
     dut.cam_pos_y.value   = to_q16( 32.0)
     dut.cam_pos_z.value   = to_q16( -5.0)
@@ -88,36 +80,26 @@ def set_camera_looking_in(dut):
     dut.cam_up_x.value    = to_q16(  0.0)
     dut.cam_up_y.value    = to_q16(  1.0)
     dut.cam_up_z.value    = to_q16(  0.0)
-    # cam_scale = tan(FOV/2) / (IMG_W/2)  (uses the cropped IMG_W so FOV is unchanged)
+    # cam_scale = tan(FOV/2) / (IMG_W/2); use cropped IMG_W to keep FOV constant
     dut.cam_scale.value   = to_q16(math.tan(math.radians(30)) / (IMG_W / 2))
     dut.sky_color.value   = 0x87CEEB
 
 
 async def bram_model(dut, mem: dict):
-    """
-    Simulate svo_bram.sv port B: 1-cycle registered read latency.
+    """Python model of svo_bram.sv port B (1-cycle registered read).
 
-    svo_bram uses 'always @(posedge clk_b) if (en_b) dout_b <= mem[addr_b]'.
-    That means address committed after edge E is sampled by the BRAM at edge
-    E+1, and dout_b is valid (committed) after edge E+1 — so the FSM reads it
-    at edge E+2.  The S_BRAM_WAIT/field=7 wait state in svo_traversal.sv
-    absorbs exactly this 2-edge delay.
-
-    Verilator fires VPI callbacks before NBA commits, so Timer(1) is needed to
-    read the committed NB values.  The pending_data pipeline then adds the
-    required extra cycle of delay:
-      edge E+1ns  → sample svo_rd_addr, store in pending (don't drive yet)
-      edge E+1+1ns → drive pending → FSM reads at edge E+2  ✓
+    svo_bram: `always @(posedge clk_b) if (en_b) dout_b <= mem[addr_b]`.
+    Address at edge E → dout_b valid after E+1 → FSM reads at E+2.
+    S_BRAM_WAIT/field=7 is the wait state that absorbs this 2-edge delay.
+    Timer(1) is required so Verilator NBA commits are visible before we sample.
     """
     pending_data = None
     dut.svo_rd_data.value = 0
     while True:
         await RisingEdge(dut.clk)
-        await Timer(1, units="ns")   # wait for NB commit
-        # Output the address that was registered one cycle ago
+        await Timer(1, units="ns")
         if pending_data is not None:
             dut.svo_rd_data.value = pending_data
-        # Sample this cycle's address for output next cycle
         if int(dut.svo_rd_en.value) == 1:
             pending_data = mem.get(int(dut.svo_rd_addr.value), 0)
         else:
@@ -125,13 +107,7 @@ async def bram_model(dut, mem: dict):
 
 
 async def axis_sink(dut, pixels: list):
-    """
-    Collect pixels from the AXI-Stream output.
-
-    axis_tready is held high in reset_dut so the FSM never stalls.
-    Pixels are stored as (sequential_index, 24-bit_colour) to match the
-    fb_monitor interface that the test assertions expect.
-    """
+    """Collect AXI-Stream pixels as (sequential_index, 24-bit_colour) tuples."""
     while True:
         await RisingEdge(dut.clk)
         if int(dut.axis_tvalid.value) and int(dut.axis_tready.value):
@@ -140,7 +116,7 @@ async def axis_sink(dut, pixels: list):
 
 
 async def trigger_render(dut):
-    """Assert start for exactly one cycle."""
+    """Pulse start for one cycle."""
     await RisingEdge(dut.clk)
     dut.start.value = 1
     await RisingEdge(dut.clk)
@@ -148,17 +124,13 @@ async def trigger_render(dut):
 
 
 async def wait_for_frame_done(dut, max_cycles: int = MAX_CYCLES) -> bool:
-    """Poll frame_done each cycle up to max_cycles. Returns True if found."""
+    """Poll frame_done for up to max_cycles; returns True if seen."""
     for _ in range(max_cycles):
         await RisingEdge(dut.clk)
         if int(dut.frame_done.value) == 1:
             return True
     return False
 
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 @cocotb.test()
 async def test_frame_done_pulses(dut):
@@ -186,9 +158,7 @@ async def test_busy_deasserts_after_frame(dut):
     cocotb.start_soon(bram_model(dut, mem))
 
     await trigger_render(dut)
-    # busy is set by NB assignment at the trigger edge; wait one more cycle
-    # for the committed value to be visible via VPI.
-    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)  # NB commit not visible until next cycle (Verilator)
     assert int(dut.busy.value) == 1, "busy not asserted after start"
 
     done = await wait_for_frame_done(dut)

@@ -1,6 +1,4 @@
-# sim/Makefile
-# cocotb + Verilator testbench for svo_traversal.sv (Phase 1)
-# and svo_full_tb.sv (Phase 2, full shading + shadows).
+# sim/Makefile — cocotb + Verilator: Phase 1 (traversal only) and Phase 2 (shading + shadows)
 
 SIM           ?= verilator
 TOPLEVEL_LANG ?= verilog
@@ -16,24 +14,22 @@ $(shell mkdir -p $(OUTPUT_DIR))
 RTL_DIR = $(abspath ../vivado/ip/svo_raytracer/hdl)
 
 # ─── Fast-sim crop ───────────────────────────────────────────────────────────
-# RENDER_DIV downscales the render by an integer factor (same FOV), gating
-# correctness ~DIV^2 faster. Drives both the RTL build (-GIMG_W/-GIMG_H) and the
-# Python tb / gen_reference (via the exported env var) so they stay matched.
-#   make                       full 320x240 (bit-identical to before)
-#   RENDER_DIV=5 make          64x48 render, ~25x faster
-# NOTE: changing RENDER_DIV changes COMPILE_ARGS -> run `make clean` first.
+# RENDER_DIV downscales the render (same FOV), ~DIV² faster.
+# Drives both RTL (-GIMG_W/-GIMG_H) and the Python tb via the exported env var.
+#   make              full 320×240
+#   RENDER_DIV=5 make 64×48, ~25× faster
+# Changing RENDER_DIV changes COMPILE_ARGS — run `make clean` first.
 RENDER_DIV ?= 1
 RENDER_W   := $(shell expr 320 / $(RENDER_DIV))
 RENDER_H   := $(shell expr 240 / $(RENDER_DIV))
 export RENDER_DIV
 
-# Multi-ray pool size for the N-sweep. Overridable: `RAY_POOL_N=6 make`.
-# NOTE: changing RAY_POOL_N changes COMPILE_ARGS -> run `make clean` first.
+# Multi-ray pool size. Overridable: `RAY_POOL_N=6 make`.
+# Changing RAY_POOL_N changes COMPILE_ARGS — run `make clean` first.
 RAY_POOL_N ?= 4
 
 # ─── Phase 1: traversal-only (SHADE_MODE=0) ──────────────────────────────────
-# Multi-ray core (svo_traversal_mr). RAY_POOL_N=1 is bit-identical to the old
-# single-ray svo_traversal — gate against output/golden/golden_phase1_*.png.
+# RAY_POOL_N=1 is bit-identical to the single-ray baseline.
 VERILOG_SOURCES = $(RTL_DIR)/shared_qmul3.sv $(RTL_DIR)/pixel_reorder.sv $(RTL_DIR)/ray_scheduler.sv $(RTL_DIR)/svo_traversal_mr.sv
 TOPLEVEL        = svo_traversal_mr
 MODULE          = tb_svo_traversal
@@ -55,11 +51,8 @@ compare-shade:
 	python3 gen_reference_shaded.py
 	python3 compare_shaded.py
 
-# Profile the OLD single-ray raytracer over the SAME workload as the current
-# multi-ray core (FSM cycle comparison). Checks out the baseline commit into a
-# ../fyp-baseline worktree, overlays world.vox + the current camera, runs shade,
-# and copies the dated profile to output/profiles/baseline_*.  RENDER_DIV passes
-# through (default 5).  See profile_baseline.sh.
+# Run the single-ray baseline in a worktree for FSM cycle comparison.
+# See profile_baseline.sh for details.
 RENDER_DIV   ?= 5
 BASELINE_REF ?= d5095bc
 shade-baseline:

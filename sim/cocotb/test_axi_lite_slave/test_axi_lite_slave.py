@@ -1,14 +1,4 @@
-"""
-Cocotb tests for axi_lite_slave.sv
-
-Covers:
-- AXI4-Lite write handshake (AWVALID/AWREADY, WVALID/WREADY, BVALID/BREADY)
-- AXI4-Lite read handshake (ARVALID/ARREADY, RVALID/RREADY)
-- Every register in the map: write then verify output port changes
-- ctrl_trigger auto-clears after one cycle  (caught by background monitor)
-- SVO_DATA auto-increments svo_wr_addr and pulses svo_wr_en (monitor)
-- STATUS register returns {frame_done, busy}
-"""
+"""Cocotb tests for axi_lite_slave.sv."""
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, ClockCycles, Timer
@@ -123,12 +113,7 @@ async def test_light_dir_registers(dut):
 
 @cocotb.test()
 async def test_ctrl_trigger_pulses_then_clears(dut):
-    """Writing 0x00 bit0 arms a multi-cycle ctrl_trigger pulse that then auto-clears.
-
-    The design uses a 32-cycle pulse (trig_cnt <= 6'd32 in axi_lite_slave.sv) so the
-    trigger survives the traversal FSM's multicycle path; sample a wide window and
-    assert it goes high for a stretch and returns low on its own.
-    """
+    """Writing 0x00 arms a 32-cycle ctrl_trigger pulse that auto-clears."""
     await reset(dut)
     await axi_write(dut, 0x00, 1)
 
@@ -143,9 +128,7 @@ async def test_ctrl_trigger_pulses_then_clears(dut):
 
 @cocotb.test()
 async def test_svo_data_auto_increments_addr(dut):
-    """Each SVO_DATA write must pulse svo_wr_en and increment svo_wr_addr.
-    Again we monitor during the write because both signals are single-cycle.
-    """
+    """Each SVO_DATA write must pulse svo_wr_en and auto-increment svo_wr_addr."""
     await reset(dut)
     await axi_write(dut, 0x48, 0)   # SVO_ADDR = 0
     assert int(dut.svo_wr_addr.value) == 0
@@ -173,23 +156,19 @@ async def test_svo_data_auto_increments_addr(dut):
         assert int(dut.svo_wr_addr.value) == i + 1, (
             f"svo_wr_addr={int(dut.svo_wr_addr.value)}, expected {i+1}"
         )
-        # svo_wr_en must be cleared one cycle after the transaction
         await RisingEdge(dut.S_AXI_ACLK)
         assert int(dut.svo_wr_en.value) == 0, "svo_wr_en did not de-assert"
 
 
 @cocotb.test()
 async def test_lut_autoinc(dut):
-    """LUT upload via the auto-incrementing register pair: 0x50=index, 0x54=data(++).
-
-    Covers all 16 entries, a mid-stream index reset, and the material-flag byte
-    [31:24] surviving (the LUT word is now [31:24]=flag, [23:0]=RGB)."""
+    """LUT auto-inc upload: 0x50=index, 0x54=data (index++). Covers all 16 entries,
+    mid-stream index reset, and [31:24] material-flag byte passthrough."""
     await reset(dut)
-    # full 0..15 stream from index 0
     words = [(0x01_00_00_00 | (i << 16) | (i << 8) | i) for i in range(16)]
-    await axi_write(dut, 0x50, 0)                 # lut_index = 0
+    await axi_write(dut, 0x50, 0)
     for w in words:
-        await axi_write(dut, 0x54, w)             # write + auto-increment
+        await axi_write(dut, 0x54, w)
     for i, expected in enumerate(words):
         got = int(dut.lut[i].value)
         assert got == expected, f"lut[{i}]=0x{got:08X}, expected 0x{expected:08X}"

@@ -1,27 +1,14 @@
 `timescale 1ns/1ps
-// stack_store.sv — all RAY_POOL_N traversal stacks in one synchronous-read RAM.
-// Address = {slot, sp}. One packed entry (ENTRY_W bits). 1-cycle read latency.
+// stack_store.sv — all RAY_POOL_N traversal stacks in a single synchronous-read RAM.
+// addr = slot * STACK_DEPTH + sp; 1-cycle read latency. Field-opaque (240-bit words).
 //
-// The 240-bit entry layout mirrors the per-ray stack arrays in svo_traversal.sv:
+// 240-bit entry layout (mirrors svo_traversal_mr per-ray stack):
 //   node_idx[15:0], bitmask[15:0], t_min[31:0], t_max[31:0],
 //   t_next_x/y/z[31:0] each, cx/cy/cz[5:0] each,
-//   node_half[5:0], orig_x/y/z[5:0] each, +6 pad = 240 bits total.
-// This module is field-opaque: it stores/loads the whole 240-bit word as-is.
+//   node_half[5:0], orig_x/y/z[5:0] each, +6 pad.
 //
-// Parameters
-//   RAY_POOL_N  : number of rays in flight (number of independent stacks)
-//   STACK_DEPTH : maximum depth of each stack (matches svo_traversal STACK_DEPTH)
-//   ENTRY_W     : width of one packed stack entry in bits
-//
-// Address arithmetic:
-//   addr = slot * STACK_DEPTH + sp
-//   Total entries = RAY_POOL_N * STACK_DEPTH
-//
-// Icarus note: $clog2(DEPTH) for DEPTH = RAY_POOL_N*STACK_DEPTH=48 → 6 bits.
-// The expression (w_slot * STACK_DEPTH + w_sp) is evaluated in the width of
-// the widest operand (STACK_DEPTH is an int literal → 32-bit context), then
-// truncated to [$clog2(DEPTH)-1:0] by the wire assignment.  Icarus 11+ handles
-// this correctly with -g2012.
+// Icarus: (w_slot * STACK_DEPTH + w_sp) is evaluated in 32-bit context (int literal),
+// then truncated to [$clog2(DEPTH)-1:0] by the wire assignment — correct with -g2012.
 
 module stack_store #(
     parameter int RAY_POOL_N  = 4,

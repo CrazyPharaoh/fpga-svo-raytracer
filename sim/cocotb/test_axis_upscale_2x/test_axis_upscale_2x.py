@@ -1,3 +1,4 @@
+"""Cocotb tests for axis_upscale_2x.sv."""
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge
@@ -26,8 +27,7 @@ async def test_2x2_replication(dut):
     cocotb.start_soon(Clock(dut.aclk, 10, units="ns").start())
     await reset(dut)
 
-    # source pixel value encodes its (row, col)
-    src = [[((r << 16) | c) for c in range(IN_W)] for r in range(IN_H)]
+    src = [[((r << 16) | c) for c in range(IN_W)] for r in range(IN_H)]  # pixel value encodes (row, col)
     in_pixels = []
     for r in range(IN_H):
         for c in range(IN_W):
@@ -52,7 +52,7 @@ async def test_2x2_replication(dut):
 
     async def consumer():
         while len(out) < OUT_W * OUT_H:
-            dut.m_axis_tready.value = random.randint(0, 1)   # random backpressure
+            dut.m_axis_tready.value = random.randint(0, 1)
             await RisingEdge(dut.aclk)
             if dut.m_axis_tvalid.value == 1 and dut.m_axis_tready.value == 1:
                 out.append((int(dut.m_axis_tdata.value),
@@ -75,8 +75,7 @@ async def test_2x2_replication(dut):
 
 @cocotb.test()
 async def test_locks_to_sof(dut):
-    """Mid-stream start: the upscaler must ignore input before the first SOF (tuser) and
-    align its framing to it, instead of latching whatever phase it powered up in."""
+    """Upscaler must suppress output until the first SOF (tuser) and align framing to it."""
     cocotb.start_soon(Clock(dut.aclk, 10, units="ns").start())
     await reset(dut)
 
@@ -91,14 +90,13 @@ async def test_locks_to_sof(dut):
     out = []
 
     async def producer():
-        # pre-roll: 6 garbage pixels with NO SOF -> must be ignored while unsynced
+        # 6 garbage pixels before SOF — must be ignored while unsynced
         for _ in range(6):
             dut.s_axis_tdata.value = 0xDEAD0000
             dut.s_axis_tuser.value = 0
             dut.s_axis_tlast.value = 0
             dut.s_axis_tvalid.value = 1
             await RisingEdge(dut.aclk)
-        # the real frame: advance on tready
         i = 0
         while i < len(frame):
             data, tuser, tlast = frame[i]

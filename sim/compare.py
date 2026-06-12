@@ -18,15 +18,8 @@ THRESHOLD  = 0.95   # pass if ≥ 95% pixels match
 
 
 def write_mismatch_log(trace_path, mismatch_set, out_path, hw, ref):
-    """
-    DEBUG — stream-parse pixel_trace.txt and write only the traces for pixels
-    in mismatch_set to out_path. mismatch_set is a set of (px, py) tuples.
-
-    For each mismatched pixel the header is annotated with the hw vs ref result.
-    hw and ref are numpy uint8 arrays shaped (H, W, 3).
-
-    Remove this function and its call in main() when debug logging is done.
-    """
+    """Stream-parse pixel_trace.txt and write only mismatched-pixel traces to out_path.
+    mismatch_set: set of (px, py). hw, ref: uint8 arrays shaped (H, W, 3)."""
     if not os.path.exists(trace_path):
         print(f"  (mismatch log skipped: {trace_path} not found)")
         return
@@ -57,7 +50,6 @@ def write_mismatch_log(trace_path, mismatch_set, out_path, hw, ref):
 
             m = pixel_re.match(line)
             if m:
-                # New pixel block starting — flush previous if it was a mismatch
                 flush(f_out)
 
                 cur_px, cur_py = int(m.group(1)), int(m.group(2))
@@ -80,7 +72,6 @@ def write_mismatch_log(trace_path, mismatch_set, out_path, hw, ref):
             elif in_target:
                 buf.append(raw_line)
 
-        # Flush the very last pixel
         flush(f_out)
 
     print(f"Mismatch log: {out_path}  ({written} pixels written)")
@@ -111,7 +102,7 @@ def main():
     print(f"Match      : {n_match}  ({pct:.2f}%)")
     print(f"Mismatch   : {n_mismatch}  ({100-pct:.2f}%)")
 
-    # Break down mismatch types
+    # False-hit / false-miss breakdown
     hw_hit  = np.all(hw  == [255,255,255], axis=2)
     ref_hit = np.all(ref == [255,255,255], axis=2)
     false_hit  = int((hw_hit  & ~ref_hit).sum())
@@ -119,7 +110,7 @@ def main():
     print(f"  False hits (hw=white, ref=sky): {false_hit}")
     print(f"  False miss (hw=sky, ref=white): {false_miss}")
 
-    # Save diff image: green=match, red=hw extra hit, blue=ref extra hit
+    # Diff image: green=match, red=false hit, blue=false miss
     diff = np.zeros((H, W, 3), dtype=np.uint8)
     diff[match]              = [0, 200, 0]    # green: correct
     diff[hw_hit & ~ref_hit]  = [255, 0, 0]   # red:   false hit
@@ -127,13 +118,10 @@ def main():
     Image.fromarray(diff, 'RGB').save(DIFF_PATH)
     print(f"Diff image : {DIFF_PATH}")
 
-    # DEBUG: write mismatch trace log if pixel_trace.txt exists.
-    # Remove this block when pixel_tracer is removed from tb_svo_traversal.py.
     LOGS_DIR      = os.path.join(OUTPUT_DIR, 'logs')
     TRACE_PATH    = os.path.join(LOGS_DIR, 'pixel_trace.txt')
     MISMATCH_PATH = os.path.join(LOGS_DIR, 'mismatch_trace.txt')
-    # np.where(~match) → (py_indices, px_indices)
-    py_arr, px_arr = np.where(~match)
+    py_arr, px_arr = np.where(~match)   # np.where → (py_indices, px_indices)
     mismatch_coords = set(zip(px_arr.tolist(), py_arr.tolist()))
     write_mismatch_log(TRACE_PATH, mismatch_coords, MISMATCH_PATH, hw, ref)
 

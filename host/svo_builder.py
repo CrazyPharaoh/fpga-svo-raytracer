@@ -1,7 +1,4 @@
-# host/svo_builder.py
-# CPU-side SVO build and serialise functions.
-# Extracted from hardware_ref/fpga_svo_raytracer.py so the PYNQ host can
-# reuse them without importing the full reference model.
+# host/svo_builder.py — CPU-side SVO build and serialise functions.
 
 import math
 import numpy as np
@@ -11,9 +8,7 @@ from typing import List, Optional
 WORLD_SIZE  = 64
 MAX_DEPTH   = 6
 
-# Set to 1 to generate a simple test world (single block at world centre)
-# instead of the full terrain. All callers use build_world() unchanged.
-TESTING = 0
+TESTING = 0   # set to 1 for a single test block at world centre
 
 STATE_EMPTY = 0b00
 STATE_SOLID = 0b11
@@ -23,11 +18,8 @@ BLOCK_AIR     = 0
 BLOCK_STONE   = 1
 BLOCK_GRASS   = 2
 BLOCK_GLOWING = 3
-BLOCK_SAND    = 4   # low terrain (beaches)
-BLOCK_SNOW    = 5   # high peaks
-# NOTE: block_id 0..5 only — shading LUT is 6 entries and the LUT index is clamped to 5
-# in shading_pipeline.sv (and gen_reference_shaded.py). Adding a 7th colour needs the LUT
-# array + register map extended (see CLAUDE.md / the LUT plumbing in axi_lite_slave.sv).
+BLOCK_SAND    = 4
+BLOCK_SNOW    = 5
 
 
 @dataclass
@@ -35,7 +27,7 @@ class SVONode:
     bitmask:  int       = 0
     children: List      = field(default_factory=lambda: [None] * 8)
     block_id: List[int] = field(default_factory=lambda: [0] * 8)
-    dom_block: int      = 0   # representative block for LOD (depth-cap) shading; serialised in word 7
+    dom_block: int      = 0   # representative block for depth-cap shading (serialised in word 7)
 
 
 def _build_test_world() -> np.ndarray:
@@ -47,7 +39,7 @@ def _build_test_world() -> np.ndarray:
 
 
 def build_world() -> np.ndarray:
-    """Return a 64^3 uint8 voxel grid. Returns test world when TESTING=1."""
+    """Return a 64^3 uint8 voxel grid. When TESTING=1, returns a single test block."""
     if TESTING:
         return _build_test_world()
     grid = np.zeros((WORLD_SIZE, WORLD_SIZE, WORLD_SIZE), dtype=np.uint8)
@@ -56,10 +48,9 @@ def build_world() -> np.ndarray:
             h = max(1, min(6, 1 + int(2 * (math.sin(0.4 * x) + math.cos(0.35 * z) + 2))))
             for y in range(h):
                 grid[x, y, z] = BLOCK_STONE
-            # Height-based surface colour: sand low, grass mid, snow on peaks.
             top = BLOCK_SNOW if h >= 5 else (BLOCK_SAND if h <= 2 else BLOCK_GRASS)
             grid[x, h - 1, z] = top
-    # Glowing cluster at world centre
+    # Glowing cluster above world centre
     cx, cz = WORLD_SIZE // 2, WORLD_SIZE // 2
     peak = max(1, min(6, 1 + int(2 * (math.sin(0.4 * cx) + math.cos(0.35 * cz) + 2))))
     for dx in range(4):
@@ -70,7 +61,7 @@ def build_world() -> np.ndarray:
 
 
 def build_svo(grid: np.ndarray, ox=0, oy=0, oz=0, size=None) -> SVONode:
-    """Recursively build an SVO from the voxel grid. Returns the root SVONode."""
+    """Recursively build an SVO from the voxel grid; returns the root SVONode."""
     if size is None:
         size = WORLD_SIZE
     node = SVONode()
@@ -100,10 +91,7 @@ def build_svo(grid: np.ndarray, ox=0, oy=0, oz=0, size=None) -> SVONode:
                 bits = STATE_MIXED
                 node.children[cidx] = child
         node.bitmask |= (bits << (cidx * 2))
-    # Representative block for depth-cap LOD: the first non-air block found among
-    # this node's children (SOLID child -> its block_id; MIXED child -> that child's
-    # dom_block, which recurses to a real leaf colour). Lets hardware shade a
-    # depth-capped MIXED node with a real surrounding colour instead of guessing.
+    # dom_block: first non-air block in this node's children, for depth-cap shading.
     for cidx in range(8):
         st = (node.bitmask >> (cidx * 2)) & 3
         if st == STATE_SOLID and node.block_id[cidx] != BLOCK_AIR:
@@ -114,11 +102,7 @@ def build_svo(grid: np.ndarray, ox=0, oy=0, oz=0, size=None) -> SVONode:
 
 
 def flatten_svo(root: SVONode) -> List[SVONode]:
-    """
-    BFS traversal of the SVO tree.
-    Returns a flat list of SVONodes where each node's children[i] is either
-    None (leaf) or an integer index into the returned list.
-    """
+    """BFS the SVO tree; returns a flat list where children[i] is an integer index or 0."""
     obj_to_idx = {}
     queue = [root]
     ordered = []
@@ -131,7 +115,6 @@ def flatten_svo(root: SVONode) -> List[SVONode]:
             if isinstance(node.children[i], SVONode):
                 queue.append(node.children[i])
 
-    # Replace child SVONode references with integer indices
     for node in ordered:
         for i in range(8):
             if isinstance(node.children[i], SVONode):
@@ -143,17 +126,13 @@ def flatten_svo(root: SVONode) -> List[SVONode]:
 
 
 def serialise_nodes(nodes: List[SVONode]) -> List[int]:
-    """
-    Serialise a flat node list into a sequence of 32-bit words for streaming
-    into the FPGA BRAM via SVO_DATA register.
+    """Serialise a flat node list to 32-bit words for BRAM upload via SVO_DATA (0x4C).
 
-    Each node occupies exactly 8 words:
-      word 0    bitmask [15:0]
-      words 1-4 child_ptr pairs: word k holds child_ptr[2k-2] in [15:0]
-                                           and child_ptr[2k-1] in [31:16]
-      words 5-6 block_id quads:  word 5 holds block_id[0..3] packed 8-bit each
-                                  word 6 holds block_id[4..7]
-      word 7    padding (zero)
+    8 words per node:
+      word 0:   bitmask [15:0]
+      words 1–4: child_ptr pairs (two 16-bit indices per word)
+      words 5–6: block_id quads (four 8-bit IDs per word)
+      word 7:   dom_block (depth-cap representative block, 8-bit)
     """
     words = []
     for n in nodes:
@@ -167,5 +146,5 @@ def serialise_nodes(nodes: List[SVONode]) -> List[int]:
             for j in range(4):
                 w |= (n.block_id[i + j] & 0xFF) << (j * 8)
             words.append(w)
-        words.append(n.dom_block & 0xFF)   # word 7: representative block for depth-cap LOD
+        words.append(n.dom_block & 0xFF)
     return words

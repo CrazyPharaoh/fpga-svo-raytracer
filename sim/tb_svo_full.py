@@ -1,8 +1,6 @@
 # sim/tb_svo_full.py
-# Phase 2 testbench: drives svo_full_tb (primary trav + shading_pipeline + shadow trav).
-# No shade_stub — shading pipeline and shadow traversal are inside the DUT.
-# Includes pixel_tracer for per-pixel FSM debugging.
-# Signal hierarchy: DUT is svo_full_tb, traversal internals at dut.traversal.*
+# Phase 2 testbench: drives svo_full_tb (primary traversal + shading_pipeline + shadow traversal).
+# Signal hierarchy: DUT is svo_full_tb; traversal internals at dut.traversal.*
 
 import sys, os, math
 import cocotb
@@ -17,8 +15,7 @@ import svo_builder
 import vox_loader
 from sim_profiling import state_profiler, write_state_profile
 
-# Fast-sim crop: RENDER_DIV downscales the render (same FOV) to gate ~DIV^2 faster.
-# Must match the -GIMG_W/-GIMG_H build (Makefile.shade) and gen_reference_shaded.py.
+# RENDER_DIV: must match the -GIMG_W/-GIMG_H build (Makefile.shade) and gen_reference_shaded.py.
 RENDER_DIV     = int(os.environ.get('RENDER_DIV', '1'))
 IMG_W, IMG_H   = 320 // RENDER_DIV, 240 // RENDER_DIV
 CLK_PERIOD_NS  = 10
@@ -26,16 +23,13 @@ CLK_PERIOD_NS  = 10
 _LM = math.sqrt(1.0**2 + 2.0**2 + 1.5**2)
 LIGHT_DIR = (1.0/_LM, 2.0/_LM, 1.5/_LM)
 
-# MagicaVoxel world: 64^3 block_id grid + 16 packed LUT words
-# (each word [31:24]=material flag, [23:0]=RGB) loaded from host/world.vox.
-# Scene select: WORLD=vox (default; MagicaVoxel host/world.vox) or WORLD=procedural
-# (the original svo_builder.build_world() terrain). gen_reference_shaded.py reads the
-# same WORLD env var + camera/LUT so the reference PNG comparison stays matched.
+# WORLD=vox (default): loads host/world.vox (64^3 grid + 16 LUT words, [31:24]=mat flag, [23:0]=RGB).
+# WORLD=procedural: uses svo_builder.build_world(). gen_reference_shaded.py reads the same env var.
 WORLD = os.environ.get('WORLD', 'vox')
 if WORLD == 'procedural':
     GRID = svo_builder.build_world()
     _PROC_COLS = [(0,0,0),(120,120,120),(60,160,40),(255,0,0),(194,178,128),(235,240,250)]
-    LUT_WORDS = [((r << 16) | (g << 8) | b) for (r, g, b) in _PROC_COLS] + [0]*10  # flag 0 (static)
+    LUT_WORDS = [((r << 16) | (g << 8) | b) for (r, g, b) in _PROC_COLS] + [0]*10  # mat flag 0 (static)
 else:
     WORLD_VOX = os.path.join(os.path.dirname(__file__), '..', 'host', 'world.vox')
     GRID, LUT_WORDS = vox_loader.load_world(WORLD_VOX)
@@ -100,12 +94,9 @@ _FACE_NAMES  = {0: 'X', 1: 'Y', 2: 'Z'}
 # ─── BRAM model ───────────────────────────────────────────────────────────────
 
 async def bram_model(dut, words):
-    """1-cycle registered BRAM model.
-    Primary (port B wide, gated on en) -> svo_rd_wide_prim: whole node = 8 words packed
-        into 256 bits, word w at bits [w*32 +: 32]. Addressed by node index.
-    Two shadow lanes (always read addr) -> svo_rd_data_shad / svo_rd_data_shad1: 32-bit
-        word at {node,word} (matches the dual-port svo_bram_shadow on HW; w5-w7 are
-        unused by the shadow so serving the real word vs 0 gives the same shadow result)."""
+    """1-cycle registered BRAM model (matches hardware svo_bram_shadow).
+    Port B wide (gated, primary): svo_rd_wide_prim = 256-bit node, word w at bits [w*32+:32].
+    Two shadow lanes (always read): svo_rd_data_shad / svo_rd_data_shad1 = 32-bit word."""
     def rd(addr):
         a = int(addr)
         return int(words[a]) if a < len(words) else 0
@@ -130,9 +121,7 @@ async def bram_model(dut, words):
             dut.svo_rd_data_shad.value = pend_shad
         if pend_shad1 is not None:
             dut.svo_rd_data_shad1.value = pend_shad1
-        # primary: port B wide, gated on en (matches dout_b_wide <= mem[node] if en_b)
-        pend_prim = rd_node(dut.svo_rd_node_prim.value) if int(dut.svo_rd_en_prim.value) else None
-        # shadow lanes: always read addr (matches dout_a/dout_b <= mem[addr])
+        pend_prim  = rd_node(dut.svo_rd_node_prim.value) if int(dut.svo_rd_en_prim.value) else None
         pend_shad  = rd(dut.svo_rd_addr_shad.value)
         pend_shad1 = rd(dut.svo_rd_addr_shad1.value)
 
@@ -140,7 +129,7 @@ async def bram_model(dut, words):
 # ─── Pixel collector ──────────────────────────────────────────────────────────
 
 async def collect_pixels_axis(dut, pixels):
-    """Collect pixels from AXI-Stream output; log progress every 1000 pixels."""
+    """Collect AXI-Stream pixels into list; tuser resets on SOF."""
     dut.axis_tready.value = 1
     while len(pixels) < IMG_W * IMG_H:
         await RisingEdge(dut.clk)
@@ -154,12 +143,8 @@ async def collect_pixels_axis(dut, pixels):
 
 
 # ─── Pixel tracer ─────────────────────────────────────────────────────────────
-# Accesses traversal internal signals via dut.traversal.* (--public-flat-rw
-# exposes all hierarchy; svo_full_tb names the primary instance "traversal").
-
-# Per-ray signals became [slot] arrays in svo_traversal_mr. _SlotView wraps the
-# traversal sub-hierarchy so the tracer's reads of per-ray signals auto-index the
-# active slot (0); scalar internals pass through. (Plan Task 10 generalises N>1.)
+# Accesses traversal internals via dut.traversal.* (requires --public-flat-rw).
+# Per-ray signals are [slot] arrays in svo_traversal_mr; _SlotView auto-indexes slot 0.
 _PER_RAY_SIGNALS = {
     'bitmask', 'cidx', 'cx', 'cy', 'cz', 'dt_x', 'dt_y', 'dt_z',
     'hit_face', 'hit_face_sign_r', 'inv_x', 'inv_y', 'inv_z',
@@ -172,7 +157,7 @@ _TRACE_SLOT = 0
 
 
 class _SlotView:
-    """Read-only wrapper that auto-indexes per-ray array signals to a slot."""
+    """Read-only wrapper: auto-indexes per-ray array signals to a fixed slot."""
     def __init__(self, hier):
         object.__setattr__(self, '_hier', hier)
 
@@ -182,10 +167,8 @@ class _SlotView:
 
 
 async def pixel_tracer(dut, pixel_logs):
-    """Per-pixel FSM trace for Phase 2. Logs state transitions from the primary
-    traversal instance (dut.traversal) plus shade/shadow handshake from the
-    top-level svo_full_tb wires (dut.shade_start, dut.shade_done, etc.)."""
-    t = _SlotView(dut.traversal)   # per-ray signals -> active slot (N=1: slot 0)
+    """Log FSM state transitions per pixel from dut.traversal (primary core)."""
+    t = _SlotView(dut.traversal)
 
     prev_state = -1
     step = 0
@@ -199,7 +182,7 @@ async def pixel_tracer(dut, pixel_logs):
         if int(dut.rst.value):
             continue
 
-        state = int(dut.dbg_state.value)   # forwarded from traversal via top port
+        state = int(dut.dbg_state.value)
         if state == prev_state:
             continue
 
@@ -208,7 +191,7 @@ async def pixel_tracer(dut, pixel_logs):
         sn  = _STATE_NAMES.get(state, f'S_{state}')
         pad = f"  [{step:03d}] {sn:<14s} | "
 
-        if state == 1:   # S_RAY_SETUP — new pixel
+        if state == 1:   # S_RAY_SETUP: new pixel
             if cur_lines:
                 pixel_logs.append((cur_px, cur_py, cur_lines))
             cur_px  = int(dut.dbg_px.value)
@@ -218,7 +201,7 @@ async def pixel_tracer(dut, pixel_logs):
             pad     = f"  [{step:03d}] {sn:<14s} | "
             cur_lines.append(pad + f"px={cur_px} py={cur_py}")
 
-        elif state == 2:   # S_ROOT_SLAB — ray params ready
+        elif state == 2:   # S_ROOT_SLAB: ray params ready
             sx = '+1' if not (int(t.step_x.value) & 4) else '-1'
             sy = '+1' if not (int(t.step_y.value) & 4) else '-1'
             sz = '+1' if not (int(t.step_z.value) & 4) else '-1'
@@ -229,7 +212,7 @@ async def pixel_tracer(dut, pixel_logs):
                       f"step=({sx},{sy},{sz})"
             )
 
-        elif state == 3:   # S_ENTER_NODE
+        elif state == 3:   # S_ENTER_NODE: issue BRAM read
             cur_lines.append(
                 pad + f"t_min={_qf(t.t_min)} t_max={_qf(t.t_max)}  "
                       f"node={int(t.node_idx.value)} half={int(t.node_half.value)}  "
@@ -237,10 +220,10 @@ async def pixel_tracer(dut, pixel_logs):
                       f"sp={int(t.sp.value)}"
             )
 
-        elif state == 4:   # S_BRAM_WAIT
+        elif state == 4:   # S_BRAM_WAIT: reading node words
             cur_lines.append(pad + f"loading BRAM for node={int(t.node_idx.value)}")
 
-        elif state == 5:   # S_CHECK_CHILD
+        elif state == 5:   # S_CHECK_CHILD: classify child from bitmask
             bm     = int(t.bitmask.value)
             cx_v   = int(t.cx.value)
             cy_v   = int(t.cy.value)
@@ -254,7 +237,7 @@ async def pixel_tracer(dut, pixel_logs):
                       f"t_next=({_qf(t.t_next_x)},{_qf(t.t_next_y)},{_qf(t.t_next_z)})"
             )
 
-        elif state == 6:   # S_EMPTY
+        elif state == 6:   # S_EMPTY: advance DDA
             tnx = _from_q16(t.t_next_x.value)
             tny = _from_q16(t.t_next_y.value)
             tnz = _from_q16(t.t_next_z.value)
@@ -266,17 +249,17 @@ async def pixel_tracer(dut, pixel_logs):
                       f"dt=({_qf(t.dt_x)},{_qf(t.dt_y)},{_qf(t.dt_z)})"
             )
 
-        elif state == 7:   # S_SOLID — Phase 2: shade_start fired this same cycle
+        elif state == 7:   # S_SOLID: hit; shade_start asserted this cycle
             face_n   = _FACE_NAMES.get(int(t.hit_face.value), '?')
             face_s   = '-' if int(t.hit_face_sign_r.value) else '+'
             blk      = int(t.r_block[int(t.cidx.value)].value) if hasattr(t, 'r_block') else '?'
             cur_lines.append(
                 pad + f"t_hit={_qf(t.t_min)}  cidx={int(t.cidx.value)}  "
                       f"face={face_n}{face_s}  block_id={blk}  sp={int(t.sp.value)}\n"
-                f"  {'':3s} {'':14s} | → shade_start=1 (Phase 2: handing to shading_pipeline)"
+                f"  {'':3s} {'':14s} | → shade_start=1"
             )
 
-        elif state == 8:   # S_MIXED
+        elif state == 8:   # S_MIXED: push stack and descend
             sp_v = int(t.sp.value)
             cur_lines.append(
                 pad + f"descend: cidx={int(t.cidx.value)}  push sp:{sp_v}→{sp_v+1}  "
@@ -285,7 +268,7 @@ async def pixel_tracer(dut, pixel_logs):
                       f"half={int(t.node_half.value)}"
             )
 
-        elif state == 9:   # S_POP_STACK
+        elif state == 9:   # S_POP_STACK: child exhausted, restore parent
             sp_v = int(t.sp.value)
             cur_lines.append(
                 pad + f"pop sp:{sp_v}→{max(0, sp_v-1)}  "
@@ -293,16 +276,16 @@ async def pixel_tracer(dut, pixel_logs):
                       f"t_min={_qf(t.t_min)}"
             )
 
-        elif state == 10:   # S_MISS — Phase 2: shade_start fired for miss
+        elif state == 10:   # S_MISS: ray exited world; shade_start asserted for sky colour
             cur_lines.append(
                 pad + f"sky_color=({SKY_COLOR[0]},{SKY_COLOR[1]},{SKY_COLOR[2]}) → MISS\n"
-                f"  {'':3s} {'':14s} | → shade_start=1 (Phase 2: handing miss to shading_pipeline)"
+                f"  {'':3s} {'':14s} | → shade_start=1"
             )
 
-        elif state == 11:   # S_WAIT_SHADE — waiting for shading_pipeline to complete
-            cur_lines.append(pad + "waiting for shade_done from shading_pipeline ...")
+        elif state == 11:   # S_WAIT_SHADE: waiting for shade_done
+            cur_lines.append(pad + "waiting for shade_done ...")
 
-        elif state == 12:   # S_WRITE_PIXEL — shade_done returned; pixel ready
+        elif state == 12:   # S_WRITE_PIXEL: emit pixel over AXI-Stream
             pc    = int(dut.axis_tdata.value) & 0xFFFFFF
             r_out = (pc >> 16) & 0xFF
             g_out = (pc >> 8)  & 0xFF
@@ -314,7 +297,7 @@ async def pixel_tracer(dut, pixel_logs):
             )
             cur_lines.append(f"  RESULT: color=({r_out},{g_out},{b_out})")
 
-        elif state == 13:   # S_NEXT_PIXEL
+        elif state == 13:   # S_NEXT_PIXEL: pixel complete, flush and advance
             if cur_lines:
                 pixel_logs.append((cur_px, cur_py, cur_lines))
             cur_lines = []
@@ -322,7 +305,7 @@ async def pixel_tracer(dut, pixel_logs):
 
 
 def write_pixel_trace_log(pixel_logs, log_path):
-    """Write accumulated per-pixel trace lines to log_path."""
+    """Write per-pixel trace lines to log_path."""
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     sep = '=' * 80
     with open(log_path, 'w') as f:
@@ -362,18 +345,7 @@ async def test_render_frame_shaded(dut):
     dut.rst.value = 0
     await RisingEdge(dut.clk)
 
-    # Camera (identical to tb_svo_traversal.py)
-    #pos   = [40.0, 60.0, 10.0]
-    # pos = [30, 15, 0]
-    # fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
-    # right = normalise(cross(fwd, [0, 1, 0]))
-    # up    = cross(right, fwd)
-
-    # #test 1
-    # pos   = [47.0, 8.857, -0.512]
-    # fwd   = [0.0, -1.0, 0.018]
-    # right = [-1.0, 0.0, 0.0]
-    # up    = [0.0, 0.018, 1.0]
+    # Camera — must stay identical to gen_reference_shaded.py.
     if WORLD == 'procedural':
         # original build_world() view (looks at the terrain centre)
         pos   = [30.0, 15.0, 0.0]
@@ -381,13 +353,11 @@ async def test_render_frame_shaded(dut):
         right = normalise(cross(fwd, [0, 1, 0]))
         up    = cross(right, fwd)
     else:
-        #test 2 (world.vox fly-around)
         pos   = [48.0095, 16.7627, 27.9686]
         fwd   = [-0.9094, -0.337, 0.2437]
         right = [-0.2588, 0.0, -0.9659]
         up    = [-0.3255, 0.9415, 0.0872]
-    # scale = tan(fov/2)/(IMG_W/2): same FOV at any RENDER_DIV. At 320 -> /160.0.
-    fov_scale = math.tan(math.radians(60) / 2) / (IMG_W / 2)
+    fov_scale = math.tan(math.radians(60) / 2) / (IMG_W / 2)  # same FOV at any RENDER_DIV
 
     dut.cam_pos_x.value   = to_q16(pos[0]);   dut.cam_pos_y.value   = to_q16(pos[1]);   dut.cam_pos_z.value   = to_q16(pos[2])
     dut.cam_right_x.value = to_q16(right[0]); dut.cam_right_y.value = to_q16(right[1]); dut.cam_right_z.value = to_q16(right[2])
@@ -406,9 +376,9 @@ async def test_render_frame_shaded(dut):
 
     for i in range(16):
         getattr(dut, f"lut_{i}").value = LUT_WORDS[i]
-    dut.time_phase.value = 0   # static frame in sim (matches gen_reference_shaded TIME_PHASE)
-    dut.shadow_on.value = 1     # shadows on (matches gen_reference SHADOWS_ENABLED)
-    dut.max_depth.value = 6     # full detail (no LOD cap) -> pixel-identical to today
+    dut.time_phase.value = 0   # static frame; matches gen_reference_shaded.py TIME_PHASE=0
+    dut.shadow_on.value = 1    # must match gen_reference_shaded.py SHADOWS_ENABLED
+    dut.max_depth.value = 6    # full detail; no LOD cap
 
     await RisingEdge(dut.clk)
 
@@ -442,7 +412,6 @@ async def test_render_frame_shaded(dut):
         pixel_logs,
         os.path.join(out_dir, 'logs', 'pixel_trace_shaded.txt')
     )
-    # FSM cycle profile (shade path): canonical copy in logs/ + dated history in profiles/.
     write_state_profile(state_counts, os.path.join(out_dir, 'logs', 'state_profile_shaded.txt'),
                         IMG_W, IMG_H,
                         archive_dir=os.path.join(out_dir, 'profiles'), label='shade')

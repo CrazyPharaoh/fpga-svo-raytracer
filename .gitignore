@@ -1,2 +1,13 @@
 *.md
 sim/shade_build
+# Python bytecode
+__pycache__/
+*.pyc
+
+# cocotb / Verilator / Icarus simulation build output + results
+sim_build/
+sim/cocotb/*/results.xml
+
+# Vivado ILA capture dumps + scratch
+vivado/analyser_results/
+vivado/ip/check.sv

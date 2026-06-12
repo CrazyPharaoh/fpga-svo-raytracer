@@ -1,4 +1,4 @@
-# host/fly_camera.py — pure camera math for the keyboard fly-through (no hardware imports)
+# host/fly_camera.py — camera math for the fly-through (no hardware imports).
 import math
 from dataclasses import dataclass
 
@@ -10,7 +10,7 @@ def cross(a, b):
 PITCH_LIMIT = math.radians(89)
 
 def vectors(yaw, pitch):
-    """Return (fwd, right, up) for a yaw/pitch (Y-up), matching display_frame's convention."""
+    """Return (fwd, right, up) unit vectors for yaw/pitch (Y-up)."""
     cp = math.cos(pitch)
     fwd   = [cp*math.sin(yaw), math.sin(pitch), cp*math.cos(yaw)]
     right = normalise(cross(fwd, [0, 1, 0]))

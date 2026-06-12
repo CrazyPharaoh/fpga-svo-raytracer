@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'hardware_ref')
 import svo_builder
 import fpga_svo_raytracer as ref
 
-# Fast-sim crop: must match tb_svo_traversal.py / the -GIMG_W build (see sim/Makefile).
+# RENDER_DIV: must match tb_svo_traversal.py and the -GIMG_W Makefile build parameter.
 RENDER_DIV   = int(os.environ.get('RENDER_DIV', '1'))
 IMG_W, IMG_H = 320 // RENDER_DIV, 240 // RENDER_DIV
 SKY_COLOR    = (135, 206, 235)
@@ -36,7 +36,7 @@ def main():
     nodes = svo_builder.flatten_svo(root)
     print(f"  {len(nodes)} nodes")
 
-    # Camera — identical to testbench
+    # Camera — must match tb_svo_traversal.py
     pos   = [40, 60, 10]
     fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
     right = normalise(cross(fwd, [0, 1, 0]))
@@ -47,7 +47,7 @@ def main():
     pixels = []
     for py in range(IMG_H):
         for px in range(IMG_W):
-            # Exact same ray formula as hardware S_RAY_SETUP
+            # Ray formula matches hardware S_RAY_SETUP
             u  = (px - IMG_W / 2) * fov_scale
             v  = (py - IMG_H / 2) * fov_scale
             dx = fwd[0] + u*right[0] - v*up[0]

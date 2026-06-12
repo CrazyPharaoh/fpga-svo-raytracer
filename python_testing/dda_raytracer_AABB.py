@@ -1,3 +1,4 @@
+# dda_raytracer_AABB.py — early prototype: flat 3D DDA, no metrics tracking
 import math
 import os
 import time
@@ -44,30 +45,15 @@ def add(v1, v2):
     return (v1[0] + v2[0], v1[1] + v2[1], v1[2]+ v2[2])
 
 def generateWorld(width_x, height_y, depth_z, default_val=0):
-    # Create [X][Y][Z] structure
-    # Note the order of loops: 
-    #   Outer: range(width_x)
-    #   Middle: range(height_y)
-    #   Inner: range(depth_z)
     print("generating world with size:", width_x)
     world = [[[default_val for z in range(depth_z)] for y in range(height_y)] for x in range(width_x)]
-
-    # # --- Add the Floor
-    # # Now we can loop naturally using x and z
-    # for x in range(width_x):
-    #     for z in range(depth_z):
-    #         # Access strictly as [x][y][z]
-    #             world[x][0][z] = 1
 
     check_size = 1
 
     for x in range(width_x):
         for z in range(depth_z):
-            # 1. Scale the coordinates down by the size
             scaled_x = x // check_size
             scaled_z = z // check_size
-            
-            # 2. Check if the sum is even or odd (standard checkerboard math)
             if (scaled_x + scaled_z) % 2 == 0:
                  world[x][0][z] = 4  # White
             else:
@@ -77,15 +63,9 @@ def generateWorld(width_x, height_y, depth_z, default_val=0):
 
 
 def intersect_voxel(ray_origin, ray_direction, world):
-    # Initialize the algorithm:
-    # Check which box we are starting in:
     map_pos = [floor(ray_origin[i]) for i in range(3)]
-
-    # Work out distance moved along ray for 1 unit in each direction
     delta_dist = [1e30 if d == 0 else abs(1/d) for d in ray_direction]
 
-    # Work out what direciton we are moving in for each axis and the 
-    # distance to the closest boundary
     step = [0, 0, 0]
     side_dist = [0.0, 0.0, 0.0]
 
@@ -96,9 +76,7 @@ def intersect_voxel(ray_origin, ray_direction, world):
         else:
             step[i] = 1
             side_dist[i] = (map_pos[i] + 1.0 - ray_origin[i]) * delta_dist[i]
-    
-    # DDA Loop
-    # Check smallest side_dist and pick that axis
+
     block_value = 0
 
     while(block_value == 0):
@@ -108,22 +86,16 @@ def intersect_voxel(ray_origin, ray_direction, world):
             if side_dist[i] < min_dist:
                 axis = i
                 min_dist = side_dist[i]
-        
-        # Increment side dist in the min axis
-        side_dist[axis] = side_dist [axis] + delta_dist [axis]
 
-        # Move map coordinates
+        side_dist[axis] = side_dist[axis] + delta_dist[axis]
         map_pos[axis] = map_pos[axis] + step[axis]
 
-        # Record Normal to axis
         normal = [0, 0, 0]
         normal[axis] = -step[axis]
 
-        # Work out hit point
         t = side_dist[axis] - delta_dist[axis]
-        hit_point = add(ray_origin , scalarMult(t, ray_direction))
+        hit_point = add(ray_origin, scalarMult(t, ray_direction))
 
-        # Check map_pos if we are out of bounds
         for i in range(3):
             if map_pos[i] >= world_size or map_pos[i] < 0:
                 return 0, (0, 0, 0), (0, 0, 0)
@@ -142,8 +114,7 @@ def createPPM(pixel_list):
 
 
 def get_colour(block_id, normal_vect, hit_point):
-    # If out of bounds return black
-    if block_id == 0:
+    if block_id == 0:  # miss / out of bounds
         return (0, 0, 0)
     
     light_dir = normalize(sub(light_pos, hit_point))
@@ -171,8 +142,6 @@ def create_image():
 
     for y in range(height):
         for x in range(width):
-            
-            # Map Screen and camera to rays and coordinates
             Px = (2* (x + 0.5) / width  - 1) * aspect_ratio * math.tan(fov / 2)
             Py = -(2 * (y + 0.5) / height - 1) * math.tan(fov / 2)
 

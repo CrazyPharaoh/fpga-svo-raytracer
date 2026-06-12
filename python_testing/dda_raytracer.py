@@ -1,3 +1,4 @@
+# dda_raytracer.py — early prototype: flat 3D DDA with per-op hardware metrics
 import math
 import os
 import time
@@ -70,73 +71,58 @@ def intersect_voxel(ray_origin, ray_direction, world, metrics):
     map_pos = [floor(ray_origin[i]) for i in range(3)]
 
     
-    metrics['divisions'] += 3 # 3 divisions required to calculate delta_dist
+    metrics['divisions'] += 3  # one per axis for delta_dist
     delta_dist = [1e30 if d == 0 else abs(1/d) for d in ray_direction]
 
-    # Work out what direciton we are moving in for each axis and the 
-    # distance to the closest boundary
     step = [0, 0, 0]
     side_dist = [0.0, 0.0, 0.0]
 
     for i in range(3):
-        metrics['comparisons'] += 1 # --- TRACKING: 1 comparison ---
+        metrics['comparisons'] += 1
         if ray_direction[i] < 0:
             step[i] = -1
-            # --- TRACKING: 1 subtraction, 1 multiplication ---
-            metrics['adds_subs'] += 1 
+            metrics['adds_subs'] += 1
             metrics['multiplications'] += 1
             side_dist[i] = (ray_origin[i] - map_pos[i]) * delta_dist[i]
         else:
             step[i] = 1
-            # --- TRACKING: 1 addition, 1 subtraction, 1 multiplication ---
-            metrics['adds_subs'] += 2 
+            metrics['adds_subs'] += 2
             metrics['multiplications'] += 1
             side_dist[i] = (map_pos[i] + 1.0 - ray_origin[i]) * delta_dist[i]
-    
-    # DDA Loop
-    # Check smallest side_dist and pick that axis
+
     block_value = 0
 
     while(block_value == 0):
-        # --- TRACKING: 1 iteration, 1 comparison for the while loop condition ---
         metrics['iterations'] += 1
-        metrics['comparisons'] += 1 
+        metrics['comparisons'] += 1
 
         min_dist = 2e11
         axis = 1
         for i in range(3):
-            # --- TRACKING: 1 comparison ---
             metrics['comparisons'] += 1
             if side_dist[i] < min_dist:
                 axis = i
                 min_dist = side_dist[i]
-        
-        # --- TRACKING: 1 addition ---
-        metrics['adds_subs'] += 1
-        side_dist[axis] = side_dist [axis] + delta_dist [axis]
 
-        # --- TRACKING: 1 addition ---
+        metrics['adds_subs'] += 1
+        side_dist[axis] = side_dist[axis] + delta_dist[axis]
+
         metrics['adds_subs'] += 1
         map_pos[axis] = map_pos[axis] + step[axis]
 
-        # Record Normal to axis
         normal = [0, 0, 0]
         normal[axis] = -step[axis]
 
-        # --- TRACKING: 1 subtraction, 3 multiplications (scalarMult), 3 additions (add) ---
-        metrics['adds_subs'] += 4 
+        metrics['adds_subs'] += 4
         metrics['multiplications'] += 3
         t = side_dist[axis] - delta_dist[axis]
-        hit_point = add(ray_origin , scalarMult(t, ray_direction))
+        hit_point = add(ray_origin, scalarMult(t, ray_direction))
 
-        # Check map_pos if we are out of bounds
         for i in range(3):
-            # --- TRACKING: 2 comparisons (>= and <) ---
             metrics['comparisons'] += 2
             if map_pos[i] >= world_size or map_pos[i] < 0:
                 return 0, (0, 0, 0), (0, 0, 0)
 
-        # --- TRACKING: 1 Memory Read (fetching block ID), 1 comparison (> 0) ---
         metrics['mem_reads'] += 1
         metrics['comparisons'] += 1
         if world[map_pos[0]][map_pos[1]][map_pos[2]] > 0:
@@ -153,8 +139,7 @@ def createPPM(pixel_list):
 
 
 def get_colour(block_id, normal_vect, hit_point):
-    # If out of bounds return black
-    if block_id == 0:
+    if block_id == 0:  # miss / out of bounds
         return (0, 0, 0)
     
     light_dir = normalize(sub(light_pos, hit_point))
@@ -167,7 +152,6 @@ def main():
     print(floor(-12.3))
     print(numAbs(-123))
 
-    # --- CHANGED: Added dummy metrics dictionary for main test ---
     dummy_metrics = {'mem_reads': 0, 'iterations': 0, 'adds_subs': 0, 'multiplications': 0, 'divisions': 0, 'comparisons': 0}
     world = generateWorld(world_size)
     block_value, normal, hit_point = intersect_voxel((8.5, 10.5, 8.5), (0, -1, 0), world, dummy_metrics)
@@ -182,7 +166,6 @@ def create_image():
     world = generateWorld(world_size)
     after_gen = time.time()
 
-    # --- CHANGED: Initialize Total Metrics dictionary ---
     total_metrics = {
         'mem_reads': 0,
         'iterations': 0,
@@ -194,15 +177,12 @@ def create_image():
 
     for y in range(height):
         for x in range(width):
-            
-            # Map Screen and camera to rays and coordinates
             Px = (2* (x + 0.5) / width  - 1) * aspect_ratio * math.tan(fov / 2)
             Py = -(2 * (y + 0.5) / height - 1) * math.tan(fov / 2)
 
             mapped_ray_dir = (Px, Py, 1)
             camera_pos = (16, 10, 4)
 
-            # --- CHANGED: Create fresh metrics dict for this specific ray ---
             ray_metrics = {
                 'mem_reads': 0,
                 'iterations': 0,
@@ -212,10 +192,8 @@ def create_image():
                 'comparisons': 0
             }
 
-            # --- CHANGED: Pass ray_metrics into intersect_voxel ---
             block_value, normal, hit_point = intersect_voxel(camera_pos, normalize(mapped_ray_dir), world, ray_metrics)
-            
-            # --- CHANGED: Add this ray's metrics to the total ---
+
             for key in total_metrics:
                 total_metrics[key] += ray_metrics[key]
 
@@ -225,7 +203,6 @@ def create_image():
     after_rays = time.time()
     createPPM(pixel_list)
 
-    # --- Print the final averaged hardware metrics ---
     total_rays = width * height
     print("\n--- HARDWARE PERFORMANCE METRICS ---")
     print(f"Total Rays Cast: {total_rays}")

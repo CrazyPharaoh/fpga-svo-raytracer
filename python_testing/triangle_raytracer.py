@@ -1,3 +1,4 @@
+# triangle_raytracer.py — early prototype: Möller-Trumbore triangle raytracer with op-count metrics
 import math
 import os
 import time
@@ -42,13 +43,11 @@ def cross(v1, v2):
     )
 
 def buildScene():
-    """Build a scene of triangles with pre-computed normals.
-    Scene: Floor (2 triangles) + box/cube (12 triangles) + pyramid (6 triangles) = 20 triangles.
-    """
+    """Floor (2) + box (12) + pyramid (6) = 20 triangles. Normals pre-computed."""
     triangles = []
 
     def make_tri(v0, v1, v2, color):
-        # Pre-compute normal at scene setup time (no per-ray cross product needed for shading)
+        # Normal pre-computed; no per-ray cross product needed
         edge1 = sub(v1, v0)
         edge2 = sub(v2, v0)
         n = cross(edge1, edge2)
@@ -63,62 +62,46 @@ def buildScene():
             'color': color
         }
 
-    # --- Floor (2 triangles, y=0, spanning -5 to 5 in x and 3 to 13 in z) ---
+    # Floor (y=0, x∈[-5,5], z∈[3,13])
     floor_color = (200, 200, 200)
     triangles.append(make_tri((-5, 0, 3), (5, 0, 3), (5, 0, 13), floor_color))
     triangles.append(make_tri((-5, 0, 3), (5, 0, 13), (-5, 0, 13), floor_color))
 
-    # --- Box / cube (12 triangles, 6 faces × 2) centered at (0, 1.5, 8) size 2x3x2 ---
+    # Box (12 triangles, 6 faces × 2), centred at (0, 1.5, 8), size 2×3×2
     bx0, by0, bz0 = -1.0, 0.0, 7.0
     bx1, by1, bz1 =  1.0, 3.0, 9.0
     box_color = (220, 50, 50)
 
-    # Front face (z = bz0)
-    triangles.append(make_tri((bx0, by0, bz0), (bx1, by0, bz0), (bx1, by1, bz0), box_color))
+    triangles.append(make_tri((bx0, by0, bz0), (bx1, by0, bz0), (bx1, by1, bz0), box_color))  # front
     triangles.append(make_tri((bx0, by0, bz0), (bx1, by1, bz0), (bx0, by1, bz0), box_color))
-    # Back face (z = bz1)
-    triangles.append(make_tri((bx1, by0, bz1), (bx0, by0, bz1), (bx0, by1, bz1), box_color))
+    triangles.append(make_tri((bx1, by0, bz1), (bx0, by0, bz1), (bx0, by1, bz1), box_color))  # back
     triangles.append(make_tri((bx1, by0, bz1), (bx0, by1, bz1), (bx1, by1, bz1), box_color))
-    # Left face (x = bx0)
-    triangles.append(make_tri((bx0, by0, bz1), (bx0, by0, bz0), (bx0, by1, bz0), box_color))
+    triangles.append(make_tri((bx0, by0, bz1), (bx0, by0, bz0), (bx0, by1, bz0), box_color))  # left
     triangles.append(make_tri((bx0, by0, bz1), (bx0, by1, bz0), (bx0, by1, bz1), box_color))
-    # Right face (x = bx1)
-    triangles.append(make_tri((bx1, by0, bz0), (bx1, by0, bz1), (bx1, by1, bz1), box_color))
+    triangles.append(make_tri((bx1, by0, bz0), (bx1, by0, bz1), (bx1, by1, bz1), box_color))  # right
     triangles.append(make_tri((bx1, by0, bz0), (bx1, by1, bz1), (bx1, by1, bz0), box_color))
-    # Top face (y = by1)
-    triangles.append(make_tri((bx0, by1, bz0), (bx1, by1, bz0), (bx1, by1, bz1), box_color))
+    triangles.append(make_tri((bx0, by1, bz0), (bx1, by1, bz0), (bx1, by1, bz1), box_color))  # top
     triangles.append(make_tri((bx0, by1, bz0), (bx1, by1, bz1), (bx0, by1, bz1), box_color))
-    # Bottom face (y = by0)
-    triangles.append(make_tri((bx0, by0, bz1), (bx1, by0, bz1), (bx1, by0, bz0), box_color))
+    triangles.append(make_tri((bx0, by0, bz1), (bx1, by0, bz1), (bx1, by0, bz0), box_color))  # bottom
     triangles.append(make_tri((bx0, by0, bz1), (bx1, by0, bz0), (bx0, by0, bz0), box_color))
 
-    # --- Pyramid (4 side faces + 1 base = 4*1 + 2 = 6 triangles) ---
-    # Base square: (-1.5, 0, 9.5) to (1.5, 0, 12.5), apex at (0, 3.5, 11)
+    # Pyramid: base (-1.5,0,9.5)→(1.5,0,12.5), apex (0,3.5,11)
     p_base = [(-1.5, 0, 9.5), (1.5, 0, 9.5), (1.5, 0, 12.5), (-1.5, 0, 12.5)]
     p_apex = (0.0, 3.5, 11.0)
     pyr_color = (50, 180, 50)
 
-    # 4 side faces
-    triangles.append(make_tri(p_base[0], p_base[1], p_apex, pyr_color))
+    triangles.append(make_tri(p_base[0], p_base[1], p_apex, pyr_color))  # sides
     triangles.append(make_tri(p_base[1], p_base[2], p_apex, pyr_color))
     triangles.append(make_tri(p_base[2], p_base[3], p_apex, pyr_color))
     triangles.append(make_tri(p_base[3], p_base[0], p_apex, pyr_color))
-
-    # Base (2 triangles)
-    triangles.append(make_tri(p_base[0], p_base[2], p_base[1], pyr_color))
+    triangles.append(make_tri(p_base[0], p_base[2], p_base[1], pyr_color))  # base
     triangles.append(make_tri(p_base[0], p_base[3], p_base[2], pyr_color))
 
     return triangles
 
 def check_triangle_intersect(ray_origin, ray_dir, tri, metrics):
-    """Möller-Trumbore algorithm. Returns t or None.
-
-    Operation count per triangle:
-      adds_subs:     12  (edges, s-vector, cross products)
-      multiplications: 30 (2 cross products + 4 dot products + 3 final)
-      divisions:      1  (inv_a = 1.0 / det)
-      comparisons:    6  (barycentric bounds + t > 0)
-      sqrts:          0
+    """Möller-Trumbore. Returns t or None.
+    Cost: 12A, 30M, 1D, 6C, 0 sqrt per triangle.
     """
     EPSILON = 1e-7
 
@@ -126,90 +109,66 @@ def check_triangle_intersect(ray_origin, ray_dir, tri, metrics):
     v1 = tri['v1']
     v2 = tri['v2']
 
-    # edge1 = v1 - v0, edge2 = v2 - v0
-    # --- TRACKING: 3 subs, 3 subs = 6 adds_subs ---
-    metrics['adds_subs'] += 6
+    metrics['adds_subs'] += 6  # edge1, edge2
     edge1 = sub(v1, v0)
     edge2 = sub(v2, v0)
 
-    # h = cross(ray_dir, edge2): 6 mults, 3 subs
-    # --- TRACKING: 6 mults, 3 adds_subs ---
-    metrics['multiplications'] += 6
+    metrics['multiplications'] += 6  # h = cross(rd, e2)
     metrics['adds_subs'] += 3
     h = cross(ray_dir, edge2)
 
-    # a = dot(edge1, h): 3 mults, 2 adds
-    # --- TRACKING: 3 mults, 2 adds_subs ---
-    metrics['multiplications'] += 3
+    metrics['multiplications'] += 3  # a = dot(e1, h)
     metrics['adds_subs'] += 2
     a = dot(edge1, h)
 
-    # --- TRACKING: 1 comparison (near-parallel check) ---
-    metrics['comparisons'] += 1
+    metrics['comparisons'] += 1  # near-parallel
     if abs(a) < EPSILON:
         return None
 
-    # inv_a = 1.0 / a
-    # --- TRACKING: 1 division ---
     metrics['divisions'] += 1
     inv_a = 1.0 / a
 
-    # s = ray_origin - v0: 3 subs
-    # --- TRACKING: 3 adds_subs ---
-    metrics['adds_subs'] += 3
+    metrics['adds_subs'] += 3  # s = ro - v0
     s = sub(ray_origin, v0)
 
-    # u = dot(s, h) * inv_a: 3 mults, 2 adds, 1 mult
-    # --- TRACKING: 4 mults, 2 adds_subs ---
-    metrics['multiplications'] += 4
+    metrics['multiplications'] += 4  # u
     metrics['adds_subs'] += 2
     u = dot(s, h) * inv_a
 
-    # --- TRACKING: 2 comparisons (barycentric u bounds) ---
-    metrics['comparisons'] += 2
+    metrics['comparisons'] += 2  # u bounds
     if u < 0.0 or u > 1.0:
         return None
 
-    # q = cross(s, edge1): 6 mults, 3 subs
-    # --- TRACKING: 6 mults, 3 adds_subs ---
-    metrics['multiplications'] += 6
+    metrics['multiplications'] += 6  # q = cross(s, e1)
     metrics['adds_subs'] += 3
     q = cross(s, edge1)
 
-    # v = dot(ray_dir, q) * inv_a: 3 mults, 2 adds, 1 mult
-    # --- TRACKING: 4 mults, 2 adds_subs ---
-    metrics['multiplications'] += 4
+    metrics['multiplications'] += 4  # v
     metrics['adds_subs'] += 2
     v = dot(ray_dir, q) * inv_a
 
-    # --- TRACKING: 2 comparisons (barycentric v bounds) ---
-    metrics['comparisons'] += 2
+    metrics['comparisons'] += 2  # v bounds
     if v < 0.0 or u + v > 1.0:
         return None
 
-    # t = dot(edge2, q) * inv_a: 3 mults, 2 adds, 1 mult
-    # --- TRACKING: 4 mults, 2 adds_subs ---
-    metrics['multiplications'] += 4
+    metrics['multiplications'] += 4  # t
     metrics['adds_subs'] += 2
     t = dot(edge2, q) * inv_a
 
-    # --- TRACKING: 1 comparison (t > 0) ---
-    metrics['comparisons'] += 1
+    metrics['comparisons'] += 1  # t > 0
     if t > EPSILON:
         return t
 
     return None
 
 def get_nearest_triangle(scene, ray_origin, ray_dir, metrics):
-    """Test all triangles, return (nearest_t, nearest_tri) or (None, None)."""
+    """Linear scan; returns (nearest_t, nearest_tri) or (None, None)."""
     nearest_t = None
     nearest_tri = None
 
     for tri in scene:
-        # --- TRACKING: 1 mem read (fetch triangle data) ---
         metrics['mem_reads'] += 1
         t = check_triangle_intersect(ray_origin, ray_dir, tri, metrics)
-        # --- TRACKING: 2 comparisons ---
         metrics['comparisons'] += 2
         if t is not None and (nearest_t is None or t < nearest_t):
             nearest_t = t
@@ -228,7 +187,6 @@ def get_colour(nearest_t, nearest_tri, ray_origin, ray_dir):
     if nearest_tri is None:
         return (0, 0, 0)
 
-    # --- TRACKING: 3 mults, 3 adds ---
     hit_point = add(ray_origin, scalarMult(nearest_t, ray_dir))
     normal = nearest_tri['normal']
 

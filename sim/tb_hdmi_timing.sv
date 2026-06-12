@@ -1,6 +1,5 @@
-// sim/tb_hdmi_timing.sv
-// Verifies that hdmi_timing produces exactly 640×480 = 307200 active pixels
-// per frame for the 640×480 @ 60 Hz VESA timing spec.
+// sim/tb_hdmi_timing.sv — testbench for hdmi_timing.
+// Counts active pixels over one frame; passes if exactly 640×480 = 307200.
 `timescale 1ns/1ps
 module tb_hdmi_timing;
     logic       clk = '0;

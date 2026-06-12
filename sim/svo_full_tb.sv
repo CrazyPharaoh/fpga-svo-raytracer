@@ -1,8 +1,7 @@
-// sim/svo_full_tb.sv
-// Simulation wrapper: primary traversal (SHADE_MODE=1) + shading_pipeline +
-// shadow traversal (SHADOW_MODE=1), with BRAM arbiter.
-// Exposes the same BRAM-read and AXI-Stream ports as svo_traversal.sv so that
-// tb_svo_full.py can reuse the existing Python bram_model coroutine.
+// sim/svo_full_tb.sv — full-system simulation wrapper.
+// Instantiates svo_traversal_mr (SHADE_MODE=1) + SHADE_LANES shading pipelines +
+// SHADE_LANES shadow traversals. Exposes BRAM-read and AXI-Stream ports so that
+// tb_svo_full.py can drive it with the Python bram_model coroutine.
 `timescale 1ns/1ps
 module svo_full_tb #(
     parameter int IMG_W = 320,   // overridable for the RENDER_DIV fast-sim crop
@@ -20,7 +19,7 @@ module svo_full_tb #(
     input  logic signed [31:0] cam_fwd_x,   cam_fwd_y,   cam_fwd_z,
     input  logic signed [31:0] cam_scale,
 
-    // Scene colours (Q16.16 packed RGB for colours, Q16.16 distances)
+    // Scene colours: packed RGB [23:0] for colours, Q16.16 for distances
     input  logic [23:0] sky_color,
     input  logic [23:0] fog_color,
     input  logic signed [31:0] fog_start,
@@ -34,12 +33,11 @@ module svo_full_tb #(
     input  logic        shadow_on,
     input  logic [3:0]  max_depth,
 
-    // lut_0..15 map to block_id 0..15 in shading_pipeline ([31:24]=mat flag,[23:0]=RGB)
+    // lut[0..15]: block_id → colour; [31:24]=material flag, [23:0]=RGB
     input  logic [31:0] lut_0, lut_1, lut_2, lut_3, lut_4, lut_5, lut_6, lut_7,
     input  logic [31:0] lut_8, lut_9, lut_10, lut_11, lut_12, lut_13, lut_14, lut_15,
 
-    // SVO BRAM read ports — two independent ports (Python bram_model drives data).
-    // Primary reads port B; shadow reads port A.
+    // SVO BRAM read ports — driven by Python bram_model.
     output logic [11:0]  svo_rd_node_prim,
     input  logic [255:0] svo_rd_wide_prim,
     output logic         svo_rd_en_prim,
@@ -72,9 +70,7 @@ module svo_full_tb #(
 
     localparam int SHADE_LANES = 2;
 
-    // -------------------------------------------------------------------------
-    // Primary traversal ↔ shading pipelines — one bundle per lane.
-    // -------------------------------------------------------------------------
+    // --- primary traversal ↔ shading handshake signals (one bundle per lane) ---
     logic        shade_start         [0:SHADE_LANES-1];
     logic        shade_done          [0:SHADE_LANES-1];
     logic        shade_is_miss       [0:SHADE_LANES-1];
@@ -86,14 +82,12 @@ module svo_full_tb #(
     logic signed [31:0] shade_hit_px [0:SHADE_LANES-1], shade_hit_py [0:SHADE_LANES-1], shade_hit_pz [0:SHADE_LANES-1];
     logic [23:0] shade_pixel_color   [0:SHADE_LANES-1];
 
-    // -------------------------------------------------------------------------
-    // Shading pipelines ↔ shadow traversals — one per lane.
-    // -------------------------------------------------------------------------
+    // --- shading pipeline ↔ shadow traversal handshake signals (one per lane) ---
     logic        shadow_start [0:SHADE_LANES-1], shadow_done [0:SHADE_LANES-1], shadow_any_hit [0:SHADE_LANES-1];
     logic signed [31:0] shadow_ro_x [0:SHADE_LANES-1], shadow_ro_y [0:SHADE_LANES-1], shadow_ro_z [0:SHADE_LANES-1];
     logic signed [31:0] shadow_rd_x [0:SHADE_LANES-1], shadow_rd_y [0:SHADE_LANES-1], shadow_rd_z [0:SHADE_LANES-1];
 
-    // shadow read ports collected into an array for the per-lane shadow instances
+    // shadow BRAM ports collected into arrays for the generate loop
     logic [14:0] svo_rd_addr_shad_a [0:SHADE_LANES-1];
     logic [31:0] svo_rd_data_shad_a [0:SHADE_LANES-1];
     logic        svo_rd_en_shad_a   [0:SHADE_LANES-1];
@@ -104,9 +98,7 @@ module svo_full_tb #(
     assign svo_rd_en_shad1   = svo_rd_en_shad_a[1];
     assign svo_rd_data_shad_a[1] = svo_rd_data_shad1;
 
-    // -------------------------------------------------------------------------
-    // LUT: individual ports → unpacked array for shading_pipeline
-    // -------------------------------------------------------------------------
+    // LUT: flatten individual ports to unpacked array for shading_pipeline
     logic [31:0] lut_arr [0:15];
     assign lut_arr[0]=lut_0; assign lut_arr[1]=lut_1; assign lut_arr[2]=lut_2;
     assign lut_arr[3]=lut_3; assign lut_arr[4]=lut_4; assign lut_arr[5]=lut_5;
@@ -115,9 +107,7 @@ module svo_full_tb #(
     assign lut_arr[12]=lut_12; assign lut_arr[13]=lut_13; assign lut_arr[14]=lut_14;
     assign lut_arr[15]=lut_15;
 
-    // -------------------------------------------------------------------------
-    // Primary traversal — SHADE_MODE=1, SHADOW_MODE=0
-    // -------------------------------------------------------------------------
+    // --- primary multi-ray traversal (SHADE_MODE=1, SHADOW_MODE=0) ---
     svo_traversal_mr #(.RAY_POOL_N(RAY_POOL_N), .SHADOW_MODE(0), .SHADE_MODE(1), .SHADE_LANES(SHADE_LANES), .IMG_W(IMG_W), .IMG_H(IMG_H)) traversal (
         .clk(clk), .rst(rst), .start(start),
         .cam_pos_x(cam_pos_x),     .cam_pos_y(cam_pos_y),     .cam_pos_z(cam_pos_z),
@@ -144,14 +134,10 @@ module svo_full_tb #(
         .dbg_px(dbg_px), .dbg_py(dbg_py),
         .dbg_tvalid(dbg_tvalid), .dbg_tready(dbg_tready),
         .dbg_mr(),
-        .dbg_cur_slot(), .dbg_d0(), .dbg_d1()   // ILA probes — unused in sim
+        .dbg_cur_slot(), .dbg_d0(), .dbg_d1()
     );
 
-    // -------------------------------------------------------------------------
-    // SHADE_LANES parallel shading lanes (shader + shadow traversal each).
-    // Each lane's shadow reads its own port (Python bram_model serves both); on HW
-    // these map to the dual-port svo_bram_shadow. Must match SHADOW_EN in top.sv.
-    // -------------------------------------------------------------------------
+    // --- SHADE_LANES shading + shadow lanes (must match SHADOW_EN in top.sv) ---
     localparam bit SHADOW_EN = 1'b1;
     generate for (genvar L = 0; L < SHADE_LANES; L++) begin : g_lane
         shading_pipeline shading (
@@ -182,7 +168,7 @@ module svo_full_tb #(
                 .cam_right_x('0), .cam_right_y('0), .cam_right_z('0),
                 .cam_up_x('0),    .cam_up_y('0),    .cam_up_z('0),
                 .cam_scale('0),   .sky_color('0),
-                .max_depth(max_depth),   // shadows follow the depth cap too
+                .max_depth(max_depth),
                 .svo_rd_addr(svo_rd_addr_shad_a[L]), .svo_rd_data(svo_rd_data_shad_a[L]), .svo_rd_en(svo_rd_en_shad_a[L]),
                 .fb_wr_addr(), .fb_wr_data(), .fb_wr_en(),
                 .axis_tvalid(), .axis_tdata(), .axis_tlast(), .axis_tuser(),

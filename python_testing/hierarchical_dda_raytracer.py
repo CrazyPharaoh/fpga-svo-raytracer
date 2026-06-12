@@ -1,3 +1,4 @@
+# hierarchical_dda_raytracer.py — early prototype: 2-level macro/micro DDA with op-count metrics
 import math
 import os
 import time
@@ -97,10 +98,9 @@ def buildMacroGridBitmask(world):
     return bitmask
 
 def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metrics):
-    """2-level hierarchical DDA: macro 4x4x4 grid → micro 8x8x8 per cell."""
+    """2-level hierarchical DDA: macro 4×4×4 grid then micro 8×8×8 per occupied cell."""
 
-    # --- Reciprocals computed once, shared by both DDA levels ---
-    # --- TRACKING: 3 divisions ---
+    # Reciprocals shared by both DDA levels
     metrics['divisions'] += 3
     inv_dx = 1e30 if ray_direction[0] == 0 else 1.0 / ray_direction[0]
     inv_dy = 1e30 if ray_direction[1] == 0 else 1.0 / ray_direction[1]
@@ -110,36 +110,30 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
     delta_dist_macro = (abs(inv_dx) * MICRO_SIZE, abs(inv_dy) * MICRO_SIZE, abs(inv_dz) * MICRO_SIZE)
     delta_dist_micro = (abs(inv_dx), abs(inv_dy), abs(inv_dz))
 
-    # --- Macro DDA initialisation ---
+    # Macro DDA initialisation
     macro_pos = [floor(ray_origin[i] / MICRO_SIZE) for i in range(3)]
     step_macro = [0, 0, 0]
     side_dist_macro = [0.0, 0.0, 0.0]
 
     for i in range(3):
-        # --- TRACKING: 1 comparison ---
         metrics['comparisons'] += 1
         if ray_direction[i] < 0:
             step_macro[i] = -1
-            # --- TRACKING: 1 sub, 1 mult ---
             metrics['adds_subs'] += 1
             metrics['multiplications'] += 1
             side_dist_macro[i] = (ray_origin[i] / MICRO_SIZE - macro_pos[i]) * delta_dist_macro[i]
         else:
             step_macro[i] = 1
-            # --- TRACKING: 1 add, 1 sub, 1 mult ---
             metrics['adds_subs'] += 2
             metrics['multiplications'] += 1
             side_dist_macro[i] = (macro_pos[i] + 1.0 - ray_origin[i] / MICRO_SIZE) * delta_dist_macro[i]
 
-    # --- Macro DDA loop ---
+    # Macro DDA loop
     while True:
-        # --- TRACKING: 1 iteration ---
         metrics['iterations'] += 1
 
-        # Bounds check macro cell
         out_of_bounds = False
         for i in range(3):
-            # --- TRACKING: 2 comparisons ---
             metrics['comparisons'] += 2
             if macro_pos[i] < 0 or macro_pos[i] >= MACRO_SIZE:
                 out_of_bounds = True
@@ -147,21 +141,17 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
         if out_of_bounds:
             return 0, (0, 0, 0), (0, 0, 0)
 
-        # Bitmask occupancy check (single shift + AND on FPGA)
+        # Bitmask occupancy check
         bit_index = macro_pos[0] * 16 + macro_pos[1] * 4 + macro_pos[2]
-        # --- TRACKING: 1 comparison (bit test) ---
         metrics['comparisons'] += 1
         if (bitmask >> bit_index) & 1:
-            # --- Occupied macro-cell: run micro DDA inside it ---
             cell_min = [macro_pos[i] * MICRO_SIZE for i in range(3)]
             cell_max = [(macro_pos[i] + 1) * MICRO_SIZE for i in range(3)]
 
-            # Find entry point into macro-cell from current ray position
-            # Use slab test to get t_enter
+            # Slab test to find macro-cell entry point
             t_enter = 0.0
             entry_axis = 0
             for i in range(3):
-                # --- TRACKING: 1 sub, 1 mult ---
                 metrics['adds_subs'] += 1
                 metrics['multiplications'] += 1
                 if ray_direction[i] != 0:
@@ -170,13 +160,11 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
                         t_enter = t_slab
                         entry_axis = i
 
-            # Entry point for micro DDA
-            # --- TRACKING: 3 mults, 3 adds ---
             metrics['multiplications'] += 3
             metrics['adds_subs'] += 3
             entry = add(ray_origin, scalarMult(max(0.0, t_enter - 1e-4), ray_direction))
 
-            # Clamp entry to macro-cell
+            # Clamp entry to macro-cell bounds
             micro_origin = (
                 max(float(cell_min[0]), min(float(cell_max[0]) - 1e-6, entry[0])),
                 max(float(cell_min[1]), min(float(cell_max[1]) - 1e-6, entry[1])),
@@ -188,35 +176,27 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
             side_dist_micro = [0.0, 0.0, 0.0]
 
             for i in range(3):
-                # --- TRACKING: 1 comparison ---
                 metrics['comparisons'] += 1
                 if ray_direction[i] < 0:
                     step_micro[i] = -1
-                    # --- TRACKING: 1 sub, 1 mult ---
                     metrics['adds_subs'] += 1
                     metrics['multiplications'] += 1
                     side_dist_micro[i] = (micro_origin[i] - micro_pos[i]) * delta_dist_micro[i]
                 else:
                     step_micro[i] = 1
-                    # --- TRACKING: 2 adds_subs, 1 mult ---
                     metrics['adds_subs'] += 2
                     metrics['multiplications'] += 1
                     side_dist_micro[i] = (micro_pos[i] + 1.0 - micro_origin[i]) * delta_dist_micro[i]
 
-            # last_axis tracks the face we last crossed (needed for correct normals).
-            # Seed with entry_axis so the first voxel (checked before any advance)
-            # already has a valid entry-face normal.
+            # Seed with entry_axis so the first voxel has a valid entry-face normal
             last_axis = entry_axis
 
-            # --- Micro DDA loop ---
+            # Micro DDA loop
             while True:
-                # --- TRACKING: 1 iteration ---
                 metrics['iterations'] += 1
 
-                # Check still within macro-cell
                 still_inside = True
                 for i in range(3):
-                    # --- TRACKING: 2 comparisons ---
                     metrics['comparisons'] += 2
                     if micro_pos[i] < cell_min[i] or micro_pos[i] >= cell_max[i]:
                         still_inside = False
@@ -224,10 +204,8 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
                 if not still_inside:
                     break
 
-                # Also bounds-check against world
                 in_world = True
                 for i in range(3):
-                    # --- TRACKING: 2 comparisons ---
                     metrics['comparisons'] += 2
                     if micro_pos[i] < 0 or micro_pos[i] >= world_size:
                         in_world = False
@@ -235,19 +213,15 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
                 if not in_world:
                     break
 
-                # --- TRACKING: 1 mem read ---
                 metrics['mem_reads'] += 1
-                # --- TRACKING: 1 comparison ---
                 metrics['comparisons'] += 1
                 if world[micro_pos[0]][micro_pos[1]][micro_pos[2]] > 0:
                     block_value = world[micro_pos[0]][micro_pos[1]][micro_pos[2]]
-                    # Use last_axis (the face we entered through) for the normal.
-                    # min(side_dist_micro) is wrong here: after each advance the
-                    # stepped axis has its side_dist incremented, so it is no
-                    # longer the minimum — that picks a different (wrong) axis.
+                    # Use last_axis (face we entered through) for the normal.
+                    # Reading min(side_dist_micro) after advancing is wrong — the
+                    # stepped axis has already been incremented.
                     normal = [0, 0, 0]
                     normal[last_axis] = -step_micro[last_axis]
-                    # --- TRACKING: 1 sub, 3 mults, 3 adds ---
                     metrics['adds_subs'] += 4
                     metrics['multiplications'] += 3
                     t = max(0.0, side_dist_micro[last_axis] - delta_dist_micro[last_axis])
@@ -258,17 +232,14 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
                 min_sd = 2e30
                 axis = 0
                 for i in range(3):
-                    # --- TRACKING: 1 comparison ---
                     metrics['comparisons'] += 1
                     if side_dist_micro[i] < min_sd:
                         axis = i
                         min_sd = side_dist_micro[i]
 
-                last_axis = axis  # record before incrementing so hit detection uses it
-                # --- TRACKING: 1 add ---
+                last_axis = axis
                 metrics['adds_subs'] += 1
                 side_dist_micro[axis] += delta_dist_micro[axis]
-                # --- TRACKING: 1 add ---
                 metrics['adds_subs'] += 1
                 micro_pos[axis] += step_micro[axis]
 
@@ -276,16 +247,13 @@ def intersect_voxel_hierarchical(ray_origin, ray_direction, world, bitmask, metr
         min_sd = 2e30
         macro_axis = 0
         for i in range(3):
-            # --- TRACKING: 1 comparison ---
             metrics['comparisons'] += 1
             if side_dist_macro[i] < min_sd:
                 macro_axis = i
                 min_sd = side_dist_macro[i]
 
-        # --- TRACKING: 1 add ---
         metrics['adds_subs'] += 1
         side_dist_macro[macro_axis] += delta_dist_macro[macro_axis]
-        # --- TRACKING: 1 add ---
         metrics['adds_subs'] += 1
         macro_pos[macro_axis] += step_macro[macro_axis]
 

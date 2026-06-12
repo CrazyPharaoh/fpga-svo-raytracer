@@ -1,11 +1,7 @@
 # sim/sim_profiling.py
-# Shared FSM cycle profiler for the Phase-1 (tb_svo_traversal) and Phase-2
-# (tb_svo_full) cocotb testbenches, so both emit an identical-format profile and
-# a consistent dated history accumulates in output/profiles/.
-#
-# dbg_state is the *primary traversal* FSM state in both testbenches, so the same
-# state-name table applies. (In the shade path, time spent in shading shows up as
-# S_WAIT_SHADE.)
+# FSM cycle profiler shared by tb_svo_traversal and tb_svo_full.
+# Samples dbg_state (primary traversal) each cycle and emits a per-state histogram.
+# In the shaded path, time waiting for shading_pipeline appears as S_WAIT_SHADE.
 import os, subprocess
 from datetime import datetime
 import cocotb
@@ -20,7 +16,7 @@ STATE_NAMES = {
 
 
 def git_rev():
-    """Short git hash (+'-dirty') for stamping profiles; 'unknown' if unavailable."""
+    """Short git hash (with '-dirty' suffix if working tree is modified)."""
     try:
         here  = os.path.dirname(os.path.abspath(__file__))
         h     = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
@@ -32,33 +28,22 @@ def git_rev():
 
 
 async def state_profiler(dut, counts):
-    """
-    Cycle-accurate FSM profiler. Samples dbg_state every clock while the core is
-    busy (the render only, excluding idle) and tallies a per-state cycle histogram
-    into `counts` (dict: state_id -> cycle count). Nothing is hardcoded — it reads
-    the real state register each cycle, so q_phase wait cycles are attributed to
-    whatever state the FSM actually sits in.
-    """
+    """Sample dbg_state every rising edge while busy=1 and tally into counts (state_id→cycles)."""
     while True:
         await RisingEdge(dut.clk)
         await Timer(1, unit='ns')          # let NBA region commit
         if int(dut.rst.value):
             continue
-        if not int(dut.busy.value):        # only profile the active render
+        if not int(dut.busy.value):        # exclude idle cycles
             continue
         s = int(dut.dbg_state.value)
         counts[s] = counts.get(s, 0) + 1
 
 
 def write_state_profile(counts, log_path, img_w, img_h, archive_dir=None, label=''):
-    """Print the FSM cycle breakdown, write it to log_path (overwritten each run),
-    and — if archive_dir is given — keep a dated, git-stamped copy there so a
-    running history accumulates.
-
-    `label` (e.g. 'phase1' / 'shade') tags the header and dated filename so the two
-    paths don't collide. NOTE: absolute cycle counts scale with pixel count, so only
-    compare profiles taken at the SAME RENDER_DIV; percentages compare across any.
-    """
+    """Write the FSM cycle breakdown to log_path and, if archive_dir is given,
+    a dated git-stamped copy for history. label ('phase1'/'shade') tags the header
+    and filename. Absolute counts scale with RENDER_DIV; percentages are comparable."""
     total = sum(counts.values())
     rows  = sorted(counts.items(), key=lambda kv: -kv[1])
     stamp = datetime.now().strftime('%Y%m%d_%H%M%S')

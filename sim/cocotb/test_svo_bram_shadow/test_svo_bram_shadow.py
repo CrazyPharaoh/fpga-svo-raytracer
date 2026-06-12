@@ -1,14 +1,7 @@
-"""
-Cocotb tests for svo_bram_shadow.sv (M2 geometry-only shadow SVO RAM, one lane).
+"""Cocotb tests for svo_bram_shadow.sv (geometry-only shadow SVO RAM, GW=5).
 
-Proves the read path the shadow traversal depends on:
-  - Port A writes 8x 32-bit words to node K at addr {K, 0..7}; only words 0..4
-    (GW=5 geometry planes) are stored.
-  - Port B reads addr {K, w}: words 0..4 return what was written (1-cycle
-    registered latency); words 5..7 return 0 (unused by the shadow).
-  - Independent nodes don't alias.
-This is the module the full sim replaces with a Python model, so it has never
-run as RTL — the shadow ("everything in shadow") symptom lives or dies here.
+Port A writes words 0..7; only words 0..4 are stored (geometry planes only).
+Port B reads with 1-cycle latency: words 0..4 return as written, words 5..7 return 0.
 """
 import cocotb
 from cocotb.clock import Clock
@@ -42,7 +35,7 @@ async def write_word(dut, node: int, word: int, data: int):
 
 
 async def read_word(dut, node: int, word: int) -> int:
-    """1-cycle registered read on port B: present addr at edge N, data at edge N+1."""
+    """Read one word from port B (1-cycle registered latency)."""
     await RisingEdge(dut.clk)
     await Timer(1, unit="ns")
     dut.addr_b.value = node_addr(node, word)
@@ -81,8 +74,8 @@ async def test_two_nodes_independent(dut):
 
 @cocotb.test()
 async def test_sequential_word_reads(dut):
-    """Reading words 0..4 back-to-back (the traversal's field sequence) tracks the
-    1-cycle-delayed word select correctly (no stale/aliased word)."""
+    """Back-to-back reads of words 0..4 (matching the traversal's field sequence) track
+    the 1-cycle-delayed address correctly with no stale data."""
     await init(dut)
     node = 21
     for w in range(5):
@@ -94,8 +87,7 @@ async def test_sequential_word_reads(dut):
     for w in range(1, 6):
         await RisingEdge(dut.clk); await Timer(1, unit="ns")
         dut.addr_b.value = node_addr(node, w & 0x7)
-        seen.append(int(dut.dout_b.value))   # this reflects the PREVIOUS addr (w-1)
-    # seen[i] corresponds to word i (0..4)
+        seen.append(int(dut.dout_b.value))  # reflects PREVIOUS addr (w-1)
     for w in range(5):
         exp = 0x5A5A_0000 | w
         assert seen[w] == exp, f"seq word {w}: got 0x{seen[w]:08X} expected 0x{exp:08X}"

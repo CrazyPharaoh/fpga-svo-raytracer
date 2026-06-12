@@ -1,0 +1,6 @@
+# Vivado regenerates these from create_project.tcl + commands.tcl — never commit.
+build/
+*.jou
+*.log
+.Xil/
+vivado*.str

@@ -1,3 +1,4 @@
+"""Cocotb tests for shared_qmul3.sv (3-lane Q16.16 pipelined multiplier)."""
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge
@@ -5,7 +6,7 @@ import random
 
 
 def qmul_ref(a, b):
-    # signed 32x32 -> bits [47:16], 32-bit two's complement
+    """Q16.16 reference: signed 32×32 product, bits [47:16], wrapped to 32 bits."""
     def s32(x):
         return x - (1 << 32) if x & (1 << 31) else x
     return ((s32(a) * s32(b)) >> 16) & 0xFFFFFFFF
@@ -13,10 +14,8 @@ def qmul_ref(a, b):
 
 @cocotb.test()
 async def test_latency_and_correctness(dut):
-    """Streams random operands, then DISCOVERS the pipeline latency L (the offset
-    at which every lane's output matches qmul of its operands). Passes if a single
-    consistent L exists across all three lanes, and reports it (that's the offset
-    the FSM consumer needs to use when collecting)."""
+    """Stream random operands, discover pipeline latency L, and verify all three lanes
+    match qmul_ref at a consistent offset L."""
     cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
 
     N = 40
@@ -24,13 +23,13 @@ async def test_latency_and_correctness(dut):
                for _ in range(3)] for _ in range(N)]
 
     def rd(sig):
-        # outputs are X for the first cycles until the pipeline fills; treat as None
+        # outputs are X until the pipeline fills
         try:
             return int(sig.value)
         except ValueError:
             return None
 
-    captured = []  # captured[c] = (p0, p1, p2) read just after edge c
+    captured = []  # (p0, p1, p2) sampled after each edge
     for c in range(N + 6):
         if c < N:
             (a0, b0), (a1, b1), (a2, b2) = inputs[c]
@@ -51,5 +50,4 @@ async def test_latency_and_correctness(dut):
             break
 
     assert detected is not None, "no consistent pipeline latency found in 1..5"
-    dut._log.info(f"shared_qmul3 measured latency L = {detected} "
-                  f"(FSM collect = issue-stage + {detected}; +1 more if operands are registered)")
+    dut._log.info(f"shared_qmul3 latency L={detected} (collect = issue + {detected}; +1 if operands are registered)")

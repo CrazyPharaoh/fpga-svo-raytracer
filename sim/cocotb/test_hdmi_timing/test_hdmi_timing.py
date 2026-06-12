@@ -1,8 +1,4 @@
-"""
-Cocotb tests for hdmi_timing.sv
-
-Run:  cd sim/cocotb/test_hdmi_timing && make
-"""
+"""Cocotb tests for hdmi_timing.sv (640×480 @ 60 Hz VESA)."""
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, ClockCycles, Timer
@@ -49,11 +45,9 @@ async def test_hx_wraps_at_h_total(dut):
     """hx must wrap from H_TOTAL-1 back to 0 and hy must increment."""
     cocotb.start_soon(Clock(dut.clk_pixel, 39_720, units="ps").start())
     await reset(dut)
-    # Run to the last column of line 0
     await ClockCycles(dut.clk_pixel, H_TOTAL - 1)
     assert int(dut.hx.value) == H_TOTAL - 1
     assert int(dut.hy.value) == 0
-    # One more clock → hx wraps, hy increments
     await RisingEdge(dut.clk_pixel)
     assert int(dut.hx.value) == 0, f"hx={int(dut.hx.value)} expected 0 after wrap"
     assert int(dut.hy.value) == 1, f"hy={int(dut.hy.value)} expected 1"
@@ -64,10 +58,8 @@ async def test_hy_wraps_at_v_total(dut):
     """hy must wrap to 0 after V_TOTAL lines."""
     cocotb.start_soon(Clock(dut.clk_pixel, 39_720, units="ps").start())
     await reset(dut)
-    # Advance to last pixel of last line
     await ClockCycles(dut.clk_pixel, H_TOTAL * V_TOTAL - 1)
     assert int(dut.hy.value) == V_TOTAL - 1
-    # One more clock → both wrap
     await RisingEdge(dut.clk_pixel)
     assert int(dut.hx.value) == 0
     assert int(dut.hy.value) == 0
@@ -111,9 +103,8 @@ async def test_vsync_polarity_and_position(dut):
     await reset(dut)
     sync_start = V_ACTIVE + V_FP
     sync_end   = sync_start + V_SYNC
-    # Sample vsync at hx=0 for each line
+    # Sample vsync at hx=0 each line
     for line in range(V_TOTAL):
-        # Wait until hx==0 for this line (it already is at start, then each H_TOTAL clocks)
         if line > 0:
             await ClockCycles(dut.clk_pixel, H_TOTAL)
         expected_low = (sync_start <= line < sync_end)

@@ -1,17 +1,11 @@
 """
-fpga_svo_raytracer.py — FPGA-Targeted Sparse Voxel Octree Raytracer
-Python golden reference model for hardware translation to Verilog/VHDL.
+fpga_svo_raytracer.py — Python golden reference for the SVO raytracer hardware.
 
-All traversal logic mirrors a fixed-register-file hardware design:
- - No dynamic allocation inside the traversal loop
- - No division inside the traversal loop (reciprocals pre-computed)
- - No recursion inside traversal (fixed LIFO stack of depth STACK_DEPTH)
- - No sorting of children (DDA natural front-to-back ordering)
+Traversal mirrors the RTL register-file design: no dynamic allocation, no
+division, no recursion inside the loop; fixed LIFO stack; DDA front-to-back
+child ordering.
 """
 
-# ---------------------------------------------------------------------------
-# Imports
-# ---------------------------------------------------------------------------
 import math
 import os
 import glob
@@ -21,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 # ---------------------------------------------------------------------------
-# Global Constants — Hardware Parameters
+# Constants
 # ---------------------------------------------------------------------------
 WORLD_SIZE    = 64          # voxels per axis (must be power of 2)
 MAX_DEPTH     = 6           # SVO depth = log2(64) = 6 levels
@@ -42,7 +36,7 @@ STATE_MIXED   = 0b01        # internal — descend into child node
 BLOCK_AIR     = 0
 BLOCK_STONE   = 1
 BLOCK_GRASS   = 2
-BLOCK_GLOWING = 3           # dynamic LUT block — pulsing emissive
+BLOCK_GLOWING = 3           # pulsing emissive, updated each frame
 
 SKY_COLOR     = (135, 206, 235)
 GROUND_COLOR  = (80,  60,  40)
@@ -51,7 +45,7 @@ FOG_COLOR     = (180, 200, 220)
 ORBIT_RADIUS  = 30
 ORBIT_HEIGHT  = 20
 
-INF = float('inf')  # sentinel for "already-crossed" DDA boundary
+INF = float('inf')  # sentinel: mid-plane already crossed, never step again
 
 # ---------------------------------------------------------------------------
 # Data Structures
@@ -59,10 +53,7 @@ INF = float('inf')  # sentinel for "already-crossed" DDA boundary
 
 @dataclass
 class SVONode:
-    """
-    One octree node. bitmask is 16-bit: 2 bits per child (bits [2i+1:2i] for child i).
-    children holds child node indices (None = leaf), block_id holds block type per child.
-    """
+    """One octree node. bitmask[2i+1:2i] = child i state (EMPTY/SOLID/MIXED)."""
     bitmask:  int       = 0
     children: List      = field(default_factory=lambda: [None] * 8)
     block_id: List[int] = field(default_factory=lambda: [0] * 8)
@@ -70,7 +61,7 @@ class SVONode:
 
 @dataclass
 class Metrics:
-    """Traversal counters — for performance analysis, not part of the hardware model."""
+    """Traversal performance counters."""
     primary_rays:    int = 0
     shadow_rays:     int = 0
     nodes_visited:   int = 0
@@ -83,14 +74,14 @@ metrics = Metrics()
 # Color LUT
 # ---------------------------------------------------------------------------
 color_lut: List[List[int]] = [[0, 0, 0]] * 256
-color_lut = [list(c) for c in color_lut]   # ensure mutable sublists
+color_lut = [list(c) for c in color_lut]
 color_lut[BLOCK_AIR]     = [0,   0,   0]
 color_lut[BLOCK_STONE]   = [120, 120, 120]
 color_lut[BLOCK_GRASS]   = [60,  160,  40]
-color_lut[BLOCK_GLOWING] = [255,   0,   0]   # updated each frame by update_color_lut
+color_lut[BLOCK_GLOWING] = [255,   0,   0]   # overwritten each frame by update_color_lut
 
 # ---------------------------------------------------------------------------
-# Math Helpers
+# Vector helpers
 # ---------------------------------------------------------------------------
 
 def _norm(v):
@@ -137,12 +128,12 @@ def _clamp(x, lo, hi):
     return lo if x < lo else (hi if x > hi else x)
 
 def _reflect(l, n):
-    """Reflect L about N: 2*(L.N)*N - L"""
+    """2*(L.N)*N - L"""
     d = _dot(l, n)
     return (2.0*d*n[0] - l[0], 2.0*d*n[1] - l[1], 2.0*d*n[2] - l[2])
 
 def _mat3_mul_vec(m, v):
-    """3x3 row-major matrix times a 3-vector."""
+    """Row-major 3×3 matrix times a 3-vector."""
     return (
         m[0][0]*v[0] + m[0][1]*v[1] + m[0][2]*v[2],
         m[1][0]*v[0] + m[1][1]*v[1] + m[1][2]*v[2],
@@ -156,7 +147,7 @@ LIGHT_DIR = _norm((1.0, 2.0, 1.5))
 # ---------------------------------------------------------------------------
 
 def build_world(grid: np.ndarray) -> None:
-    """Populate the voxel grid with terrain (sine/cosine heightmap + glowing cluster)."""
+    """Sine/cosine heightmap terrain with a raised glowing cluster at centre."""
     WS = WORLD_SIZE
     for x in range(WS):
         for z in range(WS):
@@ -166,7 +157,7 @@ def build_world(grid: np.ndarray) -> None:
             for y in range(1, h + 1):
                 grid[x, y, z] = BLOCK_GRASS
 
-    # 4×5×4 glowing cluster at centre, raised 3 voxels above terrain peak
+    # 4×5×4 glowing cluster, 3 voxels above the terrain peak
     GLOW_W, GLOW_H, GLOW_D = 4, 5, 4
     cx = WORLD_SIZE // 2 - GLOW_W // 2
     cz = WORLD_SIZE // 2 - GLOW_D // 2
@@ -186,7 +177,7 @@ def build_world(grid: np.ndarray) -> None:
                     grid[cx + dx2, gy + dy2, cz + dz2] = BLOCK_GLOWING
 
 # ---------------------------------------------------------------------------
-# SVO Builder Helpers
+# SVO Builder
 # ---------------------------------------------------------------------------
 
 def _set_child_state(node: SVONode, child_idx: int, state: int, blk: int) -> None:
@@ -198,12 +189,8 @@ def _set_child_state(node: SVONode, child_idx: int, state: int, blk: int) -> Non
 def _get_child_state(node: SVONode, child_idx: int) -> int:
     return (node.bitmask >> (child_idx * 2)) & 0b11
 
-# ---------------------------------------------------------------------------
-# SVO Builder — CPU-side recursive construction
-# ---------------------------------------------------------------------------
-
 def build_svo(grid: np.ndarray) -> List[SVONode]:
-    """Top-down recursive SVO builder. Returns list of SVONode (index 0 = root)."""
+    """Top-down recursive SVO build. Returns node list, index 0 = root."""
     nodes: List[SVONode] = []
 
     def alloc() -> int:
@@ -233,7 +220,7 @@ def build_svo(grid: np.ndarray) -> List[SVONode]:
                     if sub.size == 0 or np.all(sub == BLOCK_AIR):
                         _set_child_state(nodes[nidx], cidx, STATE_EMPTY, BLOCK_AIR)
                     elif (depth + 1) == MAX_DEPTH:
-                        # force solid at max depth for any non-air voxel
+                        # at max depth, any non-air sub-voxel becomes a solid leaf
                         dominant = int(sub.flat[0]) if sub.flat[0] != BLOCK_AIR else BLOCK_STONE
                         _set_child_state(nodes[nidx], cidx, STATE_SOLID, dominant)
                     elif np.all(sub == sub.flat[0]) and sub.flat[0] != BLOCK_AIR:
@@ -250,18 +237,18 @@ def build_svo(grid: np.ndarray) -> List[SVONode]:
     return nodes
 
 # ---------------------------------------------------------------------------
-# Camera & Transformation Helpers
+# Camera helpers
 # ---------------------------------------------------------------------------
 
 def make_look_at(eye, target, up):
-    """Build a row-major 3x3 rotation matrix [right, up, forward] from camera parameters."""
+    """Row-major 3×3 rotation [right, up, forward]."""
     forward = _norm(_sub(target, eye))
     right   = _norm(_cross(forward, up))
-    up_     = _cross(right, forward)   # recomputed for orthogonality
+    up_     = _cross(right, forward)   # re-orthogonalised
     return [right, up_, forward]
 
 def make_orbit_camera(frame_idx: int, radius: float, height: float):
-    """Compute eye position and rotation matrix for orbit animation frame."""
+    """Eye position and rotation for one frame of the orbit animation."""
     angle = frame_idx * (2.0 * math.pi / NUM_FRAMES)
     cx = WORLD_SIZE / 2.0 + math.sin(angle) * radius
     cz = WORLD_SIZE / 2.0 + math.cos(angle) * radius
@@ -275,7 +262,7 @@ def make_orbit_camera(frame_idx: int, radius: float, height: float):
 # ---------------------------------------------------------------------------
 
 def update_color_lut(frame_idx: int) -> None:
-    """Update BLOCK_GLOWING LUT entry for pulsing emissive effect."""
+    """Pulse the glowing block colour once per frame."""
     pulse = 0.5 + 0.5 * math.sin(frame_idx * 2.0 * math.pi / NUM_FRAMES)
     r = int(200 + 55 * pulse)
     g = int(80  * pulse)
@@ -283,7 +270,7 @@ def update_color_lut(frame_idx: int) -> None:
     color_lut[BLOCK_GLOWING] = [r, g, b]
 
 # ---------------------------------------------------------------------------
-# SVO Traversal — THE CORE (FPGA Pipeline)
+# SVO Traversal
 # ---------------------------------------------------------------------------
 
 def svo_traverse(
@@ -292,25 +279,24 @@ def svo_traverse(
     svo_nodes: List[SVONode],
     shadow_mode: bool = False
 ):
-    """
-    Fixed-depth LIFO stack SVO traversal. No division, append, recursion, or dynamic allocation.
-    Returns: (t, (hx,hy,hz), face_axis, face_sign, block_id) on hit,
-             True on shadow hit (shadow_mode=True),
-             None on miss.
+    """Fixed-depth LIFO-stack DDA traversal. No division, recursion, or dynamic allocation.
+
+    Returns (t, hit_pos, face_axis, face_sign, block_id) on hit,
+            True on shadow-mode hit, or None on miss.
     """
     WS = float(WORLD_SIZE)
 
-    # Pre-compute reciprocals once per ray — no division inside the loop
+    # Pre-compute reciprocals; no division inside the traversal loop
     inv_dx = 1.0 / (ray_dx if abs(ray_dx) > 1e-9 else 1e-9)
     inv_dy = 1.0 / (ray_dy if abs(ray_dy) > 1e-9 else 1e-9)
     inv_dz = 1.0 / (ray_dz if abs(ray_dz) > 1e-9 else 1e-9)
 
-    # Sign bits used for child octant selection
+    # Sign bits for child octant selection
     sign_x = 1 if ray_dx >= 0.0 else 0
     sign_y = 1 if ray_dy >= 0.0 else 0
     sign_z = 1 if ray_dz >= 0.0 else 0
 
-    # Root AABB slab intersection test
+    # Root AABB slab test
     if sign_x:
         tx_enter = (0.0  - ray_ox) * inv_dx
         tx_exit  = (WS   - ray_ox) * inv_dx
@@ -332,14 +318,14 @@ def svo_traverse(
         tz_enter = (WS   - ray_oz) * inv_dz
         tz_exit  = (0.0  - ray_oz) * inv_dz
 
-    # t_enter = max of slab entries; t_exit = min of slab exits
+    # t_enter = max of slab entries, t_exit = min of slab exits
     t_enter = max(tx_enter, ty_enter, tz_enter, 0.0)
     t_exit  = min(tx_exit,  ty_exit,  tz_exit)
 
     if t_enter >= t_exit:
         return None
 
-    # Determine entry face (which slab was entered last)
+    # Entry face = the slab entered last
     if tx_enter >= ty_enter and tx_enter >= tz_enter:
         face_axis = 0
         face_sign = 1 if ray_dx < 0.0 else -1
@@ -350,7 +336,7 @@ def svo_traverse(
         face_axis = 2
         face_sign = 1 if ray_dz < 0.0 else -1
 
-    # Entry hit point — nudged slightly forward to select correct initial child
+    # Entry point, nudged into the first child
     hx = ray_ox + ray_dx * (t_enter + 1e-7)
     hy = ray_oy + ray_dy * (t_enter + 1e-7)
     hz = ray_oz + ray_dz * (t_enter + 1e-7)
@@ -359,7 +345,7 @@ def svo_traverse(
     cy = 1 if hy >= WS * 0.5 else 0
     cz = 1 if hz >= WS * 0.5 else 0
 
-    # Root mid-plane t values; set to INF if already crossed
+    # Root mid-plane t values; INF if already behind us
     tx_mid = (WS * 0.5 - ray_ox) * inv_dx
     ty_mid = (WS * 0.5 - ray_oy) * inv_dy
     tz_mid = (WS * 0.5 - ray_oz) * inv_dz
@@ -368,10 +354,7 @@ def svo_traverse(
     ty0 = ty_mid if ty_mid > t_enter + 1e-9 else INF
     tz0 = tz_mid if tz_mid > t_enter + 1e-9 else INF
 
-    # ---------------------------------------------------------------------------
-    # Pre-allocated fixed-depth traversal stack (hardware register file analogue).
-    # Never use append — each slot maps to a fixed set of registers in hardware.
-    # ---------------------------------------------------------------------------
+    # Fixed-depth traversal stack — one slot per register file entry in hardware
     stk_node       = [0]   * STACK_DEPTH
     stk_scale      = [0.0] * STACK_DEPTH
     stk_ox         = [0.0] * STACK_DEPTH
@@ -388,7 +371,7 @@ def svo_traverse(
     stk_face_axis  = [0]   * STACK_DEPTH
     stk_face_sign  = [0]   * STACK_DEPTH
 
-    # Push root node
+    # Push root
     stk_node[0]      = 0
     stk_scale[0]     = WS
     stk_ox[0]        = 0.0
@@ -406,9 +389,6 @@ def svo_traverse(
     stk_face_sign[0] = face_sign
     stk_ptr = 1
 
-    # ---------------------------------------------------------------------------
-    # Main traversal loop — runs until stack empty or hit found
-    # ---------------------------------------------------------------------------
     while stk_ptr > 0:
 
         stk_ptr -= 1
@@ -429,12 +409,12 @@ def svo_traverse(
         face_axis   = stk_face_axis[stk_ptr]
         face_sign   = stk_face_sign[stk_ptr]
 
-        node = svo_nodes[node_idx]   # BRAM read — 1 or 2 cycle latency in hardware
+        node = svo_nodes[node_idx]
         metrics.nodes_visited += 1
 
-        half = scale * 0.5   # power-of-2 scale: arithmetic right-shift in hardware
+        half = scale * 0.5
 
-        # Inner DDA loop — enumerate children front-to-back within this node
+        # Inner DDA loop — enumerate children front-to-back
         while t_now < t_node_exit:
 
             child_idx = cx | (cy << 1) | (cz << 2)
@@ -453,9 +433,9 @@ def svo_traverse(
                 return (t_now, (hit_x, hit_y, hit_z), face_axis, face_sign, node.block_id[child_idx])
 
             elif state == STATE_MIXED:
-                # Push parent resume state, then descend into child
+                # Push parent resume state, then descend
 
-                # Compute parent's next DDA step (advance past the boundary we're crossing)
+                # Advance parent DDA past the boundary we are crossing
                 next_cx        = cx
                 next_cy        = cy
                 next_cz        = cz
@@ -507,7 +487,7 @@ def svo_traverse(
 
                 child_half = half * 0.5
 
-                # Child node exit t (slab test using pre-computed reciprocals)
+                # Child exit t via slab test with pre-computed reciprocals
                 if sign_x:
                     child_t_exit_x = (child_ox + half - ray_ox) * inv_dx
                 else:
@@ -525,7 +505,7 @@ def svo_traverse(
 
                 child_t_exit = min(child_t_exit_x, child_t_exit_y, child_t_exit_z)
 
-                # Child mid-plane t values; set to INF if already crossed
+                # Child mid-plane t values; INF if already behind us
                 child_tx_mid = (child_ox + child_half - ray_ox) * inv_dx
                 child_ty_mid = (child_oy + child_half - ray_oy) * inv_dy
                 child_tz_mid = (child_oz + child_half - ray_oz) * inv_dz
@@ -534,7 +514,7 @@ def svo_traverse(
                 child_ty = child_ty_mid if child_ty_mid > t_now + 1e-9 else INF
                 child_tz = child_tz_mid if child_tz_mid > t_now + 1e-9 else INF
 
-                # Initial child-of-child selection from nudged entry point
+                # Initial child-of-child selection from the nudged entry point
                 ehx = ray_ox + ray_dx * (t_now + 1e-7)
                 ehy = ray_oy + ray_dy * (t_now + 1e-7)
                 ehz = ray_oz + ray_dz * (t_now + 1e-7)
@@ -563,13 +543,13 @@ def svo_traverse(
 
                 break
 
-            # STATE_EMPTY — advance DDA to next child
+            # EMPTY — advance DDA to next child
             t_now = t_child_exit
 
             if t_now >= t_node_exit:
                 break
 
-            # DDA step: determine which boundary was crossed and update child bits
+            # Determine which boundary was crossed and flip the child bit
             if abs(t_child_exit - tx) < 1e-9:
                 cx = 1 - cx
                 tx = INF
@@ -589,17 +569,14 @@ def svo_traverse(
             if cx < 0 or cx > 1 or cy < 0 or cy > 1 or cz < 0 or cz > 1:
                 break
 
-    return None   # stack exhausted — ray miss
+    return None  # stack exhausted — ray miss
 
 # ---------------------------------------------------------------------------
-# Shading Pipeline
+# Shading
 # ---------------------------------------------------------------------------
 
 def shade_hit(t, hit_pos, face_axis, face_sign, block_id, ray_d, svo_nodes):
-    """
-    Shading pipeline for a hit: hemisphere lighting, XOR checkerboard texture,
-    Phong specular, shadow ray, and distance fog.
-    """
+    """Hemisphere + Lambert + Phong specular + shadow + fog."""
     hx, hy, hz = hit_pos
 
     normal = [0.0, 0.0, 0.0]
@@ -608,7 +585,7 @@ def shade_hit(t, hit_pos, face_axis, face_sign, block_id, ray_d, svo_nodes):
     hemi_t     = (normal[1] + 1.0) * 0.5
     hemi_color = _lerp3(GROUND_COLOR, SKY_COLOR, hemi_t)
 
-    # XOR checkerboard — free in hardware (single gate per bit)
+    # World-space XOR checkerboard texture
     ix = int(math.floor(hx))
     iy = int(math.floor(hy))
     iz = int(math.floor(hz))
@@ -617,7 +594,7 @@ def shade_hit(t, hit_pos, face_axis, face_sign, block_id, ray_d, svo_nodes):
     scale_p = 0.75 + 0.25 * pattern
     tex     = [base[c] * scale_p for c in range(3)]
 
-    # Shadow ray: offset origin along normal to avoid self-intersection
+    # Shadow ray: bias origin along normal to avoid self-intersection
     bias_pos = (
         hx + normal[0] * SHADOW_BIAS,
         hy + normal[1] * SHADOW_BIAS,
@@ -633,7 +610,7 @@ def shade_hit(t, hit_pos, face_axis, face_sign, block_id, ray_d, svo_nodes):
 
     diff = max(0.0, _dot(normal, LIGHT_DIR))
 
-    # Phong specular via repeated squarings (^32)
+    # Phong specular ^32 via repeated squarings
     refl = _norm(_reflect(LIGHT_DIR, tuple(normal)))
     view = _norm(_neg(ray_d))
     s    = max(0.0, _dot(refl, view))
@@ -652,7 +629,7 @@ def shade_hit(t, hit_pos, face_axis, face_sign, block_id, ray_d, svo_nodes):
 
 
 def shade_miss(ray_d):
-    """Sky gradient for a ray miss, based on ray Y direction."""
+    """Sky gradient based on ray Y component."""
     sky_t  = max(0.0, ray_d[1])
     miss_c = _lerp3(
         (SKY_COLOR[0]*0.7, SKY_COLOR[1]*0.7, SKY_COLOR[2]*0.7),
@@ -666,15 +643,15 @@ def shade_miss(ray_d):
 # ---------------------------------------------------------------------------
 
 def cast_primary_ray(px: int, py: int, eye, rot_mat, svo_nodes: List[SVONode]):
-    """Generate primary ray for pixel (px, py) and invoke traversal + shading."""
+    """Generate and trace the primary ray for pixel (px, py)."""
     aspect = IMG_W / IMG_H
     tan_half_fov = math.tan(math.radians(FOV_DEG) * 0.5)
 
-    # NDC pixel centre coords (Y flipped to match screen space)
+    # NDC pixel centre (Y flipped to screen space)
     u = (px + 0.5) / IMG_W * 2.0 - 1.0
     v = 1.0 - (py + 0.5) / IMG_H * 2.0
 
-    # rot_mat rows = [right, up, forward] (from make_look_at)
+    # rot_mat rows = [right, up, forward]
     cam_right   = rot_mat[0]
     cam_up      = rot_mat[1]
     cam_forward = rot_mat[2]
@@ -702,25 +679,21 @@ def cast_primary_ray(px: int, py: int, eye, rot_mat, svo_nodes: List[SVONode]):
         return shade_hit(t, hit_pos, face_axis, face_sign, block_id, ray_d, svo_nodes)
 
 # ---------------------------------------------------------------------------
-# PPM Writer
+# Output helpers
 # ---------------------------------------------------------------------------
 
 def write_ppm(path: str, pixels: np.ndarray, width: int, height: int) -> None:
-    """Write ASCII PPM P3 format."""
+    """Write ASCII PPM (P3)."""
     with open(path, 'w') as f:
         f.write(f"P3\n{width} {height}\n255\n")
         flat = pixels.astype(np.uint8).reshape(-1, 3)
         for r, g, b in flat:
             f.write(f"{r} {g} {b}\n")
 
-# ---------------------------------------------------------------------------
-# GIF Stitcher
-# ---------------------------------------------------------------------------
-
 def stitch_gif(frame_dir: str, out_path: str, fps: int = 10) -> None:
-    """Stitch rendered PPM frames into an animated GIF using Pillow."""
+    """Stitch PPM frames into an animated GIF (requires Pillow)."""
     try:
-        from PIL import Image   # soft dependency — fallback if missing
+        from PIL import Image   # soft dependency
         paths = sorted(glob.glob(frame_dir))
         if not paths:
             print("No frames found for GIF stitching.")
@@ -736,12 +709,8 @@ def stitch_gif(frame_dir: str, out_path: str, fps: int = 10) -> None:
         print("  Install with: pip install Pillow")
         print(f"  Frames available in: {frame_dir}")
 
-# ---------------------------------------------------------------------------
-# Metrics Report
-# ---------------------------------------------------------------------------
-
 def print_metrics(total_frames: int, metrics_path: str = None) -> None:
-    """Print performance metrics to terminal and optionally to a txt file."""
+    """Print traversal metrics; optionally write to file."""
     total_primary = metrics.primary_rays
     total_shadow  = metrics.shadow_rays
     total_nodes   = metrics.nodes_visited
@@ -777,11 +746,11 @@ def print_metrics(total_frames: int, metrics_path: str = None) -> None:
         print(f"  Metrics saved → {metrics_path}")
 
 # ---------------------------------------------------------------------------
-# Main Entry Point
+# Entry point
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    sys.setrecursionlimit(10000)   # increase for deep SVO build recursion
+    sys.setrecursionlimit(10000)   # needed for the recursive SVO build
 
     base_dir    = os.path.dirname(os.path.abspath(__file__))
     frame_dir   = os.path.join(base_dir, "frames")

@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
-# host/hdmi_display.py
-# Standalone HDMI-output bring-up + diagnostics for the SVO raytracer.
-# Runs the ENTIRE flow in the correct order (no notebook cell-ordering to get wrong):
-#   load overlay -> S2MM setup -> upload SVO -> camera -> shading -> render -> arm MM2S (HDMI)
-# Then prints detailed status so we can tell software-OK from hardware-fault.
-#
-# Run on the PYNQ:   sudo python3 hdmi_display.py
-# (needs svo_builder.py alongside it and the bitstream at BITSTREAM below)
+# host/hdmi_display.py — HDMI-output bring-up and diagnostics for the SVO raytracer.
+# Runs the full flow in order: load overlay -> S2MM arm -> upload SVO -> camera ->
+# shading registers -> render -> arm MM2S, printing status at each step.
+# Run on the PYNQ: sudo python3 hdmi_display.py  (needs svo_builder.py + the bitstream)
 
 import sys, time, math
 import numpy as np

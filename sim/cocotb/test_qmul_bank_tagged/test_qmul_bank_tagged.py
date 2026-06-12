@@ -1,3 +1,4 @@
+"""Cocotb tests for qmul_bank_tagged.sv."""
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge
@@ -7,14 +8,12 @@ Q = 1 << 16
 
 @cocotb.test()
 async def test_tag_follows_product(dut):
-    """Issue two back-to-back multiplies with different tags; confirm each
-    product returns with the correct tag and correct values, in order.
-    QCOL = LAT+1 = 4: wrapper input-reg (1) + shared_qmul3 LAT=3 (3) = 4."""
+    """Two back-to-back issues with different tags; products must return tagged and in order.
+    QCOL = LAT+1 = 4 (1 input-reg + 3-cycle shared_qmul3)."""
     cocotb.start_soon(Clock(dut.clk, 10, unit="ns").start())
     dut.iss_valid.value = 0
     await RisingEdge(dut.clk)
 
-    # Cycle A: issue 3*4, 5*6, 7*8 with tag 0b101
     dut.iss_valid.value = 1
     dut.iss_tag.value = 0b101
     dut.a0.value = 3 * Q
@@ -25,7 +24,7 @@ async def test_tag_follows_product(dut):
     dut.b2.value = 8 * Q
     await RisingEdge(dut.clk)
 
-    # Cycle B: issue 2*2, 0*0, 0*0 with tag 0b010
+    # Cycle B: tag 0b010
     dut.iss_tag.value = 0b010
     dut.a0.value = 2 * Q
     dut.b0.value = 2 * Q
@@ -48,8 +47,6 @@ async def test_tag_follows_product(dut):
             ))
 
     assert len(seen) >= 2, f"expected >=2 tagged results, got {seen}"
-
-    # First result: tag=0b101, products 12*Q, 30*Q, 56*Q
     assert seen[0][0] == 0b101, \
         f"first tag: expected 0b101=5, got {seen[0][0]}"
     assert seen[0][1] == 12 * Q, \
@@ -58,8 +55,6 @@ async def test_tag_follows_product(dut):
         f"first p1: expected {30*Q}, got {seen[0][2]}"
     assert seen[0][3] == 56 * Q, \
         f"first p2: expected {56*Q}, got {seen[0][3]}"
-
-    # Second result: tag=0b010, p0=4*Q
     assert seen[1][0] == 0b010, \
         f"second tag: expected 0b010=2, got {seen[1][0]}"
     assert seen[1][1] == 4 * Q, \

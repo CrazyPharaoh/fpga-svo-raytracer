@@ -1,26 +1,18 @@
 #!/usr/bin/env python3
-# host/fly.py — live keyboard fly-through of the SVO scene on HDMI.
+# host/fly.py — live keyboard fly-through with HDMI output.
 #
-# DEFAULT (no board USB needed): read keys from THIS terminal (web terminal / SSH).
-#     python3 fly.py
-#   Type WASD/arrows etc. IN the terminal you launched from; watch the HDMI monitor.
-#
-# evdev mode (USB keyboard on the board, needs root + working board USB host):
-#     sudo python3 fly.py --evdev               (auto-find keyboard)
-#     sudo python3 fly.py --evdev /dev/input/eventN
-#
-# Software-only: writes the existing camera registers + triggers render; the HDMI MM2S
-# is parked on frame_phys, so each render updates the monitor by itself. ~3 FPS.
+# Default (stdin, no board USB needed):  python3 fly.py
+#   Type WASD/arrows in the launch terminal; watch the HDMI monitor.
+# evdev (USB keyboard on the board, needs root):
+#   sudo python3 fly.py --evdev               (auto-detect keyboard)
+#   sudo python3 fly.py --evdev /dev/input/eventN
 
 import os, glob, struct, select, fcntl, sys, time, math, json
 import numpy as np
 from pynq import Overlay, MMIO, allocate, Clocks
 import svo_builder, fly_camera, vox_loader
 
-# ── unified actions (both input backends emit these) ──────────────────────────
-#   fwd back left right up down  pitchU pitchD yawL yawR  zoomIn zoomOut  quit
-
-# ── backend A: terminal stdin (default; no board USB) ─────────────────────────
+# ── backend A: terminal stdin ─────────────────────────────────────────────────
 import termios, tty
 CHAR_ACTION = {'w':'fwd','s':'back','a':'left','d':'right',
                ' ':'up','c':'down','-':'zoomOut','=':'zoomIn','q':'quit','p':'dump',
@@ -29,8 +21,7 @@ CHAR_ACTION = {'w':'fwd','s':'back','a':'left','d':'right',
 ARROW_ACTION = {0x41:'pitchU', 0x42:'pitchD', 0x44:'yawL', 0x43:'yawR'}  # ESC [ A/B/D/C
 
 class StdinKeyboard:
-    """Reads the controlling terminal in cbreak mode. Hold-to-move uses the OS key-repeat
-    stream (each frame = the set of keys seen since the last poll)."""
+    """Terminal in cbreak mode; each poll returns keys pressed since last call."""
     def __init__(self):
         self.fd = sys.stdin.fileno()
         self.old = termios.tcgetattr(self.fd)
@@ -44,7 +35,7 @@ class StdinKeyboard:
             i = 0
             while i < len(data):
                 b = data[i]
-                if b == 0x1b and i + 2 < len(data) and data[i+1] == 0x5b:   # arrow esc-seq
+                if b == 0x1b and i + 2 < len(data) and data[i+1] == 0x5b:   # ANSI arrow ESC[A/B/D/C
                     a = ARROW_ACTION.get(data[i+2])
                     if a: acts.add(a)
                     i += 3; continue
@@ -58,7 +49,7 @@ class StdinKeyboard:
 # ── backend B: evdev USB keyboard on the board (--evdev) ──────────────────────
 EV_KEY = 0x01
 EVENT_FMT  = 'llHHi'
-EVENT_SIZE = struct.calcsize(EVENT_FMT)          # 16 on 32-bit PYNQ, 24 on 64-bit host
+EVENT_SIZE = struct.calcsize(EVENT_FMT)          # 16 bytes on 32-bit PYNQ
 EVIOCGRAB  = 0x40044590
 EVDEV_ACTION = {17:'fwd', 31:'back', 30:'left', 32:'right', 57:'up', 42:'down',
                 103:'pitchU', 108:'pitchD', 105:'yawL', 106:'yawR',
@@ -79,7 +70,7 @@ def find_keyboard(override=None, wait=20.0):
             except OSError: name = '?'
             try:
                 words = open(f'/sys/class/input/{node}/device/capabilities/key').read().split()
-                low = int(words[-1], 16)            # KEY_W(17) lives in the lowest word (32/64-bit safe)
+                low = int(words[-1], 16)            # KEY_W(17) is in the lowest capabilities word
                 cands.append(f'{dev}  ({name})')
                 if low & (1 << 17):
                     print(f'Keyboard: {dev}  ({name})'); return dev
@@ -111,16 +102,16 @@ class EvdevKeyboard:
         except OSError: pass
         os.close(self.fd)
 
-# ── hardware (mirrors hdmi_display.py) ────────────────────────────────────────
+# ── hardware constants ────────────────────────────────────────────────────────
 BITSTREAM = '/home/xilinx/jupyter_notebooks/svo_system.bit'
 IMG_W, IMG_H, BPP = 320, 240, 4
 HSIZE = STRIDE = IMG_W * BPP
 def to_q16(f):       return int(f * 65536) & 0xFFFFFFFF
 def pack_rgb(r,g,b): return ((int(r)&0xFF)<<16)|((int(g)&0xFF)<<8)|(int(b)&0xFF)
 
-# ── scene config (demo parameters, no rebuild needed) ─────────────────────────
-# All values live in a JSON next to this script (default scene.json; pass another
-# on the CLI: `python3 fly.py beach.json`). Missing keys fall back to these.
+# ── scene config ──────────────────────────────────────────────────────────────
+# Loaded from scene.json next to this script (or pass a path on the CLI).
+# Missing keys fall back to these defaults.
 DEFAULT_SCENE = {
     "world": "world.vox",
     "sky_color": [135, 206, 235],
@@ -150,7 +141,7 @@ class Renderer:
         self.ol = Overlay(BITSTREAM); self.ip = self.ol.top_0
         base = self.ol.ip_dict['axi_vdma_0']['phys_addr']
         self.vdma = MMIO(base, 0x1000); self.mm2s = MMIO(base, 0x100)
-        # Double buffer: render into the off-screen buffer, scan out the other -> no tearing.
+        # Two buffers: render into back, scan out front — no tearing.
         self.bufs = [allocate(shape=(IMG_H, IMG_W, BPP), dtype=np.uint8) for _ in range(2)]
         self.phys = [b.physical_address for b in self.bufs]
         self.front = 0                       # buffer currently scanned out to HDMI
@@ -167,18 +158,14 @@ class Renderer:
         self.ip.write(0x48, 0)
         for w in words: self.ip.write(0x4C, w)
     def _shading(self):
-        # HDMI channel-order fix: the HDMI path (no color_swap block in the BD, unlike the
-        # reference design) swaps G<->B. Pre-swap G<->B in every colour we write so it
-        # cancels out and the monitor shows correct colours. (Proper fix = add a color_swap
-        # block in Vivado, then drop this swap.)  cc(r,g,b) writes (r, b, g).
+        # The HDMI path swaps G↔B, so pre-swap every colour we write so it cancels out.
+        # cc(r,g,b) physically writes (r,b,g) into the register.
         def cc(r, g, b): return pack_rgb(r, b, g)
         s = self.scene
         lx, ly, lz = s['light_dir']
         lm = math.sqrt(lx*lx + ly*ly + lz*lz); ld = (lx/lm, ly/lm, lz/lm)
         self.ip.write(0x3C, to_q16(ld[0])); self.ip.write(0x40, to_q16(ld[1])); self.ip.write(0x44, to_q16(ld[2]))
-        # LUT (16 entries) uploaded via the auto-incrementing register pair from the
-        # loaded MagicaVoxel scene. G<->B HDMI pre-swap kept: write (R,B,G) but preserve
-        # the [31:24] material flag byte.
+        # LUT via auto-inc pair (0x50=index, 0x54=data). G↔B pre-swap; preserve [31:24] flag.
         self.ip.write(0x50, 0)                       # lut_index = 0
         for w in self.lut_words:
             flag = (w >> 24) & 0xFF
@@ -187,35 +174,32 @@ class Renderer:
         self.ip.write(0x68, cc(*s['sky_color'])); self.ip.write(0x6C, cc(*s['fog_color']))
         self.ip.write(0x70, to_q16(s['fog_start'])); self.ip.write(0x74, to_q16(s['shadow_bias']))
     def set_glow(self, phase):
-        # Animate whichever block_id is flagged MAT_GLOW through a rainbow so it looks
-        # alive. phase is a float; full hue cycle every 2*pi. Same G<->B HDMI pre-swap.
+        # Rainbow-animate any MAT_GLOW block. Full hue cycle per 2π. Same G↔B pre-swap.
         for bid, w in enumerate(self.lut_words):
             if ((w >> 24) & 0xFF) != vox_loader.MAT_GLOW:
                 continue
             r = int(127.5 * (1 + math.sin(phase)))
-            g = int(127.5 * (1 + math.sin(phase + 2.0943951)))   # +120 deg
-            b = int(127.5 * (1 + math.sin(phase + 4.1887902)))   # +240 deg
+            g = int(127.5 * (1 + math.sin(phase + 2.0943951)))   # +120°
+            b = int(127.5 * (1 + math.sin(phase + 4.1887902)))   # +240°
             self.ip.write(0x50, bid)                          # lut_index = bid
             self.ip.write(0x54, (vox_loader.MAT_GLOW << 24) | pack_rgb(r, b, g))
     def _arm_s2mm(self, idx):
-        # arm the render-write channel to write the frame into buffer `idx`
+        # Arm S2MM write channel to write the rendered frame into buffer idx.
         self.vdma.write(0x30, 0x4)
         while self.vdma.read(0x30) & 0x4: pass
         for o in (0xAC, 0xB0, 0xB4): self.vdma.write(o, self.phys[idx])
         self.vdma.write(0xA8, STRIDE); self.vdma.write(0xA4, HSIZE)
         self.vdma.write(0x30, 0x3); self.vdma.write(0xA0, IMG_H)
     def _arm_mm2s(self):
-        # frame store 0/1 -> buf0/buf1; the read channel parks on `front`
+        # Arm MM2S read channel; parks on whichever buffer is `front`.
         self.mm2s.write(0x00, 0x4)
         while self.mm2s.read(0x00) & 0x4: pass
         self.mm2s.write(0x5C, self.phys[0]); self.mm2s.write(0x60, self.phys[1]); self.mm2s.write(0x64, self.phys[1])
-        self.mm2s.write(0x28, self.front)        # PARK_PTR_REG [4:0] = MM2S park frame store
+        self.mm2s.write(0x28, self.front)        # PARK_PTR_REG: which frame store to scan
         self.mm2s.write(0x58, STRIDE); self.mm2s.write(0x54, HSIZE)
         self.mm2s.write(0x00, 0x1); self.mm2s.write(0x50, IMG_H)
     def set_sun(self, az, el):
-        # Live sun: az = azimuth around the up(Y) axis, el = elevation above horizon.
-        # light_dir points FROM surfaces TOWARD the sun, already unit-length (no swap;
-        # this is a direction vector, not a colour). Shadows follow it automatically.
+        # az = azimuth around Y, el = elevation above horizon. Direction vector — no G↔B swap.
         ce = math.cos(el)
         self.ip.write(0x3C, to_q16(ce * math.sin(az)))
         self.ip.write(0x40, to_q16(math.sin(el)))
@@ -229,25 +213,21 @@ class Renderer:
         self.ip.write(0x38, to_q16(cam.scale))
     def render(self, timeout=2.0):
         back = 1 - self.front
-        self._arm_s2mm(back)                     # render into the off-screen buffer
+        self._arm_s2mm(back)
         t0 = time.time(); self.ip.write(0x00, 1)
         while not (self.ip.read(0x04) & 0x1):
             if time.time() - t0 > 0.5: return False
         while self.ip.read(0x04) & 0x1:
             if time.time() - t0 > timeout: return False
-        # frame is complete in `back`; flip to it. The VDMA latches the new park frame at
-        # the next start-of-frame, so the swap happens between scans -> no tearing.
+        # Swap buffers; VDMA latches the new park frame at the next SOF — no mid-scan tear.
         self.front = back
         self.mm2s.write(0x28, self.front)
         return True
     def capture(self, path):
-        # Save the currently-displayed frame as a PNG (for report figures). The render
-        # writes XRGB to DDR (bytes B,G,R,X) and _shading() pre-swaps G<->B in the LUT so
-        # the HDMI path shows correct colour; index [2,0,1] undoes both -> true RGB,
-        # matching what's on the monitor.
+        # DDR byte order is B,G,R,X; _shading() pre-swapped G↔B. Index [2,0,1] undoes both → true RGB.
         import PIL.Image
         buf = self.bufs[self.front]
-        buf.invalidate()                          # DMA wrote it -> drop stale CPU cache
+        buf.invalidate()                          # flush stale CPU cache after DMA write
         rgb = np.array(buf[:, :, [2, 0, 1]])
         PIL.Image.fromarray(rgb, 'RGB').save(path)
     def stop(self):
@@ -265,7 +245,7 @@ def main(use_evdev=False, device=None, scene_path=None):
     fov = math.tan(math.radians(60)/2) / (IMG_W/2)
     cam = fly_camera.Camera.looking_at([32, 40, -20], [32, 4, 32], scale=fov)
     rnd = Renderer(load_scene(scene_path))
-    rnd.ip.write(0x88, 1); rnd.ip.write(0x8C, 6)   # demo defaults: shadows on, full depth
+    rnd.ip.write(0x88, 1); rnd.ip.write(0x8C, 6)   # shadow_on=1, max_depth=6
     if use_evdev:
         kb = EvdevKeyboard(find_keyboard(device))
         print('evdev: type on the BOARD keyboard. WASD move, arrows look, Space/Shift up-down, Q/E zoom, Esc quit')
@@ -275,23 +255,21 @@ def main(use_evdev=False, device=None, scene_path=None):
     print('  Sun: I/K raise/lower, J/L swing, O toggle auto-orbit.')
     print('  Demo: T toggle shadows, [ ] traversal depth, F capture frame.')
 
-    # ── frame capture (F): save PNGs for report figures ────────────────────────
     cap_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'captures')
     os.makedirs(cap_dir, exist_ok=True)
     cap_n = len(glob.glob(os.path.join(cap_dir, 'frame_*.png')))
     prev_capture_key = False
 
-    # ── live sun (Feature 2): seed azimuth/elevation from the scene light_dir ──
+    # Seed sun az/el from the scene light_dir
     lx, ly, lz = rnd.scene['light_dir']
     ln = math.sqrt(lx*lx + ly*ly + lz*lz) or 1.0
-    sun_el = math.asin(max(-1.0, min(1.0, ly / ln)))   # elevation above horizon
-    sun_az = math.atan2(lx, lz)                          # azimuth around up axis
+    sun_el = math.asin(max(-1.0, min(1.0, ly / ln)))
+    sun_az = math.atan2(lx, lz)
     SUN_STEP   = math.radians(4)     # per-frame nudge while a key is held
     ORBIT_STEP = math.radians(2)     # per-frame auto-orbit speed
     sun_orbit = False
     prev_orbit_key = False
 
-    # ── demo controls (shadow toggle + traversal depth cap) ────────────────────
     shadows_on = True
     max_depth  = 6
     prev_shadow_key = False
@@ -303,17 +281,15 @@ def main(use_evdev=False, device=None, scene_path=None):
             h = kb.poll()
             if 'quit' in h:
                 break
-            # ── sun controls ──────────────────────────────────────────────────
             sun_el += SUN_STEP * (('sunUp' in h) - ('sunDown' in h))
             sun_el  = max(math.radians(-89), min(math.radians(89), sun_el))
             sun_az += SUN_STEP * (('sunRight' in h) - ('sunLeft' in h))
             orbit_key = 'sunOrbit' in h
-            if orbit_key and not prev_orbit_key:        # toggle on key-down edge only
+            if orbit_key and not prev_orbit_key:        # edge-trigger: toggle on key-down
                 sun_orbit = not sun_orbit
             prev_orbit_key = orbit_key
             if sun_orbit:
                 sun_az += ORBIT_STEP
-            # ── capture (F): save the currently-displayed frame, one per key-press ─
             capture_key = 'capture' in h
             if capture_key and not prev_capture_key:
                 cap_n += 1
@@ -321,7 +297,6 @@ def main(use_evdev=False, device=None, scene_path=None):
                 while os.path.exists(p):
                     cap_n += 1; p = os.path.join(cap_dir, f'frame_{cap_n:03d}.png')
                 rnd.capture(p)
-                # print the camera so this exact shot can be reproduced in the sim
                 cfwd, cright, cup = cam.vectors()
                 print(f'\n  captured {p}   (paste this camera into the sim):')
                 print(f"    pos   = {[round(x, 4) for x in cam.pos]}")
@@ -330,7 +305,6 @@ def main(use_evdev=False, device=None, scene_path=None):
                 print(f"    up    = {[round(x, 4) for x in cup]}")
                 print(f"    scale = {cam.scale:.6f}")
             prev_capture_key = capture_key
-            # ── demo controls: shadow toggle (T) + traversal depth ([ ]) ───────
             shadow_key = 'shadowTog' in h
             if shadow_key and not prev_shadow_key:
                 shadows_on = not shadows_on
@@ -352,10 +326,9 @@ def main(use_evdev=False, device=None, scene_path=None):
             if 'zoomIn'  in h: cam.scale /= ZOOM
             if 'dump' in h:
                 fwd, right, up = cam.vectors()
-                # u_edge = (IMG_W/2)*scale = tan(fov/2); len2_corner = 1+u_edge^2+(v_edge)^2
-                u_edge = (IMG_W/2)*cam.scale
+                u_edge = (IMG_W/2)*cam.scale   # = tan(FOV/2)
                 v_edge = (IMG_H/2)*cam.scale
-                print(f"\n# --- camera dump (paste into the sim to reproduce) ---")
+                print(f"\n# --- camera dump ---")
                 print(f"pos   = {[round(x,4) for x in cam.pos]}")
                 print(f"fwd   = {[round(x,4) for x in fwd]}")
                 print(f"right = {[round(x,4) for x in right]}")
@@ -365,15 +338,14 @@ def main(use_evdev=False, device=None, scene_path=None):
                       f"len2_corner={1+u_edge**2+v_edge**2:.3f}  "
                       f"(rsqrt seed y0={1.5-(1+u_edge**2+v_edge**2)/2:.3f}; "
                       f"{'OK' if 1.5-(1+u_edge**2+v_edge**2)/2 > 0.2 else 'TOO LOW -> distortion'})\n")
-            rnd.set_glow(frames * 0.15)      # animate the glowing block (rainbow)
-            rnd.set_sun(sun_az, sun_el)      # live sun -> light_dir registers
-            rnd.ip.write(0x84, int(frames * rnd.scene['anim_speed']) & 0xFFFFFFFF)   # time_phase: water/lava anim
+            rnd.set_glow(frames * 0.15)
+            rnd.set_sun(sun_az, sun_el)
+            rnd.ip.write(0x84, int(frames * rnd.scene['anim_speed']) & 0xFFFFFFFF)   # time_phase for water/lava
             rnd.set_camera(cam)
             if not rnd.render():
                 print('  (render timeout)')
             frames += 1
 
-            # ── live FPS + sun readout (refresh ~1 Hz, overwrite one line) ─────
             fps_n += 1
             now = time.time()
             if now - fps_t >= 1.0:

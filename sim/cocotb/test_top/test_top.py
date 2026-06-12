@@ -1,24 +1,15 @@
-"""
-Cocotb integration tests for top.sv
+"""Cocotb integration tests for top.sv (SHADE_MODE=0, Phase 1).
 
-Tests the full pipeline:
-  AXI-Lite slave → SVO BRAM → traversal FSM → framebuffer → HDMI timing
-
-rgb2dvi is an external Vivado IP not present in simulation; the HDMI outputs
-(hdmi_r/g/b, hdmi_hsync/vsync, hdmi_de) are driven directly by top.sv and can
-be sampled here without rgb2dvi.
-
-Note: SHADE_MODE defaults to 0 (Phase 1) so the shading_pipeline is not
-instantiated inside top.sv in simulation.
+rgb2dvi is not present in simulation; HDMI outputs are driven directly by top.sv.
 """
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, ClockCycles, Timer
 import math
 
-SYS_CLK_NS  = 10     # 100 MHz
-PIX_CLK_NS  = 40     # 25 MHz (approximate)
-TIMEOUT_NS  = 15_000_000  # 15 ms — enough for one 320×240 frame at 100 MHz
+SYS_CLK_NS  = 10
+PIX_CLK_NS  = 40
+TIMEOUT_NS  = 15_000_000  # 15 ms — one 320×240 frame budget at 100 MHz
 IMG_W, IMG_H = 320, 240
 
 
@@ -55,11 +46,8 @@ async def axi_write(dut, addr: int, data: int):
 
 
 async def reset(dut):
-    """Hard reset, de-assert all AXI signals, initialise clocks."""
     cocotb.start_soon(Clock(dut.s_axi_aclk, SYS_CLK_NS, units="ns").start())
     cocotb.start_soon(Clock(dut.clk_pixel,  PIX_CLK_NS,  units="ns").start())
-
-    # De-assert all AXI inputs before raising reset
     dut.s_axi_aresetn.value  = 0
     dut.s_axi_awvalid.value  = 0
     dut.s_axi_wvalid.value   = 0
@@ -82,20 +70,19 @@ async def load_svo(dut, words):
 
 
 async def set_camera(dut):
-    """Point camera at world centre looking along +Z from just outside."""
-    vals = [32.0, 32.0, -5.0,    # pos
-             1.0,  0.0,  0.0,    # right
-             0.0,  1.0,  0.0,    # up
-             0.0,  0.0,  1.0]    # fwd
+    """Camera at (32,32,-5) looking along +Z."""
+    vals = [32.0, 32.0, -5.0,   # pos
+             1.0,  0.0,  0.0,   # right
+             0.0,  1.0,  0.0,   # up
+             0.0,  0.0,  1.0]   # fwd
     for off, v in zip(range(0x08, 0x38, 4), vals):
         await axi_write(dut, off, to_q16(v))
-    # cam_scale = tan(30°) / 160
-    await axi_write(dut, 0x38, to_q16(math.tan(math.radians(30)) / 160))
+    await axi_write(dut, 0x38, to_q16(math.tan(math.radians(30)) / 160))  # cam_scale = tan(30°)/160
     await axi_write(dut, 0x68, pack_rgb(135, 206, 235))  # sky colour
 
 
 async def trigger_and_wait(dut) -> bool:
-    """Write CTRL=1 and poll until irq pulses. Returns True if done."""
+    """Write CTRL=1, poll until irq pulses; returns True if done within timeout."""
     await axi_write(dut, 0x00, 1)
     max_cycles = TIMEOUT_NS // SYS_CLK_NS
     for _ in range(max_cycles):
@@ -154,8 +141,7 @@ async def test_busy_signal_visible_via_axi(dut):
     await load_svo(dut, build_all_empty_svo_words())
     await set_camera(dut)
 
-    # Trigger render — do NOT use axi_write helper here because we want to
-    # sample STATUS immediately after the write, before the frame finishes.
+    # Trigger without using the helper so STATUS can be sampled before the frame finishes
     await RisingEdge(dut.s_axi_aclk)
     dut.s_axi_awaddr.value  = 0x00
     dut.s_axi_awvalid.value = 1
@@ -168,10 +154,7 @@ async def test_busy_signal_visible_via_axi(dut):
     await RisingEdge(dut.s_axi_aclk)
     dut.s_axi_awvalid.value = 0
     dut.s_axi_wvalid.value  = 0
-    # Don't wait for BVALID — check STATUS immediately
     await ClockCycles(dut.s_axi_aclk, 2)
-
-    # Read STATUS
     await RisingEdge(dut.s_axi_aclk)
     dut.s_axi_araddr.value  = 0x04
     dut.s_axi_arvalid.value = 1

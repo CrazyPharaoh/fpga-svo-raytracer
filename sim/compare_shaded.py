@@ -21,9 +21,9 @@ THRESHOLD  = 0.95  # pass if ≥ 95% pixels match
 
 
 def write_mismatch_log(trace_path, mismatch_set, out_path, hw, ref):
-    """Filter pixel_trace_shaded.txt to only include mismatched pixels.
-    Annotates each header with hw RGB vs ref RGB. mismatch_set is a set of
-    (px, py) tuples. hw and ref are np.int32 arrays shaped (H, W, 3)."""
+    """Filter pixel_trace_shaded.txt to mismatched pixels only, annotating each
+    header with hw/ref RGB and per-channel error. mismatch_set: set of (px, py);
+    hw, ref: int32 arrays shaped (H, W, 3)."""
     if not os.path.exists(trace_path):
         print(f"  (mismatch log skipped: {trace_path} not found)")
         return
@@ -103,7 +103,7 @@ def main():
     print(f"Max error   : {int(diff.max())}")
     print(f"Mean error  : {float(diff.mean()):.3f}")
 
-    # Diff image: green=match, warm-red intensity = per-pixel max channel error
+    # Diff image: green=match; red channel intensity = per-pixel max channel error
     diff_img = np.zeros((H, W, 3), dtype=np.uint8)
     diff_img[match] = [0, 200, 0]
     if n_mismatch > 0:
@@ -112,7 +112,7 @@ def main():
     Image.fromarray(diff_img, 'RGB').save(DIFF_PATH)
     print(f"Diff image  : {DIFF_PATH}")
 
-    # Mismatch trace log
+    # Per-pixel mismatch trace log (skipped silently if pixel_trace_shaded.txt absent)
     py_arr, px_arr = np.where(~match)
     mismatch_coords = set(zip(px_arr.tolist(), py_arr.tolist()))
     write_mismatch_log(TRACE_PATH, mismatch_coords, MISMATCH_PATH,

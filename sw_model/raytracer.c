@@ -1,17 +1,15 @@
 /* sw_model/raytracer.c
  *
- * Software SVO raytracer — the CPU baseline for the FPGA-vs-software comparison.
- * Faithful port of:
- *   - traversal: hardware_ref/fpga_svo_raytracer.py  svo_traverse()
- *   - shading:   sim/gen_reference_shaded.py          shade_pixel()  (mirrors shading_pipeline.sv)
- * Scene is read from the blob produced by export_scene.py (same world.vox the FPGA renders).
+ * CPU baseline SVO raytracer for the FPGA-vs-software comparison.
+ * Traversal follows hardware_ref/fpga_svo_raytracer.py svo_traverse();
+ * shading follows sim/gen_reference_shaded.py shade_pixel() / shading_pipeline.sv.
+ * Scene is read from the blob produced by export_scene.py.
  *
  * Build:   make desktop   (or: make arm / make desktop-omp)
  * Run:     ./rt_desktop scene/world.blob [W H FRAMES out.ppm]
  *
- * Precision: REAL defaults to double (the correctness anchor vs the Python golden).
- * Define USE_FLOAT for the single-precision build (the fair CPU baseline for the
- * benchmark). The geometry epsilons below are sized for double; revisit for float.
+ * REAL defaults to double (correctness anchor vs Python golden).
+ * -DUSE_FLOAT for the single-precision build used in benchmarks.
  */
 
 #include <stdio.h>
@@ -30,25 +28,20 @@ typedef float real;
 typedef double real;
 #endif
 
-/* ── hardware/algorithm constants (mirror the Python references) ─────────────── */
+/* ── algorithm constants ──────────────────────────────────────────────────────── */
 #define WORLD_SIZE   64
 #define STACK_DEPTH  12
 #define FOV_DEG      60.0
 
-/* Geometry epsilons. The double build uses the Python golden's values. The float
- * build rescales the *temporal* compares and the child-selection nudge so they
- * survive float ULP (~1e-5 at t~100) instead of vanishing — without this, the
- * boundary tie-breaks/nudge become no-ops and the DDA picks wrong octants. The
- * reciprocal guard stays tiny (it only protects against exact-zero components). */
+/* Geometry epsilons. The float build uses larger values to survive float ULP
+ * (~1e-5 at t~100); otherwise boundary tie-breaks and the entry nudge become
+ * no-ops and the DDA picks wrong octants. DENOM_EPS only guards exact-zero components. */
 #ifdef USE_FLOAT
   #ifndef EPS
   #define EPS        1e-4f   /* temporal tie-break / "already-crossed" epsilon */
   #endif
   #ifndef NUDGE
-  /* 5e-4f tuned by sweep: > float ULP at all ray distances (so it never vanishes),
-   * small enough never to overshoot a boundary. Gives 0 wrong-octant pixels —
-   * float then matches the golden as closely as double (maxerr identical). */
-  #define NUDGE      5e-4f
+  #define NUDGE      5e-4f   /* > float ULP at all ray distances; never overshoots a boundary */
   #endif
   #ifndef DENOM_EPS
   #define DENOM_EPS  1e-9f   /* reciprocal / ray-length guard */
@@ -69,7 +62,7 @@ typedef double real;
 #define MAT_LAVA     2
 #define MAT_GLOW     3
 
-/* ── scene (filled from the blob) ───────────────────────────────────────────── */
+/* ── scene globals (populated from blob) ─────────────────────────────────────── */
 typedef struct {
     uint16_t bitmask;
     uint16_t children[8];
@@ -88,7 +81,7 @@ static int  g_time_phase;
 static uint8_t g_lut_rgb[16][3];
 static uint8_t g_lut_mat[16];
 
-/* ── little-endian readers (no struct-padding assumptions) ──────────────────── */
+/* ── little-endian blob readers ─────────────────────────────────────────────── */
 static uint8_t  rd_u8 (FILE *f){ uint8_t v; if(fread(&v,1,1,f)!=1){fprintf(stderr,"blob truncated\n");exit(1);} return v; }
 static uint16_t rd_u16(FILE *f){ uint8_t b[2]; if(fread(b,1,2,f)!=2){fprintf(stderr,"blob truncated\n");exit(1);} return b[0]|(b[1]<<8); }
 static uint32_t rd_u32(FILE *f){ uint8_t b[4]; if(fread(b,1,4,f)!=4){fprintf(stderr,"blob truncated\n");exit(1);} return (uint32_t)b[0]|((uint32_t)b[1]<<8)|((uint32_t)b[2]<<16)|((uint32_t)b[3]<<24); }
@@ -115,9 +108,9 @@ static void load_scene(const char *path)
     g_shadow_bias   = rd_f32(f);
 
     for (int i=0;i<3;i++) g_sky[i] = rd_u8(f);
-    rd_u8(f);   /* +pad */
+    rd_u8(f);   /* padding */
     for (int i=0;i<3;i++) g_fog[i] = rd_u8(f);
-    rd_u8(f);   /* +pad */
+    rd_u8(f);   /* padding */
     g_shadows_enabled = (int)rd_u32(f);
     g_time_phase      = (int)rd_u32(f);
 
@@ -138,7 +131,7 @@ static void load_scene(const char *path)
     fclose(f);
 }
 
-/* ── small helpers ──────────────────────────────────────────────────────────── */
+/* ── helpers ────────────────────────────────────────────────────────────────── */
 static inline real rmin2(real a, real b){ return a<b?a:b; }
 static inline real rmin3(real a, real b, real c){ return rmin2(rmin2(a,b),c); }
 static inline real rmin4(real a, real b, real c, real d){ return rmin2(rmin2(a,b),rmin2(c,d)); }
@@ -154,15 +147,15 @@ typedef struct {
     int  block_id;
 } hit_t;
 
-/* Port of fpga_svo_raytracer.svo_traverse(). Returns 1 on hit (out filled when
- * !shadow_mode), 0 on miss. shadow_mode returns 1 at the first solid voxel. */
+/* SVO traversal. Returns 1 on hit (out filled when !shadow_mode), 0 on miss.
+ * shadow_mode: returns 1 at the first solid voxel without filling out. */
 static int svo_traverse(real ox, real oy, real oz,
                         real dx, real dy, real dz,
                         int shadow_mode, hit_t *out)
 {
     const real WS = (real)WORLD_SIZE;
 
-    /* match the Python golden: tiny components clamp to +DENOM_EPS (sign dropped) */
+    /* tiny components clamp to +DENOM_EPS (sign dropped, as in Python golden) */
     real inv_dx = 1.0/(fabs(dx)>DENOM_EPS?dx:DENOM_EPS);
     real inv_dy = 1.0/(fabs(dy)>DENOM_EPS?dy:DENOM_EPS);
     real inv_dz = 1.0/(fabs(dz)>DENOM_EPS?dz:DENOM_EPS);
@@ -276,7 +269,7 @@ static int svo_traverse(real ox, real oy, real oz,
                 break;
             }
 
-            /* STATE_EMPTY — advance DDA */
+            /* EMPTY — advance DDA */
             t_now = t_child_exit;
             if (t_now >= t_node_exit) break;
             if (fabs(t_child_exit-tx)<EPS)      { cx=1-cx; tx=R_INF; face_axis=0; face_sign=dx<0.0?1:-1; }
@@ -288,7 +281,7 @@ static int svo_traverse(real ox, real oy, real oz,
     return 0;
 }
 
-/* Port of gen_reference_shaded.shade_pixel() for a hit. Writes RGB into rgb[3]. */
+/* Shade a hit: Lambert + specular^4 + shadow + fog. Writes RGB into rgb[3]. */
 static void shade_hit(const hit_t *h, real dx, real dy, real dz, int rgb[3])
 {
     real normal[3] = {0,0,0};
@@ -342,7 +335,7 @@ static void shade_hit(const hit_t *h, real dx, real dy, real dz, int rgb[3])
     }
 }
 
-/* Render one full frame into buf (W*H*3 RGB). Returns hit count. */
+/* Render one frame into buf (W*H*3 RGB). Returns hit count. */
 static long render_frame(uint8_t *buf, int W, int H)
 {
     real fov_scale = tan(FOV_DEG*M_PI/180.0/2.0) / (W/2.0);
@@ -393,8 +386,7 @@ int main(int argc, char **argv)
     int frames = argc>4 ? atoi(argv[4]) : 5;
     const char *out = argc>5 ? argv[5] : "frame.ppm";
 
-    /* Thread count (OpenMP builds): RT_THREADS env overrides; default = all cores.
-       e.g.  RT_THREADS=4 ./rt_desktop_omp scene/world.blob   (also honours OMP_NUM_THREADS). */
+    /* RT_THREADS env overrides the OpenMP thread count (also honours OMP_NUM_THREADS). */
 #ifdef _OPENMP
     {
         const char *nt = getenv("RT_THREADS");
@@ -406,7 +398,7 @@ int main(int argc, char **argv)
 
     uint8_t *buf = malloc((size_t)W*H*3);
 
-    /* warm-up frame (not timed) — fills caches / branch predictors */
+    /* warm-up frame (not timed) */
     long hits = render_frame(buf, W, H);
 
     double *ms = malloc(sizeof(double)*frames);
@@ -443,7 +435,7 @@ int main(int argc, char **argv)
     printf("hits/frame : %ld / %d pixels\n", hits, W*H);
     printf("ms/frame   : mean %.2f  std %.2f  min %.2f  max %.2f\n", mean, sd, mn, mx);
     double fps = 1000.0/mean;
-    long primary = (long)W * H;                 /* one primary ray per pixel */
+    long primary = (long)W * H;
     printf("FPS        : %.3f\n", fps);
     printf("primary rays/s : %.3e   (%ld rays/frame = resolution)\n", primary*fps, primary);
     if (g_shadows_enabled)

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-# host/display_frame.py
-# Render one frame using the SVO ray tracer and read it back via VDMA.
-# Run on the PYNQ board: sudo /usr/local/share/pynq-venv/bin/python3 display_frame.py
+# host/display_frame.py — render one frame and read it back via VDMA.
+# Run on the PYNQ: sudo /usr/local/share/pynq-venv/bin/python3 display_frame.py
 
 import time
 import math
@@ -32,25 +31,16 @@ def cross(a, b):
     return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
 
 
-# ---------------------------------------------------------------------------
-# Load overlay
-# ---------------------------------------------------------------------------
 print("Loading bitstream …")
 ol = Overlay(BITSTREAM)
 ip = ol.top_0
 
-# ---------------------------------------------------------------------------
-# Configure VDMA — S2MM (stream-to-memory = write channel)
-# PYNQ names it writechannel because the DMA is writing frames into memory.
-# ---------------------------------------------------------------------------
+# S2MM write channel — streams rendered pixels into the frame buffer
 vdma = ol.axi_vdma_0
 videoMode = common.VideoMode(IMG_W, IMG_H, 32)   # 32 bpp XRGB
 vdma.writechannel.mode = videoMode
 vdma.writechannel.start()
 
-# ---------------------------------------------------------------------------
-# Build and upload SVO
-# ---------------------------------------------------------------------------
 print("Building SVO …")
 grid  = svo_builder.build_world()
 root  = svo_builder.build_svo(grid)
@@ -62,23 +52,19 @@ ip.write(0x48, 0)
 for w in words:
     ip.write(0x4C, w)
 
-# ---------------------------------------------------------------------------
-# Colour / fog registers
-# ---------------------------------------------------------------------------
+# Colour LUT (0x50=index, 0x54=data auto-inc), sky, fog
 ip.write(0x50, pack_rgb(  0,   0,   0))
 ip.write(0x54, pack_rgb(128, 128, 128))
 ip.write(0x58, pack_rgb( 60, 160,  40))
 ip.write(0x5C, pack_rgb(255, 220,  80))
 ip.write(0x60, pack_rgb(  0,   0,   0))
 ip.write(0x64, pack_rgb(  0,   0,   0))
-ip.write(0x68, pack_rgb(135, 206, 235))  # sky colour
-ip.write(0x6C, pack_rgb(180, 200, 220))
-ip.write(0x70, to_q16(15.0))
-ip.write(0x74, to_q16(0.01))
+ip.write(0x68, pack_rgb(135, 206, 235))  # sky
+ip.write(0x6C, pack_rgb(180, 200, 220))  # fog
+ip.write(0x70, to_q16(15.0))             # fog_start
+ip.write(0x74, to_q16(0.01))             # shadow_bias
 
-# ---------------------------------------------------------------------------
-# Camera (same as main_phase1.py)
-# ---------------------------------------------------------------------------
+# Camera: looking from (32,40,-20) toward (32,4,32), 60° FOV
 pos   = [32.0, 40.0, -20.0]
 fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
 right = normalise(cross(fwd, [0, 1, 0]))
@@ -92,9 +78,6 @@ ip.write(0x3C, to_q16(ld[0]))
 ip.write(0x40, to_q16(ld[1]))
 ip.write(0x44, to_q16(ld[2]))
 
-# ---------------------------------------------------------------------------
-# Trigger render and wait for busy→0
-# ---------------------------------------------------------------------------
 print("Triggering render …")
 t0 = time.time()
 ip.write(0x00, 1)
@@ -103,13 +86,9 @@ while ip.read(0x04) & 0x1:
 elapsed = time.time() - t0
 print(f"Render complete in {elapsed:.3f} s")
 
-# ---------------------------------------------------------------------------
-# Read frame from VDMA
-# readframe() returns (IMG_H, IMG_W, 4) uint8 — channel order [B, G, R, 0]
-# because VDMA stores 32-bit XRGB little-endian in memory.
-# ---------------------------------------------------------------------------
+# readframe() returns (H, W, 4) uint8 with channel order [B, G, R, X] (little-endian XRGB)
 frame_raw = vdma.writechannel.readframe()
-frame_rgb = frame_raw[:, :, [2, 1, 0]]   # BGR → RGB, drop padding byte
+frame_rgb = frame_raw[:, :, [2, 1, 0]]   # BGR→RGB
 
 image = PIL.Image.fromarray(frame_rgb, 'RGB')
 image.save('/tmp/render_output.png')

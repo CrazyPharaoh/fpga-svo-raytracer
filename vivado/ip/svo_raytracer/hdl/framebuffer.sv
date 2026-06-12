@@ -1,8 +1,6 @@
-// framebuffer.sv
-// True dual-port framebuffer BRAM.
-// Write port: ray/shading pipeline @ clk_sys (100 MHz)
-// Read  port: HDMI controller      @ clk_pixel (25.175 MHz)
-// Size: 320×240 = 76800 pixels × 24-bit RGB
+// framebuffer.sv — legacy, not connected in the current design.
+// True dual-port BRAM, 320×240 = 76800 × 24-bit RGB.
+// Write: ray pipeline @ clk_sys. Read: HDMI controller @ clk_pixel.
 `timescale 1ns/1ps
 module framebuffer (
     input  logic        wr_clk,
@@ -18,7 +16,7 @@ module framebuffer (
     (* ram_style = "block" *)
     logic [23:0] mem [0:76799];
 
-    // Initialise to 0 so simulation starts clean (synthesis ignores this).
+    // Zero-init for simulation; synthesis ignores initial blocks.
     initial begin
         integer i;
         for (i = 0; i < 76800; i++) mem[i] = '0;

@@ -1,7 +1,5 @@
 # host/camera.py
-# First-person camera state and keyboard event handler.
-# Minecraft creative-mode navigation: WASD to move, arrow keys to look,
-# Space/Shift for vertical movement.
+# First-person camera state and keyboard event handler (WASD/arrows/Space/Shift).
 
 import math
 
@@ -11,13 +9,10 @@ class Camera:
     TURN_SPEED = 2.0   # degrees per keypress
 
     def __init__(self, pos=(32.0, 15.0, -5.0), yaw=0.0, pitch=-15.0):
-        self.pos   = list(pos)   # (x, y, z) in voxel space
-        self.yaw   = yaw         # horizontal rotation, degrees (0 = +Z axis)
+        self.pos   = list(pos)
+        self.yaw   = yaw         # horizontal, degrees (0 = +Z axis)
         self.pitch = pitch       # vertical tilt, degrees (positive = look up)
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
     def _basis(self):
         """Return (fwd, right, up) unit vectors from current yaw/pitch."""
         y = math.radians(self.yaw)
@@ -44,14 +39,8 @@ class Camera:
             a[0] * b[1] - a[1] * b[0],
         ]
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
     def handle_key(self, key_name: str) -> bool:
-        """
-        Update camera state for one key-down event.
-        Returns True if the camera moved (i.e. a new render is needed).
-        """
+        """Update camera state for one key-down event. Returns True if a new render is needed."""
         fwd, right, _ = self._basis()
         moved = True
         if   key_name == 'KEY_W':         self.pos = [self.pos[i] + fwd[i]   * self.MOVE_SPEED for i in range(3)]
@@ -68,15 +57,8 @@ class Camera:
         return moved
 
     def registers(self, fov_deg: float = 60.0, img_w: int = 320) -> dict:
-        """
-        Return a dict of floating-point values ready to be converted to Q16.16
-        and written to the AXI register map:
-          pos   → CAM_POS_{X,Y,Z}     (0x08-0x10)
-          right → CAM_RIGHT_{X,Y,Z}   (0x14-0x1C)
-          up    → CAM_UP_{X,Y,Z}      (0x20-0x28)
-          fwd   → CAM_FWD_{X,Y,Z}     (0x2C-0x34)
-          scale → CAM_SCALE           (0x38)
-        """
+        """Return pos/right/up/fwd/scale as floats ready for Q16.16 conversion and AXI write
+        (0x08–0x34 for vectors, 0x38 for scale)."""
         fwd, right, up = self._basis()
         scale = math.tan(math.radians(fov_deg) / 2) / (img_w / 2)
         return {
