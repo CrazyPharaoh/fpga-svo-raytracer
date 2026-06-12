@@ -1,12 +1,26 @@
+# Markdown is kept out of the repo by default (design notes live in private-docs/),
+# except README guides, which are tracked.
 *.md
-sim/shade_build
+!README.md
+!**/README.md
+
 # Python bytecode
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # cocotb / Verilator / Icarus simulation build output + results
 sim_build/
+shade_build/
+sim/shade_build
 sim/cocotb/*/results.xml
+
+# Large regenerable simulation trace dumps
+sim/output/logs/*_trace_*.txt
+
+# Scratch render outputs
+/output*.ppm
+/ppm_outputs/
 
 # Vivado ILA capture dumps + scratch
 vivado/analyser_results/
