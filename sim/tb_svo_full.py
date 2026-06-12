@@ -28,8 +28,17 @@ LIGHT_DIR = (1.0/_LM, 2.0/_LM, 1.5/_LM)
 
 # MagicaVoxel world: 64^3 block_id grid + 16 packed LUT words
 # (each word [31:24]=material flag, [23:0]=RGB) loaded from host/world.vox.
-WORLD_VOX = os.path.join(os.path.dirname(__file__), '..', 'host', 'world.vox')
-GRID, LUT_WORDS = vox_loader.load_world(WORLD_VOX)
+# Scene select: WORLD=vox (default; MagicaVoxel host/world.vox) or WORLD=procedural
+# (the original svo_builder.build_world() terrain). gen_reference_shaded.py reads the
+# same WORLD env var + camera/LUT so the reference PNG comparison stays matched.
+WORLD = os.environ.get('WORLD', 'vox')
+if WORLD == 'procedural':
+    GRID = svo_builder.build_world()
+    _PROC_COLS = [(0,0,0),(120,120,120),(60,160,40),(255,0,0),(194,178,128),(235,240,250)]
+    LUT_WORDS = [((r << 16) | (g << 8) | b) for (r, g, b) in _PROC_COLS] + [0]*10  # flag 0 (static)
+else:
+    WORLD_VOX = os.path.join(os.path.dirname(__file__), '..', 'host', 'world.vox')
+    GRID, LUT_WORDS = vox_loader.load_world(WORLD_VOX)
 
 SKY_COLOR   = (135, 206, 235)
 FOG_COLOR   = (180, 200, 220)
@@ -365,11 +374,18 @@ async def test_render_frame_shaded(dut):
     # fwd   = [0.0, -1.0, 0.018]
     # right = [-1.0, 0.0, 0.0]
     # up    = [0.0, 0.018, 1.0]
-    #test 2
-    pos   = [48.0095, 16.7627, 27.9686]
-    fwd   = [-0.9094, -0.337, 0.2437]
-    right = [-0.2588, 0.0, -0.9659]
-    up    = [-0.3255, 0.9415, 0.0872]
+    if WORLD == 'procedural':
+        # original build_world() view (looks at the terrain centre)
+        pos   = [30.0, 15.0, 0.0]
+        fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
+        right = normalise(cross(fwd, [0, 1, 0]))
+        up    = cross(right, fwd)
+    else:
+        #test 2 (world.vox fly-around)
+        pos   = [48.0095, 16.7627, 27.9686]
+        fwd   = [-0.9094, -0.337, 0.2437]
+        right = [-0.2588, 0.0, -0.9659]
+        up    = [-0.3255, 0.9415, 0.0872]
     # scale = tan(fov/2)/(IMG_W/2): same FOV at any RENDER_DIV. At 320 -> /160.0.
     fov_scale = math.tan(math.radians(60) / 2) / (IMG_W / 2)
 

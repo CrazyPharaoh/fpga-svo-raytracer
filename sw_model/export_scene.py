@@ -24,10 +24,10 @@ import gen_reference_shaded as g        # noqa: E402  (loads world.vox + LUT at 
 #    C output is comparable to reference_render_shaded.png. fov_scale is NOT exported:
 #    it depends on render width, so the C model computes it from its own resolution
 #    exactly as the reference does (tan(fov/2)/(W/2)).
-CAM_POS   = (48.0095, 16.7627, 27.9686)
-CAM_FWD   = (-0.9094, -0.337,  0.2437)
-CAM_RIGHT = (-0.2588,  0.0,   -0.9659)
-CAM_UP    = (-0.3255,  0.9415, 0.0872)
+CAM_POS   = (72.5269, 29.4615, 72.5337)
+CAM_FWD   = (-0.684,  -0.2537, -0.684)
+CAM_RIGHT = ( 0.7071,  0.0,    -0.7071)
+CAM_UP    = (-0.1794,  0.9673, -0.1794)
 
 MAGIC   = b'SVOC'
 VERSION = 1

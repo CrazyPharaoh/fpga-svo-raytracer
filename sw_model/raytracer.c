@@ -393,6 +393,15 @@ int main(int argc, char **argv)
     int frames = argc>4 ? atoi(argv[4]) : 5;
     const char *out = argc>5 ? argv[5] : "frame.ppm";
 
+    /* Thread count (OpenMP builds): RT_THREADS env overrides; default = all cores.
+       e.g.  RT_THREADS=4 ./rt_desktop_omp scene/world.blob   (also honours OMP_NUM_THREADS). */
+#ifdef _OPENMP
+    {
+        const char *nt = getenv("RT_THREADS");
+        if (nt && atoi(nt) > 0) omp_set_num_threads(atoi(nt));
+    }
+#endif
+
     load_scene(blob);
 
     uint8_t *buf = malloc((size_t)W*H*3);
@@ -433,7 +442,13 @@ int main(int argc, char **argv)
     printf("frames     : %d (+1 warm-up)\n", frames);
     printf("hits/frame : %ld / %d pixels\n", hits, W*H);
     printf("ms/frame   : mean %.2f  std %.2f  min %.2f  max %.2f\n", mean, sd, mn, mx);
-    printf("FPS        : %.3f\n", 1000.0/mean);
+    double fps = 1000.0/mean;
+    long primary = (long)W * H;                 /* one primary ray per pixel */
+    printf("FPS        : %.3f\n", fps);
+    printf("primary rays/s : %.3e   (%ld rays/frame = resolution)\n", primary*fps, primary);
+    if (g_shadows_enabled)
+        printf("total rays/s   : %.3e   (primary + %ld shadow rays/frame = 1 per hit)\n",
+               (primary + hits)*fps, hits);
     printf("wrote      : %s\n", out);
 
     free(ms); free(buf); free(g_nodes);

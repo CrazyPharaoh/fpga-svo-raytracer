@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
 ------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version : Vivado v.2025.2 (win64) Build 6299465 Fri Nov 14 19:35:11 GMT 2025
-| Date         : Fri Jun  5 16:41:59 2026
+| Date         : Tue Jun  9 01:21:35 2026
 | Host         : DESKTOP-7MNETOV running 64-bit major release  (build 9200)
 | Command      : report_drc -file svo_system_wrapper_drc_routed.rpt -pb svo_system_wrapper_drc_routed.pb -rpx svo_system_wrapper_drc_routed.rpx
 | Design       : svo_system_wrapper
@@ -24,11 +24,11 @@ Table of Contents
       Design limits: <entire design considered>
            Ruledeck: default
              Max checks: <unlimited>
-             Checks found: 247
+             Checks found: 240
 +-----------+----------+-------------------------+--------+
 | Rule      | Severity | Description             | Checks |
 +-----------+----------+-------------------------+--------+
-| DPIP-1    | Warning  | Input pipelining        | 31     |
+| DPIP-1    | Warning  | Input pipelining        | 24     |
 | DPOP-1    | Warning  | PREG Output pipelining  | 78     |
 | DPOP-2    | Warning  | MREG Output pipelining  | 132    |
 | PDCN-1569 | Warning  | LUT equation term check | 3      |
@@ -45,150 +45,115 @@ Related violations: <none>
 
 DPIP-1#2 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__11 input svo_system_i/top_0/inst/traversal/p_0_out__11/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/p_0_out__0 input svo_system_i/top_0/inst/traversal/p_0_out__0/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#3 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__13 input svo_system_i/top_0/inst/traversal/p_0_out__13/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/p_0_out__1 input svo_system_i/top_0/inst/traversal/p_0_out__1/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#4 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__14 input svo_system_i/top_0/inst/traversal/p_0_out__14/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/p_0_out__11 input svo_system_i/top_0/inst/traversal/p_0_out__11/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#5 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__15 input svo_system_i/top_0/inst/traversal/p_0_out__15/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/p_0_out__13 input svo_system_i/top_0/inst/traversal/p_0_out__13/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#6 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__17 input svo_system_i/top_0/inst/traversal/p_0_out__17/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/p_0_out__15 input svo_system_i/top_0/inst/traversal/p_0_out__15/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#7 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__18 input svo_system_i/top_0/inst/traversal/p_0_out__18/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/p_0_out__17 input svo_system_i/top_0/inst/traversal/p_0_out__17/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#8 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__19 input svo_system_i/top_0/inst/traversal/p_0_out__19/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/p_0_out__18 input svo_system_i/top_0/inst/traversal/p_0_out__18/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#9 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__2 input svo_system_i/top_0/inst/traversal/p_0_out__2/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/p_0_out__19 input svo_system_i/top_0/inst/traversal/p_0_out__19/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#10 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__20 input svo_system_i/top_0/inst/traversal/p_0_out__20/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/p_0_out__21 input svo_system_i/top_0/inst/traversal/p_0_out__21/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#11 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__21 input svo_system_i/top_0/inst/traversal/p_0_out__21/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/p_0_out__3 input svo_system_i/top_0/inst/traversal/p_0_out__3/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#12 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__22 input svo_system_i/top_0/inst/traversal/p_0_out__22/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/p_0_out__5 input svo_system_i/top_0/inst/traversal/p_0_out__5/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#13 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__3 input svo_system_i/top_0/inst/traversal/p_0_out__3/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/p_0_out__7 input svo_system_i/top_0/inst/traversal/p_0_out__7/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#14 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__4 input svo_system_i/top_0/inst/traversal/p_0_out__4/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/p_0_out__9 input svo_system_i/top_0/inst/traversal/p_0_out__9/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#15 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__5 input svo_system_i/top_0/inst/traversal/p_0_out__5/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/te_x_reg[0] input svo_system_i/top_0/inst/traversal/te_x_reg[0]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#16 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/p_0_out__7 input svo_system_i/top_0/inst/traversal/p_0_out__7/B[17:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/te_x_reg[1] input svo_system_i/top_0/inst/traversal/te_x_reg[1]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#17 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/te_x_reg[0] input svo_system_i/top_0/inst/traversal/te_x_reg[0]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/te_x_reg[2] input svo_system_i/top_0/inst/traversal/te_x_reg[2]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#18 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/te_x_reg[1]__0 input svo_system_i/top_0/inst/traversal/te_x_reg[1]__0/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/te_x_reg[3] input svo_system_i/top_0/inst/traversal/te_x_reg[3]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#19 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/te_x_reg[2]__0 input svo_system_i/top_0/inst/traversal/te_x_reg[2]__0/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/te_x_reg[3]__0 input svo_system_i/top_0/inst/traversal/te_x_reg[3]__0/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#20 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/te_x_reg[3] input svo_system_i/top_0/inst/traversal/te_x_reg[3]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/te_y_reg[1] input svo_system_i/top_0/inst/traversal/te_y_reg[1]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#21 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/te_y_reg[0] input svo_system_i/top_0/inst/traversal/te_y_reg[0]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/te_y_reg[2] input svo_system_i/top_0/inst/traversal/te_y_reg[2]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#22 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/te_y_reg[0]__0 input svo_system_i/top_0/inst/traversal/te_y_reg[0]__0/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
+DSP svo_system_i/top_0/inst/traversal/te_y_reg[3] input svo_system_i/top_0/inst/traversal/te_y_reg[3]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
 DPIP-1#23 Warning
 Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/te_y_reg[1] input svo_system_i/top_0/inst/traversal/te_y_reg[1]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
-Related violations: <none>
-
-DPIP-1#24 Warning
-Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/te_y_reg[3] input svo_system_i/top_0/inst/traversal/te_y_reg[3]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
-Related violations: <none>
-
-DPIP-1#25 Warning
-Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/te_z_reg[0] input svo_system_i/top_0/inst/traversal/te_z_reg[0]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
-Related violations: <none>
-
-DPIP-1#26 Warning
-Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/te_z_reg[0]__0 input svo_system_i/top_0/inst/traversal/te_z_reg[0]__0/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
-Related violations: <none>
-
-DPIP-1#27 Warning
-Input pipelining  
 DSP svo_system_i/top_0/inst/traversal/te_z_reg[1] input svo_system_i/top_0/inst/traversal/te_z_reg[1]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
 
-DPIP-1#28 Warning
-Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/te_z_reg[1]__0 input svo_system_i/top_0/inst/traversal/te_z_reg[1]__0/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
-Related violations: <none>
-
-DPIP-1#29 Warning
-Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/te_z_reg[2] input svo_system_i/top_0/inst/traversal/te_z_reg[2]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
-Related violations: <none>
-
-DPIP-1#30 Warning
-Input pipelining  
-DSP svo_system_i/top_0/inst/traversal/te_z_reg[2]__0 input svo_system_i/top_0/inst/traversal/te_z_reg[2]__0/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
-Related violations: <none>
-
-DPIP-1#31 Warning
+DPIP-1#24 Warning
 Input pipelining  
 DSP svo_system_i/top_0/inst/traversal/te_z_reg[3] input svo_system_i/top_0/inst/traversal/te_z_reg[3]/A[29:0] is not pipelined. Pipelining DSP48 input will improve performance.
 Related violations: <none>
@@ -1245,37 +1210,31 @@ Related violations: <none>
 
 PDCN-1569#1 Warning
 LUT equation term check  
-Used physical LUT pin 'A1' of cell svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_WRITE.write_addr_inst/USE_B_CHANNEL.cmd_b_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/gpregsm1.user_valid_i_1 (pin svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_WRITE.write_addr_inst/USE_B_CHANNEL.cmd_b_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/gpregsm1.user_valid_i_1/I1) is not included in the LUT equation: 'O6=(A5)+((~A5)*(~A2)*A3)'. If this cell is a user instantiated LUT in the design, please remove connectivity to the pin or change the equation and/or INIT string of the LUT to prevent this issue. If the cell is inferred or IP created LUT, please regenerate the IP and/or resynthesize the design to attempt to correct the issue.
+Used physical LUT pin 'A4' of cell svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_WRITE.write_addr_inst/USE_BURSTS.cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/gpregsm1.user_valid_i_1 (pin svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_WRITE.write_addr_inst/USE_BURSTS.cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/gpregsm1.user_valid_i_1/I1) is not included in the LUT equation: 'O6=(A5)+((~A5)*(~A2)*A1)'. If this cell is a user instantiated LUT in the design, please remove connectivity to the pin or change the equation and/or INIT string of the LUT to prevent this issue. If the cell is inferred or IP created LUT, please regenerate the IP and/or resynthesize the design to attempt to correct the issue.
 Related violations: <none>
 
 PDCN-1569#2 Warning
 LUT equation term check  
-Used physical LUT pin 'A3' of cell svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_WRITE.write_addr_inst/USE_BURSTS.cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/gpregsm1.user_valid_i_1 (pin svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_WRITE.write_addr_inst/USE_BURSTS.cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/gpregsm1.user_valid_i_1/I1) is not included in the LUT equation: 'O6=(A5)+((~A5)*(~A6)*A2)'. If this cell is a user instantiated LUT in the design, please remove connectivity to the pin or change the equation and/or INIT string of the LUT to prevent this issue. If the cell is inferred or IP created LUT, please regenerate the IP and/or resynthesize the design to attempt to correct the issue.
+Used physical LUT pin 'A5' of cell svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_READ.USE_SPLIT_R.read_addr_inst/USE_R_CHANNEL.cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/gpregsm1.user_valid_i_1 (pin svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_READ.USE_SPLIT_R.read_addr_inst/USE_R_CHANNEL.cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/gpregsm1.user_valid_i_1/I1) is not included in the LUT equation: 'O6=(A6)+((~A6)*(~A4)*A3)'. If this cell is a user instantiated LUT in the design, please remove connectivity to the pin or change the equation and/or INIT string of the LUT to prevent this issue. If the cell is inferred or IP created LUT, please regenerate the IP and/or resynthesize the design to attempt to correct the issue.
 Related violations: <none>
 
 PDCN-1569#3 Warning
 LUT equation term check  
-Used physical LUT pin 'A6' of cell svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_READ.USE_SPLIT_R.read_addr_inst/USE_R_CHANNEL.cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/gpregsm1.user_valid_i_1 (pin svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_READ.USE_SPLIT_R.read_addr_inst/USE_R_CHANNEL.cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/gpregsm1.user_valid_i_1/I1) is not included in the LUT equation: 'O6=(A2)+((~A2)*(~A1)*A3)'. If this cell is a user instantiated LUT in the design, please remove connectivity to the pin or change the equation and/or INIT string of the LUT to prevent this issue. If the cell is inferred or IP created LUT, please regenerate the IP and/or resynthesize the design to attempt to correct the issue.
+Used physical LUT pin 'A5' of cell svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_WRITE.write_addr_inst/USE_B_CHANNEL.cmd_b_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/gpregsm1.user_valid_i_1 (pin svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_WRITE.write_addr_inst/USE_B_CHANNEL.cmd_b_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/gpregsm1.user_valid_i_1/I1) is not included in the LUT equation: 'O6=(A6)+((~A6)*(~A4)*A3)'. If this cell is a user instantiated LUT in the design, please remove connectivity to the pin or change the equation and/or INIT string of the LUT to prevent this issue. If the cell is inferred or IP created LUT, please regenerate the IP and/or resynthesize the design to attempt to correct the issue.
 Related violations: <none>
 
 RTSTAT-10#1 Warning
 No routable loads  
-72 net(s) have no routable loads. The problem bus(es) and/or net(s) are svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_READ.USE_SPLIT_R.read_addr_inst/USE_R_CHANNEL.cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/aempty_fwft_i,
+91 net(s) have no routable loads. The problem bus(es) and/or net(s) are svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_READ.USE_SPLIT_R.read_addr_inst/USE_R_CHANNEL.cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/aempty_fwft_i,
 svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_WRITE.write_addr_inst/USE_BURSTS.cmd_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/aempty_fwft_i,
 svo_system_i/axi_mem_intercon/m00_couplers/auto_pc/inst/gen_axi4_axi3.axi3_conv_inst/USE_WRITE.write_addr_inst/USE_B_CHANNEL.cmd_b_queue/inst/fifo_gen_inst/inst_fifo_gen/gconvfifo.rf/grf.rf/gntv_or_sync_fifo.gl0.rd/gr1.gr1_int.rfwft/aempty_fwft_i,
-svo_system_i/axi_smc/inst/m00_nodes/m00_ar_node/inst/mi_handler_m_sc_areset_pipe,
-svo_system_i/axi_smc/inst/m00_nodes/m00_aw_node/inst/mi_handler_m_sc_areset_pipe,
-svo_system_i/axi_smc/inst/m00_nodes/m00_b_node/inst/mi_handler_m_sc_areset_pipe,
-svo_system_i/axi_smc/inst/m00_nodes/m00_r_node/inst/mi_handler_m_sc_areset_pipe,
-svo_system_i/axi_smc/inst/m01_nodes/m01_ar_node/inst/mi_handler_m_sc_areset_pipe,
-svo_system_i/axi_smc/inst/m01_nodes/m01_aw_node/inst/mi_handler_m_sc_areset_pipe,
-svo_system_i/axi_smc/inst/m01_nodes/m01_b_node/inst/mi_handler_m_sc_areset_pipe,
-svo_system_i/axi_smc/inst/m01_nodes/m01_r_node/inst/mi_handler_m_sc_areset_pipe,
-svo_system_i/axi_smc/inst/m01_nodes/m01_w_node/inst/mi_handler_m_sc_areset_pipe,
-svo_system_i/axi_smc/inst/s00_nodes/s00_ar_node/inst/mi_handler_m_sc_areset_pipe,
-svo_system_i/axi_smc/inst/s00_nodes/s00_r_node/inst/mi_handler_m_sc_areset_pipe,
-svo_system_i/axi_smc/inst/s00_nodes/s00_w_node/inst/mi_handler_m_sc_areset_pipe
- (the first 15 of 49 listed nets/buses).
+svo_system_i/top_0/inst/dbg_d1_w[10], svo_system_i/top_0/inst/dbg_d1_w[11],
+svo_system_i/top_0/inst/dbg_d1_w[12], svo_system_i/top_0/inst/dbg_d1_w[16],
+svo_system_i/top_0/inst/dbg_d1_w[17], svo_system_i/top_0/inst/dbg_d1_w[18],
+svo_system_i/top_0/inst/dbg_d1_w[19], svo_system_i/top_0/inst/dbg_d1_w[20],
+svo_system_i/top_0/inst/dbg_d1_w[21], svo_system_i/top_0/inst/dbg_d1_w[22],
+svo_system_i/top_0/inst/dbg_d1_w[23], svo_system_i/top_0/inst/dbg_d1_w[24]
+ (the first 15 of 68 listed nets/buses).
 Related violations: <none>
 
 REQP-181#1 Advisory

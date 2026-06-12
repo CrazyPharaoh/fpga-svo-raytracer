@@ -25,7 +25,7 @@ import termios, tty
 CHAR_ACTION = {'w':'fwd','s':'back','a':'left','d':'right',
                ' ':'up','c':'down','-':'zoomOut','=':'zoomIn','q':'quit','p':'dump',
                'i':'sunUp','k':'sunDown','j':'sunLeft','l':'sunRight','o':'sunOrbit',
-               't':'shadowTog','[':'depthDown',']':'depthUp'}
+               't':'shadowTog','[':'depthDown',']':'depthUp','f':'capture'}
 ARROW_ACTION = {0x41:'pitchU', 0x42:'pitchD', 0x44:'yawL', 0x43:'yawR'}  # ESC [ A/B/D/C
 
 class StdinKeyboard:
@@ -64,7 +64,7 @@ EVDEV_ACTION = {17:'fwd', 31:'back', 30:'left', 32:'right', 57:'up', 42:'down',
                 103:'pitchU', 108:'pitchD', 105:'yawL', 106:'yawR',
                 16:'zoomOut', 18:'zoomIn', 1:'quit',
                 23:'sunUp', 37:'sunDown', 36:'sunLeft', 38:'sunRight', 24:'sunOrbit',  # I/K/J/L/O
-                20:'shadowTog', 26:'depthDown', 27:'depthUp'}  # T / [ / ]
+                20:'shadowTog', 26:'depthDown', 27:'depthUp', 33:'capture'}  # T / [ / ] / F
 
 def find_keyboard(override=None, wait=20.0):
     if override:
@@ -240,6 +240,16 @@ class Renderer:
         self.front = back
         self.mm2s.write(0x28, self.front)
         return True
+    def capture(self, path):
+        # Save the currently-displayed frame as a PNG (for report figures). The render
+        # writes XRGB to DDR (bytes B,G,R,X) and _shading() pre-swaps G<->B in the LUT so
+        # the HDMI path shows correct colour; index [2,0,1] undoes both -> true RGB,
+        # matching what's on the monitor.
+        import PIL.Image
+        buf = self.bufs[self.front]
+        buf.invalidate()                          # DMA wrote it -> drop stale CPU cache
+        rgb = np.array(buf[:, :, [2, 0, 1]])
+        PIL.Image.fromarray(rgb, 'RGB').save(path)
     def stop(self):
         self.vdma.write(0x30, 0x0)
         for b in self.bufs:
@@ -263,7 +273,13 @@ def main(use_evdev=False, device=None, scene_path=None):
         kb = StdinKeyboard()
         print('Type IN THIS TERMINAL: WASD move, arrows look, Space/C up-down, -/= zoom, Q or Ctrl-C quit')
     print('  Sun: I/K raise/lower, J/L swing, O toggle auto-orbit.')
-    print('  Demo: T toggle shadows, [ ] traversal depth.')
+    print('  Demo: T toggle shadows, [ ] traversal depth, F capture frame.')
+
+    # ── frame capture (F): save PNGs for report figures ────────────────────────
+    cap_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'captures')
+    os.makedirs(cap_dir, exist_ok=True)
+    cap_n = len(glob.glob(os.path.join(cap_dir, 'frame_*.png')))
+    prev_capture_key = False
 
     # ── live sun (Feature 2): seed azimuth/elevation from the scene light_dir ──
     lx, ly, lz = rnd.scene['light_dir']
@@ -297,6 +313,23 @@ def main(use_evdev=False, device=None, scene_path=None):
             prev_orbit_key = orbit_key
             if sun_orbit:
                 sun_az += ORBIT_STEP
+            # ── capture (F): save the currently-displayed frame, one per key-press ─
+            capture_key = 'capture' in h
+            if capture_key and not prev_capture_key:
+                cap_n += 1
+                p = os.path.join(cap_dir, f'frame_{cap_n:03d}.png')
+                while os.path.exists(p):
+                    cap_n += 1; p = os.path.join(cap_dir, f'frame_{cap_n:03d}.png')
+                rnd.capture(p)
+                # print the camera so this exact shot can be reproduced in the sim
+                cfwd, cright, cup = cam.vectors()
+                print(f'\n  captured {p}   (paste this camera into the sim):')
+                print(f"    pos   = {[round(x, 4) for x in cam.pos]}")
+                print(f"    fwd   = {[round(x, 4) for x in cfwd]}")
+                print(f"    right = {[round(x, 4) for x in cright]}")
+                print(f"    up    = {[round(x, 4) for x in cup]}")
+                print(f"    scale = {cam.scale:.6f}")
+            prev_capture_key = capture_key
             # ── demo controls: shadow toggle (T) + traversal depth ([ ]) ───────
             shadow_key = 'shadowTog' in h
             if shadow_key and not prev_shadow_key:

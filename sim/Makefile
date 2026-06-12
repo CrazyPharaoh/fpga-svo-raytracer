@@ -55,7 +55,17 @@ compare-shade:
 	python3 gen_reference_shaded.py
 	python3 compare_shaded.py
 
-.PHONY: compare compare-shade shade clean
+# Profile the OLD single-ray raytracer over the SAME workload as the current
+# multi-ray core (FSM cycle comparison). Checks out the baseline commit into a
+# ../fyp-baseline worktree, overlays world.vox + the current camera, runs shade,
+# and copies the dated profile to output/profiles/baseline_*.  RENDER_DIV passes
+# through (default 5).  See profile_baseline.sh.
+RENDER_DIV   ?= 5
+BASELINE_REF ?= d5095bc
+shade-baseline:
+	RENDER_DIV=$(RENDER_DIV) BASELINE_REF=$(BASELINE_REF) bash profile_baseline.sh
+
+.PHONY: compare compare-shade shade shade-baseline clean
 
 clean::
 	rm -rf sim_build __pycache__ results.xml shade_build

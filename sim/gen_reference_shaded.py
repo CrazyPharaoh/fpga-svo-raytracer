@@ -30,8 +30,15 @@ SKY_COLOR  = (135, 206, 235)
 FOG_COLOR  = (180, 200, 220)
 
 # MagicaVoxel world: 16 packed LUT words mirror the hardware LUT.
-WORLD_VOX = os.path.join(os.path.dirname(__file__), '..', 'host', 'world.vox')
-_GRID, _LUT_WORDS = vox_loader.load_world(WORLD_VOX)
+# Scene select: must match tb_svo_full.py — WORLD=vox (default) or WORLD=procedural.
+WORLD = os.environ.get('WORLD', 'vox')
+if WORLD == 'procedural':
+    _GRID = svo_builder.build_world()
+    _PROC_COLS = [(0,0,0),(120,120,120),(60,160,40),(255,0,0),(194,178,128),(235,240,250)]
+    _LUT_WORDS = [((r << 16) | (g << 8) | b) for (r, g, b) in _PROC_COLS] + [0]*10  # flag 0 (static)
+else:
+    WORLD_VOX = os.path.join(os.path.dirname(__file__), '..', 'host', 'world.vox')
+    _GRID, _LUT_WORDS = vox_loader.load_world(WORLD_VOX)
 LUT = [((w >> 16) & 0xFF, (w >> 8) & 0xFF, w & 0xFF) for w in _LUT_WORDS]  # RGB only
 MAT = [(w >> 24) & 0xFF for w in _LUT_WORDS]                              # material flag per block_id
 
@@ -103,9 +110,13 @@ def shade_pixel(t_hit, hit_pos, face_axis, face_sign, block_id,
         else:
             base = tuple(c - (c >> 2) for c in base)
     else:
-        # XOR checkerboard texture (matches shading_pipeline.sv): 0.75x base on alternating
-        # unit cells. pattern = LSB of each integer hit coord XORed (HW uses Q16.16 bit 16).
-        if ((ix ^ iy ^ iz) & 1) == 0:
+        # XOR checkerboard texture (matches shading_pipeline.sv): darken alternate unit
+        # cells. Parity uses ONLY the two in-face (tangent) coords; the face-normal axis
+        # is dropped (it sits on an integer plane -> boundary-sensitive parity flips).
+        par = ((iy ^ iz) if face_axis == 0 else
+               (ix ^ iz) if face_axis == 1 else
+               (ix ^ iy)) & 1
+        if par == 0:
             base = tuple(c - (c >> 3) for c in base)   # subtle ~12% darken
 
     # ── S_DIFFSPEC ────────────────────────────────────────────────────────────
@@ -162,12 +173,22 @@ def main():
     print(f"  {len(nodes)} nodes")
 
     # Camera — MUST stay identical to tb_svo_full.py for the PNG comparison to mean anything.
-    pos   = [48.0095, 16.7627, 27.9686]
-    fwd   = [-0.9094, -0.337, 0.2437]
-    right = [-0.2588, 0.0, -0.9659]
-    up    = [-0.3255, 0.9415, 0.0872]
-    fov_scale = math.tan(math.radians(60) / 2) / (IMG_W / 2)
-
+    if WORLD == 'procedural':
+        pos   = [30.0, 15.0, 0.0]
+        fwd   = normalise([32.0 - pos[0], 4.0 - pos[1], 32.0 - pos[2]])
+        right = normalise(cross(fwd, [0, 1, 0]))
+        up    = cross(right, fwd)
+    else:
+        # pos   = [48.0095, 16.7627, 27.9686]
+        # fwd   = [-0.9094, -0.337, 0.2437]
+        # right = [-0.2588, 0.0, -0.9659]
+        # up    = [-0.3255, 0.9415, 0.0872]
+        pos   = [72.5269, 29.4615, 72.5337]
+        fwd   = [-0.684, -0.2537, -0.684]
+        right = [0.7071, 0.0, -0.7071]
+        up    = [-0.1794, 0.9673, -0.1794]
+    #fov_scale = math.tan(math.radians(60) / 2) / (IMG_W / 2)
+    fov_scale = 0.003608
     print("Rendering shaded reference frame …")
     pixels = []
     for py in range(IMG_H):

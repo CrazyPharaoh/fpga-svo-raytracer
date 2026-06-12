@@ -27,7 +27,7 @@ ifeq ($(PREC),float)
 PRECDEF  = -DUSE_FLOAT
 endif
 
-.PHONY: scene desktop desktop-omp arm run upload png clean
+.PHONY: scene desktop desktop-omp arm run run-omp upload png clean
 
 # Copy source + prebuilt scene blob to the PYNQ. Then SSH in and `make arm`.
 upload: scene
@@ -49,9 +49,17 @@ desktop-omp: $(SRC)
 arm: $(SRC)
 	$(CC) -O3 -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard $(WARN) $(PRECDEF) $(SRC) -o rt_arm $(LDLIBS)
 
+# Thread count for the OpenMP build. Blank = all cores; override e.g. THREADS=4.
+THREADS  ?=
+FRAMES   ?= 50
+
 run: scene desktop
 	./rt_desktop scene/world.blob 320 240 5 $(PPM)
 	$(MAKE) png
+
+# OpenMP run with a chosen thread count: `make run-omp THREADS=4` (blank = all cores).
+run-omp: scene desktop-omp
+	RT_THREADS=$(THREADS) ./rt_desktop_omp scene/world.blob 320 240 $(FRAMES) $(PPM)
 
 # Convert a rendered PPM to PNG (pure stdlib, no PIL — also works on the PYNQ).
 png:

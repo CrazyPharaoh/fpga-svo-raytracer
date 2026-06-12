@@ -397,6 +397,8 @@ async def test_render_frame(dut):
     # Reset
     dut.rst.value   = 1
     dut.start.value = 0
+    dut.max_depth.value = 15   # disable the LOD depth cap (>= any real tree depth);
+                               # undriven -> 0 -> caps at the root -> every ray hits (all white)
     for _ in range(5):
         await RisingEdge(dut.clk)
     dut.rst.value = 0

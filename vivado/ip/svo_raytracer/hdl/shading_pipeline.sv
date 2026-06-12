@@ -107,10 +107,15 @@ module shading_pipeline (
     logic        shadowed;
 
     // ---- XOR checkerboard texture (procedural surface variation) ----
-    // 0.75x the base colour on alternating unit cells. pattern = LSB of each integer
-    // hit coordinate (Q16.16 bit 16) XORed — one gate + shift, free in hardware.
-    // Mirrored in gen_reference_shaded.py so the reference PNG matches.
-    wire        tex_dark = ~(hit_px[16] ^ hit_py[16] ^ hit_pz[16]);
+    // Darken alternate 1-unit cells. Parity = XOR of the integer-LSB (Q16.16 bit 16)
+    // of the TWO IN-FACE (tangent) coordinates only; the face-NORMAL coordinate is
+    // dropped because it lies exactly on an integer plane, where fixed-point rounding
+    // of t_hit flips its bit and hence the whole face's parity (camera-dependent
+    // streaks + a mismatch vs the exact-arithmetic reference). Using the two tangent
+    // axes gives a boundary-stable per-face checker that matches gen_reference_shaded.py.
+    wire        tex_dark = (hit_face == 2'd0) ? ~(hit_py[16] ^ hit_pz[16]) :  // normal X
+                           (hit_face == 2'd1) ? ~(hit_px[16] ^ hit_pz[16]) :  // normal Y
+                                                ~(hit_px[16] ^ hit_py[16]);   // normal Z
     wire [23:0] base_lut = lut[(block_id > 5'd15) ? 5'd15 : block_id][23:0];
     wire [23:0] base_tex = {base_lut[23:16] - (base_lut[23:16] >> 3),
                             base_lut[15:8]  - (base_lut[15:8]  >> 3),
