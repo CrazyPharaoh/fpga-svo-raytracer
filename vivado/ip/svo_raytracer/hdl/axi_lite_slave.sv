@@ -1,6 +1,6 @@
 // axi_lite_slave.sv
 // AXI4-Lite register file: control/status, camera, light, SVO upload, colour
-// LUT, and scene registers, plus read-only debug. See register map in CLAUDE.md.
+// LUT, and scene registers, plus read-only debug. Register offsets are defined below.
 `timescale 1ns/1ps
 module axi_lite_slave #(
     parameter int C_S_AXI_DATA_WIDTH = 32,

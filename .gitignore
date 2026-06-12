@@ -25,3 +25,7 @@ sim/output/logs/*_trace_*.txt
 # Vivado ILA capture dumps + scratch
 vivado/analyser_results/
 vivado/ip/check.sv
+
+# Report lives in its own repository; keep it out of this one
+private-docs/
+CLAUDE.md
